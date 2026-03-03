@@ -2,8 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { hubs, loadHubs } from '$lib/stores/hubs';
-  import { isBluetoothSupported, requestDevice } from '$lib/ble/bleAdapter';
-  import { HubConnection } from '$lib/ble/hubConnection';
+  import { isBluetoothSupported, requestDevice, createHubConnection } from '$lib/ble/bleAdapter';
   import { saveHub } from '$lib/db/localDb';
   import { canInstall, triggerInstall } from '$lib/pwa/installPrompt';
   import type { Hub } from '$lib/domain/types';
@@ -27,15 +26,14 @@
       error = 'connecting...';
 
       // Retry GATT connect up to 3 times (BLE can be flaky)
-      let conn: HubConnection | null = null;
+      let conn = createHubConnection();
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          conn = new HubConnection();
           await conn.connect(device);
           break;
         } catch (e) {
-          conn = null;
           if (attempt < 2) {
+            conn = createHubConnection();
             error = `retrying connection (${attempt + 2}/3)...`;
             await new Promise(r => setTimeout(r, 500));
           } else {
