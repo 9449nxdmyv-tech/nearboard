@@ -37,7 +37,14 @@ export class HubConnection {
   async connect(device: BluetoothDevice): Promise<void> {
     if (!device.gatt) throw new Error('GATT not available on device');
     this.server = await device.gatt.connect();
-    this.service = await this.server.getPrimaryService(SERVICE_UUID);
+    // Small delay to let the peripheral's GATT table stabilize
+    await new Promise(r => setTimeout(r, 300));
+    try {
+      this.service = await this.server.getPrimaryService(SERVICE_UUID);
+    } catch (e: any) {
+      this.server.disconnect();
+      throw new Error(`Service discovery failed: ${e.message}`);
+    }
   }
 
   async disconnect(): Promise<void> {

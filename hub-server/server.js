@@ -198,18 +198,19 @@ const hubService = new bleno.PrimaryService({
 bleno.on('stateChange', (state) => {
   log('ble', 'state', state);
   if (state === 'poweredOn') {
-    // Set services first, then start advertising
-    bleno.setServices([hubService], (err) => {
+    // Start advertising first (includes service UUID so clients can filter)
+    bleno.startAdvertising(hubName, [SERVICE_UUID], (err) => {
       if (err) {
-        log('ble', 'setServices', `error: ${err}`);
+        log('ble', 'advertising', `error: ${err}`);
         return;
       }
-      log('ble', 'services', 'registered');
-      bleno.startAdvertising(hubName, [SERVICE_UUID], (err) => {
+      log('ble', 'advertising', `started as "${hubName}"`);
+      // Then set services (GATT table) so clients can discover them after connecting
+      bleno.setServices([hubService], (err) => {
         if (err) {
-          log('ble', 'advertising', `error: ${err}`);
+          log('ble', 'setServices', `error: ${err}`);
         } else {
-          log('ble', 'advertising', `started as "${hubName}"`);
+          log('ble', 'services', 'registered');
         }
       });
     });
