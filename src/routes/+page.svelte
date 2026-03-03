@@ -24,10 +24,29 @@
     error = '';
     try {
       const device = await requestDevice();
-      const conn = new HubConnection();
-      await conn.connect(device);
-      const meta = await conn.getHubMeta();
-      await conn.disconnect();
+      error = 'connecting...';
+
+      // Retry GATT connect up to 3 times (BLE can be flaky)
+      let conn: HubConnection | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          conn = new HubConnection();
+          await conn.connect(device);
+          break;
+        } catch (e) {
+          conn = null;
+          if (attempt < 2) {
+            error = `retrying connection (${attempt + 2}/3)...`;
+            await new Promise(r => setTimeout(r, 500));
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      error = 'reading hub info...';
+      const meta = await conn!.getHubMeta();
+      await conn!.disconnect();
 
       const hub: Hub = {
         hubId: meta.hubId,
@@ -38,10 +57,13 @@
       };
       await saveHub(hub);
       await loadHubs();
+      error = '';
       goto(`/hub/${meta.hubId}`);
     } catch (e: any) {
       if (e.name !== 'NotFoundError') {
         error = e.message || 'Failed to connect';
+      } else {
+        error = '';
       }
     } finally {
       scanning = false;

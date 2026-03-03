@@ -1,5 +1,5 @@
 import bleno from '@abandonware/bleno';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { randomUUID } from 'crypto';
 
 // ---- CLI args ----
@@ -45,7 +45,6 @@ function pruneExpired(posts) {
   const now = Date.now();
   return posts.filter(p => {
     if (p.isEphemeral && p.expiresAt && p.expiresAt <= now) return false;
-    // Max age: 30 days
     if (now - p.createdAt > 30 * 24 * 60 * 60 * 1000) return false;
     return true;
   });
@@ -80,19 +79,15 @@ const hubMetaChar = new bleno.Characteristic({
   onReadRequest(offset, callback) {
     const meta = `${hubId}|${hubName}|${hubDesc}`;
     const buf = Buffer.from(meta, 'utf-8');
-    if (offset >= buf.length) {
-      callback(bleno.Characteristic.RESULT_INVALID_OFFSET);
-    } else {
-      callback(bleno.Characteristic.RESULT_SUCCESS, buf.slice(offset));
-    }
     log('read', 'HUB_META', meta);
+    callback(bleno.Characteristic.RESULT_SUCCESS, buf.slice(offset));
   }
 });
 
 // 2. POST_REQUEST — Write (8-byte BE timestamp)
 const postRequestChar = new bleno.Characteristic({
   uuid: CHAR_POST_REQUEST,
-  properties: ['write'],
+  properties: ['write', 'writeWithoutResponse'],
   onWriteRequest(data, offset, withoutResponse, callback) {
     let since = 0;
     if (data.length >= 8) {
@@ -118,8 +113,9 @@ const postResponseChar = new bleno.Characteristic({
   uuid: CHAR_POST_RESPONSE,
   properties: ['read'],
   onReadRequest(offset, callback) {
+    // The 'offset' param from bleno is the BLE ATT offset for long reads.
+    // We use our own responseOffset for chunking across multiple read calls.
     if (responseOffset >= responseBuffer.length) {
-      // End of data — send empty buffer
       callback(bleno.Characteristic.RESULT_SUCCESS, Buffer.alloc(0));
       log('read', 'POST_RESPONSE', 'end (empty chunk)');
       return;
@@ -128,33 +124,29 @@ const postResponseChar = new bleno.Characteristic({
     const chunk = responseBuffer.slice(responseOffset, responseOffset + MAX_CHUNK);
     responseOffset += chunk.length;
     callback(bleno.Characteristic.RESULT_SUCCESS, chunk);
-    log('read', 'POST_RESPONSE', `chunk ${chunk.length} bytes, ${responseBuffer.length - responseOffset} remaining`);
+    log('read', 'POST_RESPONSE', `chunk ${chunk.length}B, ${responseBuffer.length - responseOffset} remaining`);
   }
 });
 
 // 4. POST_UPLOAD — Write (chunked JSON)
 const postUploadChar = new bleno.Characteristic({
   uuid: CHAR_POST_UPLOAD,
-  properties: ['write'],
+  properties: ['write', 'writeWithoutResponse'],
   onWriteRequest(data, offset, withoutResponse, callback) {
     uploadBuffer = Buffer.concat([uploadBuffer, data]);
 
-    // Try to parse accumulated data
     try {
       const json = uploadBuffer.toString('utf-8');
       const post = JSON.parse(json);
 
-      // Valid post received
       const posts = loadPosts();
-      // Remove imageBlob if present (too large for JSON, store separately if needed)
       posts.push(post);
       savePosts(posts);
 
       log('write', 'POST_UPLOAD', `stored post "${post.text?.slice(0, 40)}..." by ${post.authorId?.slice(0, 8)}`);
       uploadBuffer = Buffer.alloc(0);
     } catch {
-      // Not complete yet, keep accumulating
-      log('write', 'POST_UPLOAD', `chunk ${data.length} bytes, accumulated ${uploadBuffer.length} bytes`);
+      log('write', 'POST_UPLOAD', `chunk ${data.length}B, accumulated ${uploadBuffer.length}B`);
     }
 
     callback(bleno.Characteristic.RESULT_SUCCESS);
@@ -164,7 +156,7 @@ const postUploadChar = new bleno.Characteristic({
 // 5. ENGAGEMENT — Write
 const engagementChar = new bleno.Characteristic({
   uuid: CHAR_ENGAGEMENT,
-  properties: ['write'],
+  properties: ['write', 'writeWithoutResponse'],
   onWriteRequest(data, offset, withoutResponse, callback) {
     const str = data.toString('utf-8');
     const parts = str.split('|');
@@ -206,24 +198,28 @@ const hubService = new bleno.PrimaryService({
 bleno.on('stateChange', (state) => {
   log('ble', 'state', state);
   if (state === 'poweredOn') {
-    bleno.startAdvertising(hubName, [SERVICE_UUID]);
+    // Set services first, then start advertising
+    bleno.setServices([hubService], (err) => {
+      if (err) {
+        log('ble', 'setServices', `error: ${err}`);
+        return;
+      }
+      log('ble', 'services', 'registered');
+      bleno.startAdvertising(hubName, [SERVICE_UUID], (err) => {
+        if (err) {
+          log('ble', 'advertising', `error: ${err}`);
+        } else {
+          log('ble', 'advertising', `started as "${hubName}"`);
+        }
+      });
+    });
   } else {
     bleno.stopAdvertising();
   }
 });
 
-bleno.on('advertisingStart', (err) => {
-  if (err) {
-    log('ble', 'advertising', `error: ${err}`);
-    return;
-  }
-  log('ble', 'advertising', 'started');
-  bleno.setServices([hubService]);
-});
-
 bleno.on('accept', (clientAddress) => {
   log('ble', 'connect', clientAddress);
-  // Reset chunked state on new connection
   responseBuffer = Buffer.alloc(0);
   responseOffset = 0;
   uploadBuffer = Buffer.alloc(0);
@@ -231,6 +227,14 @@ bleno.on('accept', (clientAddress) => {
 
 bleno.on('disconnect', (clientAddress) => {
   log('ble', 'disconnect', clientAddress);
+  // Re-start advertising after disconnect so new clients can find us
+  bleno.startAdvertising(hubName, [SERVICE_UUID], (err) => {
+    if (err) {
+      log('ble', 're-advertise', `error: ${err}`);
+    } else {
+      log('ble', 're-advertise', 'started');
+    }
+  });
 });
 
 // ---- Logging ----
@@ -251,7 +255,6 @@ console.log('');
 console.log('  waiting for bluetooth...');
 console.log('');
 
-// Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nshutting down...');
   bleno.stopAdvertising();

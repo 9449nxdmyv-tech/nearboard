@@ -6,3 +6,4 @@ build
 hub-server/node_modules
 hub-server/posts.json
 hub-server/hub.json
+.vercel
