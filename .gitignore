@@ -1,0 +1,8 @@
+node_modules
+.svelte-kit
+build
+.vite
+*.local
+hub-server/node_modules
+hub-server/posts.json
+hub-server/hub.json
