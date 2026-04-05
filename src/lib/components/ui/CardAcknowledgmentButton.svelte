@@ -26,9 +26,11 @@
 	const faveCount = $derived(Object.keys(acknowledgments).length);
 
 	let justTapped = $state(false);
+	let toggling = $state(false);
 
 	async function handleToggle() {
-		if (!user) return;
+		if (!user || toggling) return;
+		toggling = true;
 		hapticLight();
 		justTapped = true;
 		setTimeout(() => (justTapped = false), 400);
@@ -36,6 +38,8 @@
 			await toggleAcknowledgment(boardId, contentId, user.uid, !hasFaved);
 		} catch (e) {
 			console.error('Failed to toggle fave:', e);
+		} finally {
+			toggling = false;
 		}
 	}
 </script>

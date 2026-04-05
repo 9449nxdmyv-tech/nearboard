@@ -114,10 +114,10 @@
 							{#if isBoardOwner || isOwn}
 								<button
 									onclick={() => handleDelete(comment.id)}
-									class="text-[10px] text-muted/30 hover:text-error transition-colors opacity-0 group-hover:opacity-100"
+									class="text-[10px] text-muted/40 hover:text-error active:text-error transition-colors"
 									aria-label="Delete comment"
 								>
-									Delete
+									<Icon icon="ph:trash" class="text-xs" />
 								</button>
 							{/if}
 						</div>
