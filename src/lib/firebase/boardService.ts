@@ -509,11 +509,12 @@ export async function addComment(
 export function subscribeToComments(
 	boardId: string,
 	contentId: string,
-	onUpdate: (comments: CommentDoc[]) => void
+	onUpdate: (comments: CommentDoc[]) => void,
+	max = 50
 ): Unsubscribe {
-	const q = query(commentsCol(boardId, contentId), orderBy('createdAt', 'asc'));
+	const q = query(commentsCol(boardId, contentId), orderBy('createdAt', 'desc'), firestoreLimit(max));
 	return onSnapshot(q, (snapshot) => {
-		const comments = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as CommentDoc);
+		const comments = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as CommentDoc).reverse();
 		onUpdate(comments);
 	});
 }
@@ -606,15 +607,17 @@ export async function voteOnPoll(
 export function subscribeToVotes(
 	boardId: string,
 	contentId: string,
-	onUpdate: (votes: VoteDoc[]) => void
+	onUpdate: (votes: VoteDoc[]) => void,
+	max = 200
 ): Unsubscribe {
-	return onSnapshot(
+	const q = query(
 		collection(db(), 'boards', boardId, 'content', contentId, 'votes'),
-		(snapshot) => {
-			const votes = snapshot.docs.map((d) => d.data() as VoteDoc);
-			onUpdate(votes);
-		}
+		firestoreLimit(max)
 	);
+	return onSnapshot(q, (snapshot) => {
+		const votes = snapshot.docs.map((d) => d.data() as VoteDoc);
+		onUpdate(votes);
+	});
 }
 
 // ─── Member management ───────────────────────────────────────────────────────

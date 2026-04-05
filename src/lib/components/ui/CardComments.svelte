@@ -89,6 +89,7 @@
 					{#if !isOwn}
 						{#if comment.authorPhotoURL}
 							<img src={comment.authorPhotoURL} alt=""
+								width="24" height="24" loading="lazy"
 								class="w-6 h-6 rounded-full shrink-0 object-cover mt-0.5"
 								onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
 						{:else}

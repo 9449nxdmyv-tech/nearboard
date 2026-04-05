@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import maplibregl from 'maplibre-gl';
+	import type maplibreglType from 'maplibre-gl';
 
 	let {
 		latitude,
@@ -29,56 +29,63 @@
 	} = $props();
 
 	let containerEl = $state<HTMLDivElement | undefined>();
-	let map: maplibregl.Map | null = null;
-	let marker: maplibregl.Marker | null = null;
-	let userMarkerEl: HTMLDivElement | null = null;
-	let userMarker: maplibregl.Marker | null = null;
+	let map: maplibreglType.Map | null = null;
+	let marker: maplibreglType.Marker | null = null;
+	let userMarker: maplibreglType.Marker | null = null;
 
 	onMount(() => {
 		if (!containerEl) return;
 
-		map = new maplibregl.Map({
-			container: containerEl,
-			style: 'https://tiles.openfreemap.org/styles/liberty',
-			center: [longitude, latitude],
-			zoom,
-			interactive,
-			attributionControl: false
-		});
+		let destroyed = false;
 
-		// Main location marker
-		marker = new maplibregl.Marker({ color: markerColor })
-			.setLngLat([longitude, latitude])
-			.addTo(map);
+		(async () => {
+			const maplibregl = (await import('maplibre-gl')).default;
+			if (destroyed) return;
 
-		// User location blue dot
-		if (showUserLocation && navigator.geolocation) {
-			navigator.geolocation.getCurrentPosition(
-				(pos) => {
-					if (!map) return;
-					userMarkerEl = document.createElement('div');
-					userMarkerEl.className = 'mapview-user-dot';
-					userMarker = new maplibregl.Marker({ element: userMarkerEl })
-						.setLngLat([pos.coords.longitude, pos.coords.latitude])
-						.addTo(map);
-				},
-				() => { /* silently ignore */ },
-				{ timeout: 8000 }
-			);
-		}
-
-		// Click to place marker
-		if (interactive && onMapClick) {
-			map.on('click', (e) => {
-				onMapClick(e.lngLat.lat, e.lngLat.lng);
+			map = new maplibregl.Map({
+				container: containerEl!,
+				style: 'https://tiles.openfreemap.org/styles/liberty',
+				center: [longitude, latitude],
+				zoom,
+				interactive,
+				attributionControl: false
 			});
-		}
 
-		if (interactive) {
-			map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-		}
+			// Main location marker
+			marker = new maplibregl.Marker({ color: markerColor })
+				.setLngLat([longitude, latitude])
+				.addTo(map);
+
+			// User location blue dot
+			if (showUserLocation && navigator.geolocation) {
+				navigator.geolocation.getCurrentPosition(
+					(pos) => {
+						if (!map) return;
+						const userMarkerEl = document.createElement('div');
+						userMarkerEl.className = 'mapview-user-dot';
+						userMarker = new maplibregl.Marker({ element: userMarkerEl })
+							.setLngLat([pos.coords.longitude, pos.coords.latitude])
+							.addTo(map);
+					},
+					() => { /* silently ignore */ },
+					{ timeout: 8000 }
+				);
+			}
+
+			// Click to place marker
+			if (interactive && onMapClick) {
+				map.on('click', (e) => {
+					onMapClick(e.lngLat.lat, e.lngLat.lng);
+				});
+			}
+
+			if (interactive) {
+				map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+			}
+		})();
 
 		return () => {
+			destroyed = true;
 			marker?.remove();
 			userMarker?.remove();
 			map?.remove();

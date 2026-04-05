@@ -16,7 +16,7 @@
 		markAllFeedRead
 	} from '$lib/stores';
 	import {
-		subscribeToBoardContent,
+		subscribeToBoardContentPaginated,
 		isContentVisible,
 		updateLastSeen
 	} from '$lib/firebase';
@@ -50,8 +50,14 @@
 		const unsubs: (() => void)[] = [];
 
 		const boardContentMap = new Map<string, ContentDoc[]>();
+		let rebuildTimer: ReturnType<typeof setTimeout>;
 
 		function rebuildFeed() {
+			clearTimeout(rebuildTimer);
+			rebuildTimer = setTimeout(rebuildFeedNow, 100);
+		}
+
+		function rebuildFeedNow() {
 			const user = $userStore.user;
 			const allItems: any[] = [];
 
@@ -77,14 +83,17 @@
 
 		for (const board of boards) {
 			unsubs.push(
-				subscribeToBoardContent(board.id, (items) => {
+				subscribeToBoardContentPaginated(board.id, (items) => {
 					boardContentMap.set(board.id, items);
 					rebuildFeed();
 				})
 			);
 		}
 
-		return () => unsubs.forEach((u) => u());
+		return () => {
+			clearTimeout(rebuildTimer);
+			unsubs.forEach((u) => u());
+		};
 	});
 
 	async function markAllRead() {

@@ -94,6 +94,7 @@
 			<button onclick={() => { ytLoaded = true; }} class="relative block w-full group cursor-pointer overflow-hidden">
 				{#if ytThumbnail && !ytImageError}
 					<img src={ytThumbnail} alt={title}
+						width="480" height="270" loading="lazy"
 						class="w-full aspect-video object-cover transition-transform duration-300 group-hover:scale-[1.03]"
 						onerror={() => { ytImageError = true; }} />
 				{:else}

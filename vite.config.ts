@@ -32,6 +32,17 @@ export default defineConfig(({ mode }) => {
 					api: 'modern-compiler'
 				}
 			}
+		},
+		build: {
+			rollupOptions: {
+				output: {
+					manualChunks(id: string) {
+						if (id.includes('maplibre-gl')) return 'maplibre';
+						if (id.includes('gsap')) return 'gsap';
+						if (id.includes('konsta')) return 'konsta';
+					}
+				}
+			}
 		}
 	};
 });
