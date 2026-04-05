@@ -1,0 +1,29 @@
+{
+  "name": "nearboard-functions",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^6.4.0",
+    "@google-cloud/vision": "^4.3.2",
+    "@mozilla/readability": "^0.6.0",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0",
+    "groq-sdk": "^0.37.0",
+    "jsdom": "^29.0.1",
+    "open-graph-scraper": "^6.11.0",
+    "postmark": "^4.0.7"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.1",
+    "typescript": "^5.6.3"
+  }
+}

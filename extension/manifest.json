@@ -1,0 +1,33 @@
+{
+	"manifest_version": 3,
+	"name": "Nearboard",
+	"version": "0.1.0",
+	"description": "Save anything to your Nearboard boards.",
+	"permissions": ["activeTab", "storage", "identity", "offscreen", "contextMenus"],
+	"background": {
+		"service_worker": "background.js",
+		"type": "module"
+	},
+	"oauth2": {
+		"client_id": "227501540172-p2eik4n6qnciprig9a9fiapn1ofpep5m.apps.googleusercontent.com",
+		"scopes": ["email", "profile", "openid"]
+	},
+	"host_permissions": [
+		"https://*.firebaseio.com/*",
+		"https://*.googleapis.com/*",
+		"https://*.firebaseapp.com/*"
+	],
+	"action": {
+		"default_popup": "popup/index.html"
+	},
+	"content_scripts": [
+		{
+			"matches": ["<all_urls>"],
+			"js": ["content-script.js"],
+			"run_at": "document_idle"
+		}
+	],
+	"content_security_policy": {
+		"extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+	}
+}

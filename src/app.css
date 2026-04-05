@@ -1,0 +1,271 @@
+/**
+ * @file app.css
+ * @description Tailwind CSS v4 + Konsta UI theme tokens.
+ *              All design tokens live here — never inline magic values.
+ */
+
+@import "tailwindcss";
+@import 'konsta/svelte/theme.css';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+@theme {
+	/* ─── Primary brand ─────────────────────────────── */
+	--color-primary: #007aff;
+	--color-primary-shade: #0062cc;
+	--color-primary-tint: #4da3ff;
+
+	/* ─── Accent ────────────────────────────────────── */
+	--color-accent: #ff9500;
+	--color-accent-shade: #cc7700;
+
+	/* ─── Semantic ──────────────────────────────────── */
+	--color-success: #34c759;
+	--color-warning: #ff9f0a;
+	--color-error: #ff3b30;
+	--color-info: #5ac8fa;
+	--color-youtube-red: #ff0000;
+	--color-rating-star: #eab308;
+	--color-rating-pill-bg: #fffbeb; /* amber-50 */
+	--color-rating-pill-text: #b45309; /* amber-700 */
+	--color-rating-pill-border: #fde68a; /* amber-200 */
+	--color-rating-pill-shadow: #fef3c7; /* amber-100 */
+
+
+	/* ─── Surfaces ──────────────────────────────────── */
+	--color-surface: #ffffff;
+	--color-surface-1: #f2f2f7;
+	--color-surface-2: #e5e5ea;
+	--color-surface-3: #d1d1d6;
+
+	/* ─── Text ──────────────────────────────────────── */
+	--color-on-surface: #1c1c1e;
+	--color-on-surface-secondary: #3a3a3c;
+	--color-muted: #8e8e93;
+
+	/* ─── Borders ───────────────────────────────────── */
+	--color-border: #d1d1d6;
+	--color-border-light: #e5e5ea;
+
+	/* ─── Card ──────────────────────────────────────── */
+	--color-card: #ffffff;
+	--radius-card: 16px;
+
+	/* ─── Elevation / shadow scale ──────────────────── */
+	--shadow-xs: 0 1px 2px rgb(0 0 0 / 0.04);
+	--shadow-sm: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+	--shadow-card: 0 2px 8px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.04);
+	--shadow-md: 0 4px 12px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.04);
+	--shadow-lg: 0 8px 24px rgb(0 0 0 / 0.1), 0 4px 8px rgb(0 0 0 / 0.04);
+	--shadow-xl: 0 16px 48px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.06);
+
+	/* ─── Card-type accent colors ───────────────────── */
+	--color-type-note: #f59e0b;
+	--color-type-link: #3b82f6;
+	--color-type-photo: #06b6d4;
+	--color-type-video: #8b5cf6;
+	--color-type-voice: #ec4899;
+	--color-type-list: #10b981;
+	--color-type-poll: #f97316;
+	--color-type-location: #14b8a6;
+	--color-type-product: #059669;
+	--color-template-household: #3b82f6; /* blue-500 */
+	--color-template-family: #e11d48; /* rose-500 */
+	--color-template-trip: #f59e0b; /* amber-500 */
+	--color-template-team: #6366f1; /* indigo-500 */
+	--color-template-creative: #a855f7; /* purple-500 */
+	--color-template-wishlist: #10b981; /* emerald-500 */
+	--color-template-renovation: #f97316; /* orange-500 */
+	--color-template-blank: #64748b; /* slate-500 */
+
+	/* ─── Brand Specific ────────────────────────────── */
+	--color-brand-whatsapp: #25d366; /* green-500 */
+	--color-brand-telegram: #0088cc; /* blue-400 */
+
+	/* ─── Delete Actions ────────────────────────────── */
+	--color-delete-action: #ef4444; /* red-500 */
+
+	/* ─── Streak Badges ─────────────────────────────── */
+	--color-streak-low-text: #fb923c; /* orange-400 */
+	--color-streak-mid-text: #f97316; /* orange-500 */
+	--color-streak-high-text: #ea580c; /* orange-600 */
+	--color-streak-extreme-text: #dc2626; /* red-600 */
+
+	--color-streak-low-bg: #fff7ed; /* orange-50 */
+	--color-streak-mid-bg: #fff7ed; /* orange-50 */
+	--color-streak-high-bg: #fff7ed; /* orange-50 */
+	--color-streak-extreme-bg: #fef2f2; /* red-50 */
+
+	--shadow-streak-low: rgba(251, 146, 60, 0.3); /* orange-400 opacity 0.3 */
+	--shadow-streak-high: rgba(251, 146, 60, 0.6); /* orange-400 opacity 0.6 */
+
+	/* ─── Offline Banner Status ─────────────────────── */
+	--color-status-online-bg: #ecfdf5; /* green-50 */
+	--color-status-online-border: #a7f3d0; /* green-200 */
+	--color-status-online-text: #047857; /* green-600 */
+	--color-status-online-pulse: #10b981; /* green-500 */
+
+	--color-status-offline-bg: #fffbeb; /* amber-50 */
+	--color-status-offline-border: #fde68a; /* amber-200 */
+	--color-status-offline-text: #b45309; /* amber-600 */
+	--color-status-offline-text-dim: #b45309; /* amber-600 with opacity handled by Tailwind */
+
+	--color-status-reconnecting-bg: #dcfce7; /* green-100 */
+	--color-status-reconnecting-text: #047857; /* green-600 */
+	--color-status-reconnecting-text-strong: #064e3b; /* green-800 */
+	--color-status-reconnecting-progress-track: #dcfce7; /* green-200 */
+	--color-status-reconnecting-progress-bar: #10b981; /* green-500 */
+
+	/* ─── Toast Warning ─────────────────────────────── */
+	--color-toast-warning-bg: #fbbf24; /* amber-500 */
+	--color-toast-warning-text: #ffffff;
+
+	/* ─── Map View ──────────────────────────────────── */
+	--shadow-map-marker-blue: rgba(66, 133, 244, 0.3); /* google blue */
+	--shadow-map-global-black: rgba(0, 0, 0, 0.2);
+	--color-map-user-dot: #4285f4; /* google blue */
+
+	/* ─── Recording Indicators ──────────────────────── */
+	--color-recording-indicator-pulse: #f87171; /* red-400 */
+	--color-recording-indicator-dot: #ef4444; /* red-500 */
+	--color-recording-indicator-border: #ef4444; /* red-500 */
+
+	/* ─── WhatsApp Import ───────────────────────────── */
+	--color-whatsapp-import-bg: #dcfce7; /* green-100 */
+
+	/* ─── YouTube Embed ─────────────────────────────── */
+	--color-youtube-play-btn-shadow: 0 4px 20px rgba(220, 38, 38, 0.3); /* red-600 rgba */
+
+	/* ─── Reminder Cards (Today Dashboard) ──────────── */
+	--color-reminder-bg: #fffbeb; /* amber-50 */
+	--color-reminder-border: #fde68a; /* amber-200 */
+	--color-reminder-hover-border: #fcd34d; /* amber-300 */
+	--color-reminder-icon-bg: #fff3e0; /* amber-100 */
+	--color-reminder-icon-text: #b45309; /* amber-600 */
+
+	/* ─── Card Detail Modal - Type-specific Pills ───── */
+	--color-type-recipe-pill-bg: #dcfce7; /* emerald-500/10 */
+	--color-type-recipe-pill-text: #047857; /* emerald-700 */
+
+	--color-type-event-pill-bg: #ffedd5; /* orange-500/10 */
+	--color-type-event-pill-text: #c2410c; /* orange-700 */
+
+	--color-type-movie-pill-bg: #fce7f3; /* pink-500/10 */
+	--color-type-movie-pill-text: #be185d; /* pink-700 */
+
+	--color-type-place-pill-bg: #dbeafe; /* blue-500/10 */
+	--color-type-place-pill-text: #1d4ed8; /* blue-500 */
+
+	--color-card-detail-modal-bg-teal: #ccfbf1; /* teal-500/10 */
+
+	/* ─── Card Detail Modal - List Badges ───────────── */
+	--color-badge-complete-bg: #10b981; /* emerald-500 */
+	--color-badge-pending-bg: #3b82f6; /* blue-500 */
+
+	/* ─── Radius scale ──────────────────────────────── */
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+	--radius-2xl: 24px;
+	--radius-full: 9999px;
+}
+
+/* ─── Global base styles ────────────────────────────── */
+
+::selection {
+	background: rgb(0 122 255 / 0.2);
+}
+
+/* Smooth scrolling everywhere */
+html {
+	-webkit-tap-highlight-color: transparent;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbars in scroll containers (keep scroll behavior) */
+.scrollbar-hide {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+	display: none;
+}
+
+/* Focus ring utility — consistent, visible, accessible */
+.focus-ring:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+/* Card hover lift effect — reusable */
+.card-hover {
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-md);
+}
+.card-hover:active {
+	transform: translateY(0);
+	box-shadow: var(--shadow-sm);
+}
+
+/* Stagger animation utility — set --stagger-index via style attribute */
+.stagger-fade-in {
+	opacity: 0;
+	transform: translateY(8px);
+	animation: stagger-in 0.35s ease forwards;
+	animation-delay: calc(var(--stagger-index, 0) * 60ms);
+}
+@keyframes stagger-in {
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Shimmer skeleton loader */
+.skeleton-shimmer {
+	background: linear-gradient(
+		90deg,
+		var(--color-surface-1) 25%,
+		var(--color-surface-2) 50%,
+		var(--color-surface-1) 75%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+
+/* Press feedback for buttons */
+.press-scale {
+	transition: transform 0.1s ease;
+}
+.press-scale:active {
+	transform: scale(0.97);
+}
+
+/* Konsta Page: allow sticky navbars (default overflow-auto breaks sticky).
+   Only for top-level pages — Pages inside Popups/modals need scroll. */
+.k-page:not(.k-popup .k-page) {
+	overflow: visible !important;
+	position: relative !important;
+}
+
+/* Konsta Sheet/Actions: raise above bottom tab bar (z-40) */
+.k-sheet-backdrop, .k-sheet, .k-actions-backdrop, .k-actions {
+	z-index: 50 !important;
+}
+
+/* Gradient text utility */
+.text-gradient {
+	background: linear-gradient(135deg, var(--color-primary), var(--color-primary-tint));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700&amp;display=swap');
+    </style>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FAFAF8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0F0EE;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="url(#bg-grad)" />
+
+  <!-- Center Content Group -->
+  <g transform="translate(540, 860)">
+      
+      <!-- Logo Icon (Scaled up) -->
+      <g transform="translate(-128, -128) scale(1)">
+        <!-- Inline copy of logo.svg content for standalone svg -->
+        <defs>
+            <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#6C63FF;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#5a52d5;stop-opacity:1" />
+            </linearGradient>
+            <filter id="logo-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="8" />
+            <feOffset dx="2" dy="4" result="offsetblur" />
+            <feComponentTransfer>
+                <feFuncA type="linear" slope="0.2" />
+            </feComponentTransfer>
+            <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+            </filter>
+        </defs>
+        <!-- Back Card -->
+        <rect x="68" y="48" width="80" height="120" rx="12" fill="#3F3D56" opacity="0.8" transform="rotate(-10 108 108)" />
+        <!-- Front Card -->
+        <rect x="90" y="70" width="90" height="130" rx="12" fill="url(#logo-grad)" filter="url(#logo-shadow)" transform="rotate(5 135 135)" />
+        <!-- Pin -->
+        <circle cx="135" cy="90" r="6" fill="#FAFAF8" opacity="0.9" transform="rotate(5 135 135)" />
+        <!-- Lines -->
+        <g transform="rotate(5 135 135)" opacity="0.6">
+            <rect x="105" y="110" width="60" height="6" rx="3" fill="#FAFAF8" />
+            <rect x="105" y="125" width="40" height="6" rx="3" fill="#FAFAF8" />
+            <rect x="105" y="140" width="50" height="6" rx="3" fill="#FAFAF8" />
+        </g>
+      </g>
+
+      <!-- App Name -->
+      <text x="0" y="160" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="64" fill="#2D2D2D" letter-spacing="-1">
+        Nearboard
+      </text>
+      
+      <!-- Tagline -->
+      <text x="0" y="210" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="400" font-size="28" fill="#666666">
+        Shared ambient spaces
+      </text>
+  </g>
+  
+  <!-- Decorative Bottom Curve (Optional) -->
+  <path d="M0 1920 C 300 1800, 780 1800, 1080 1920 V 1920 H 0 Z" fill="#6C63FF" opacity="0.05" />
+
+</svg>

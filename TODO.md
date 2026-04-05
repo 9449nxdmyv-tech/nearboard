@@ -1,0 +1,1 @@
+- [ ] Refactor QuickCapture sheets (Photo, Video, Voice, List, Poll, Location) to use `SheetHeader.svelte` for consistent UI.
