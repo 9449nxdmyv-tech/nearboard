@@ -334,7 +334,9 @@
 							showToast(`Preview sent! (${result.data.boardCount} boards)`, 'success');
 						} catch (e: unknown) {
 							const msg = e instanceof Error ? e.message : 'Failed to send preview';
-							showToast(msg.includes('not-found') ? 'No new activity in the last 24 hours' : msg);
+							if (msg.includes('not-found')) showToast('No new activity in the last 24 hours');
+							else if (msg.includes('resource-exhausted')) showToast('Please wait a few minutes before requesting another preview');
+							else showToast(msg);
 						} finally {
 							sendingPreview = false;
 						}

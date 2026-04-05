@@ -158,15 +158,33 @@ async function generateDigestInsight(
 		}
 	}
 
-	if (summaries.length === 0 && quietBoards.length === 0) return '';
-
 	const totalCards = sections.reduce((sum, s) => sum + s.totalNewCards, 0);
+	if (totalCards === 0 && quietBoards.length === 0) return '';
+
 	const boardNames = sections.map((s) => s.boardName).join(', ');
+
+	// Build context from living summaries or fall back to section card counts
+	let boardContext: string;
+	if (summaries.length > 0) {
+		boardContext = `Board summaries:\n${summaries.join('\n')}`;
+	} else {
+		// No living summaries — derive type counts from cards
+		const breakdown = sections.map((s) => {
+			const typeCounts: Record<string, number> = {};
+			for (const card of s.cards) {
+				typeCounts[card.type] = (typeCounts[card.type] || 0) + 1;
+			}
+			const types = Object.entries(typeCounts)
+				.map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+				.join(', ');
+			return `${s.boardName}: ${types || `${s.totalNewCards} new items`}`;
+		}).join('\n');
+		boardContext = `Board activity:\n${breakdown}`;
+	}
 
 	let prompt = `You are Nearboard's digest assistant. The user has ${totalCards} new cards across boards: ${boardNames}.
 
-Board summaries:
-${summaries.join('\n')}
+${boardContext}
 `;
 
 	if (quietBoards.length > 0) {

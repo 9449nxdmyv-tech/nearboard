@@ -9,6 +9,7 @@ import { writable } from 'svelte/store';
 import { toast, updateToast, dismissToast } from './toastStore';
 import { addContent } from '$lib/firebase';
 import { hapticSuccess } from '$lib/utils/haptics';
+import { compressImages } from '$lib/utils/mediaCompression';
 
 export interface UploadJob {
 	id: string;
@@ -50,6 +51,9 @@ export function queuePhotoUpload(opts: {
 		try {
 			const { uploadPhotos } = await import('$lib/firebase/storageService');
 
+			// Compress images before upload (resize to 1920px max, JPEG 0.8 quality)
+			const compressedFiles = await compressImages(opts.files);
+
 			// Get dimensions from preview URLs
 			const dimensions = await Promise.all(
 				opts.previews.map((src) => new Promise<{ width: number; height: number }>((resolve) => {
@@ -61,7 +65,7 @@ export function queuePhotoUpload(opts: {
 				}))
 			);
 
-			const uploadResults = await uploadPhotos(opts.boardId, opts.userId, opts.files);
+			const uploadResults = await uploadPhotos(opts.boardId, opts.userId, compressedFiles);
 			const images = uploadResults.map((result, i) => ({
 				url: result.original,
 				thumbnailUrl: result.thumbnail,

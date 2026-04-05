@@ -33,6 +33,12 @@ export const sendDigestPreview = onCall(
 			throw new HttpsError('failed-precondition', 'No email address on your account.');
 		}
 
+		// Rate limit: 1 preview per 5 minutes
+		const lastPreview = userData.lastDigestPreviewAt as FirebaseFirestore.Timestamp | undefined;
+		if (lastPreview && Date.now() - lastPreview.toMillis() < 5 * 60 * 1000) {
+			throw new HttpsError('resource-exhausted', 'Please wait a few minutes before requesting another preview.');
+		}
+
 		// Always use 24h window for preview (ignores lastDigestSentAt)
 		const since = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
@@ -48,6 +54,9 @@ export const sendDigestPreview = onCall(
 		}
 
 		await sendDigestEmail(digestData);
+
+		// Record preview timestamp for rate limiting
+		await db.doc(`users/${uid}`).update({ lastDigestPreviewAt: Timestamp.now() });
 
 		return { success: true, boardCount: digestData.boards.length };
 	}

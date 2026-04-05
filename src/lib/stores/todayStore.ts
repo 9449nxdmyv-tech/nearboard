@@ -85,6 +85,7 @@ export async function loadTodayData(boards: BoardDoc[]): Promise<void> {
 		const db = getDbFn();
 
 		const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+		const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 		const todayStart = new Date();
 		todayStart.setHours(0, 0, 0, 0);
 
@@ -114,8 +115,9 @@ export async function loadTodayData(boards: BoardDoc[]): Promise<void> {
 				getDocs(query(
 					collection(db, 'boards', board.id, 'content'),
 					where('type', '==', 'voice'),
-					where('createdAt', '>=', oneDayAgo),
-					orderBy('createdAt', 'desc')
+					where('createdAt', '>=', sevenDaysAgo),
+					orderBy('createdAt', 'desc'),
+					limit(10)
 				)),
 				getDocs(query(
 					collection(db, 'boards', board.id, 'content'),

@@ -82,7 +82,8 @@ async function processBoardDigest(
 
 /**
  * Fallback briefing generation for boards without a Living Summary briefingText.
- * Uses a lightweight AI call to summarize recent changes.
+ * Uses a detailed content serialization (matching Living Summary format) for
+ * higher-quality AI output.
  */
 async function generateFallbackBriefing(
 	db: FirebaseFirestore.Firestore,
@@ -96,16 +97,56 @@ async function generateFallbackBriefing(
 		.collection(`boards/${boardId}/content`)
 		.where('createdAt', '>=', oneDayAgo)
 		.orderBy('createdAt', 'desc')
-		.limit(10)
+		.limit(15)
 		.get();
 
 	if (contentSnap.empty) return '';
 
+	// Use detailed content serialization (same format as Living Summary)
 	const changes = contentSnap.docs.map((d) => {
 		const data = d.data();
 		const author = (data.authorName as string) || 'Someone';
 		const type = data.type as string;
-		return `${author} added a ${type}${data.title ? `: "${data.title}"` : ''}`;
+		const text = (data.text as string || '').slice(0, 150);
+		const title = (data.title as string) || '';
+
+		switch (type) {
+			case 'note':
+				return `[Note] (by ${author}) ${text}`;
+			case 'list': {
+				const items = (data.items as Array<{ text: string; completed: boolean }>) || [];
+				const done = items.filter((i) => i.completed).length;
+				const names = items.slice(0, 4).map((i) => i.text).join(', ');
+				return `[List] ${title} (${done}/${items.length} done): ${names}`;
+			}
+			case 'link': {
+				const domain = (data.domain as string) || '';
+				const desc = (data.description as string || '').slice(0, 80);
+				return `[Link] ${title || data.url} (${domain}) — ${desc}`;
+			}
+			case 'product': {
+				const price = data.lastCheckedPrice || data.price;
+				const drop = data.priceDrop ? ' [PRICE DROPPED]' : '';
+				return `[Product] ${title} ${price}${drop}`;
+			}
+			case 'poll': {
+				const question = data.question as string || title;
+				return `[Poll] (by ${author}) ${question}`;
+			}
+			case 'photo': {
+				const count = (data.images as unknown[])?.length || 1;
+				const caption = (data.caption as string) || '';
+				return `[Photo x${count}] (by ${author}) ${caption}`;
+			}
+			case 'video':
+				return `[Video] (by ${author}) ${(data.caption as string) || ''}`;
+			case 'voice':
+				return `[Voice note] (by ${author})`;
+			case 'location':
+				return `[Location] (by ${author}) ${data.name || data.address || ''}`;
+			default:
+				return `[${type}] (by ${author}) ${title || text}`;
+		}
 	});
 
 	const memberNames = [...new Set(

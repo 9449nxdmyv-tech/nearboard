@@ -160,7 +160,7 @@
 		if (!stream) return;
 		hapticHeavy();
 		const chunks: Blob[] = [];
-		const mr = new MediaRecorder(stream, { mimeType: 'video/webm' });
+		const mr = new MediaRecorder(stream, { mimeType: 'video/webm', videoBitsPerSecond: 2_500_000 });
 		mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 		mr.onstop = () => {
 			videoFile = new Blob(chunks, { type: 'video/webm' });

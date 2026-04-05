@@ -17,9 +17,20 @@ import { getEligibleBoards, processInBatches } from '../utils/boardEligibility.j
 
 const REMINDER_PROMPT = `Review these board items and identify any that are time-sensitive, overdue, or worth reminding the user about today. Pay special attention to products with active price drops — these deals may expire soon and should be surfaced as urgent. Return a list of actionable reminder messages in plain language, max 20 words each. If nothing is time-sensitive, return "NONE".
 
+{templateHint}
 Board: "{boardName}"
 Items:
 {items}`;
+
+const TEMPLATE_REMINDER_HINTS: Record<string, string> = {
+	trip: 'Focus on: missing bookings, upcoming departure dates, unchecked packing items, expiring deals, unconfirmed reservations.',
+	household: 'Focus on: overdue chores, expiring groceries, unpaid bills, pending decisions, recurring tasks due today.',
+	family: 'Focus on: upcoming birthdays/events, unread shared memories, pending RSVPs, photos to review.',
+	team: 'Focus on: approaching deadlines, unresolved blockers, pending reviews, action items with no owner.',
+	creative: 'Focus on: draft deadlines, feedback awaiting response, abandoned work-in-progress, submission dates.',
+	wishlist: 'Focus on: price drops about to expire, items back in stock, seasonal deals ending soon.',
+	renovation: 'Focus on: contractor appointment dates, permit deadlines, material delivery windows, budget overruns.'
+};
 
 const CONCURRENCY_LIMIT = 5;
 const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -52,7 +63,7 @@ async function processBoardReminders(
 	db: FirebaseFirestore.Firestore,
 	boardDoc: FirebaseFirestore.QueryDocumentSnapshot
 ): Promise<void> {
-	const board = boardDoc.data() as { name: string; memberIds: string[] };
+	const board = boardDoc.data() as { name: string; memberIds: string[]; template?: string };
 
 	const contentSnap = await db
 		.collection(`boards/${boardDoc.id}/content`)
@@ -74,7 +85,12 @@ async function processBoardReminders(
 		return `- ${parts.join(' — ')}`;
 	}).join('\n');
 
+	const templateHint = board.template && TEMPLATE_REMINDER_HINTS[board.template]
+		? TEMPLATE_REMINDER_HINTS[board.template]
+		: '';
+
 	const prompt = REMINDER_PROMPT
+		.replace('{templateHint}', templateHint)
 		.replace('{boardName}', board.name)
 		.replace('{items}', items);
 

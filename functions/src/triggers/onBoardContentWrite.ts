@@ -9,6 +9,7 @@
 import '../utils/admin.js';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { notifyBoardMembers } from '../utils/fcmService.js';
 
 export const onBoardContentWrite = onDocumentWritten(
 	{ document: 'boards/{boardId}/content/{contentId}' },
@@ -78,6 +79,35 @@ export const onBoardContentWrite = onDocumentWritten(
 						}
 					} catch (err) {
 						console.error('Global content cache error:', err);
+					}
+				}
+			}
+		} else if (changeType === 'updated' && before && after) {
+			// ─── Acknowledgment notification (detect new hearts) ────────────
+			const prevAcks = (before.acknowledgments ?? {}) as Record<string, unknown>;
+			const currAcks = (after.acknowledgments ?? {}) as Record<string, unknown>;
+			const newAckUserIds = Object.keys(currAcks).filter((uid) => !(uid in prevAcks));
+
+			if (newAckUserIds.length > 0) {
+				const contentAuthorId = after.authorId as string | undefined;
+				// Notify content author about new hearts (skip if they hearted their own post)
+				if (contentAuthorId && !newAckUserIds.includes(contentAuthorId)) {
+					// Get the name of the person who hearted
+					try {
+						const ackerUid = newAckUserIds[0];
+						const ackerSnap = await db.doc(`users/${ackerUid}`).get();
+						const ackerName = (ackerSnap.data()?.displayName as string) || 'Someone';
+						const suffix = newAckUserIds.length > 1
+							? ` and ${newAckUserIds.length - 1} other${newAckUserIds.length > 2 ? 's' : ''}`
+							: '';
+						await notifyBoardMembers(
+							boardId,
+							[contentAuthorId],
+							'New reaction',
+							`${ackerName}${suffix} liked your post`
+						);
+					} catch (err) {
+						console.error('Acknowledgment notification failed:', err);
 					}
 				}
 			}

@@ -2,7 +2,10 @@
  * @file onCommentWrite.ts
  * @description Firestore trigger that fires on comment writes.
  *              Updates comment count on parent content document and
- *              sends push notifications to @mentioned board members.
+ *              sends push notifications to:
+ *              1. @mentioned board members
+ *              2. Content author (if not the commenter)
+ *              3. Previous commenters on the same content (if not the commenter)
  */
 
 import '../utils/admin.js';
@@ -28,35 +31,67 @@ export const onCommentWrite = onDocumentWritten(
 				lastActivityAt: FieldValue.serverTimestamp()
 			});
 
-			// Notify @mentioned members
 			const data = event.data!.after!.data()!;
+			const commentAuthorId: string = data.authorId;
+			const authorName: string = data.authorName ?? 'Someone';
 			const mentions: string[] = data.mentions ?? [];
+
+			// Collect all UIDs to notify (deduplicated, excluding the comment author)
+			const notifyUids = new Set<string>();
+
+			// 1. Content author — notify if not the commenter
+			const contentSnap = await contentRef.get();
+			const contentAuthorId = contentSnap.data()?.authorId as string | undefined;
+			if (contentAuthorId && contentAuthorId !== commentAuthorId) {
+				notifyUids.add(contentAuthorId);
+			}
+
+			// 2. Previous commenters on this content
+			const commentsSnap = await db
+				.collection(`boards/${boardId}/content/${contentId}/comments`)
+				.orderBy('createdAt', 'desc')
+				.limit(50)
+				.get();
+
+			for (const commentDoc of commentsSnap.docs) {
+				const uid = commentDoc.data().authorId as string;
+				if (uid && uid !== commentAuthorId) {
+					notifyUids.add(uid);
+				}
+			}
+
+			// 3. @mentioned members — resolve display names to UIDs
 			if (mentions.length > 0) {
-				// Resolve mentioned display names to member UIDs
 				const membersSnap = await db
 					.collection(`boards/${boardId}/members`)
 					.get();
 
-				const mentionedIds = membersSnap.docs
-					.filter((doc) => {
-						const memberName: string = doc.data().displayName ?? '';
-						return mentions.some(
-							(m) => memberName.toLowerCase() === m.toLowerCase()
-						);
-					})
-					.map((doc) => doc.id)
-					// Don't notify the comment author about their own mention
-					.filter((id) => id !== data.authorId);
-
-				if (mentionedIds.length > 0) {
-					const authorName: string = data.authorName ?? 'Someone';
-					await notifyBoardMembers(
-						boardId,
-						mentionedIds,
-						'You were mentioned',
-						`${authorName} mentioned you in a comment`
+				for (const memberDoc of membersSnap.docs) {
+					const memberName: string = memberDoc.data().displayName ?? '';
+					const isMentioned = mentions.some(
+						(m) => memberName.toLowerCase() === m.toLowerCase()
 					);
+					if (isMentioned && memberDoc.id !== commentAuthorId) {
+						notifyUids.add(memberDoc.id);
+					}
 				}
+			}
+
+			// Send notification to all collected UIDs
+			if (notifyUids.size > 0) {
+				// Choose appropriate message based on who's being notified
+				const hasMentions = mentions.length > 0;
+				const title = hasMentions ? 'New comment mention' : 'New comment';
+				const body = hasMentions
+					? `${authorName} mentioned you in a comment`
+					: `${authorName} commented on a post`;
+
+				await notifyBoardMembers(
+					boardId,
+					Array.from(notifyUids),
+					title,
+					body
+				);
 			}
 		} else if (before && !after) {
 			// Deleted
