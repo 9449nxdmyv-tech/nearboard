@@ -43,6 +43,8 @@ export {
 	subscribeToComments,
 	deleteComment,
 	toggleAcknowledgment,
+	followBoard,
+	unfollowBoard,
 	subscribeToLatestBriefing,
 	voteOnPoll,
 	subscribeToVotes,

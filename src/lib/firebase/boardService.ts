@@ -22,6 +22,8 @@ import {
 	updateDoc,
 	deleteField,
 	increment,
+	arrayUnion,
+	arrayRemove,
 	Timestamp,
 	type Unsubscribe,
 	type QueryDocumentSnapshot,
@@ -531,6 +533,40 @@ export async function deleteComment(
 	// Decrement comment count on parent content doc
 	const contentRef = doc(db(), 'boards', boardId, 'content', contentId);
 	updateDoc(contentRef, { commentCount: increment(-1) }).catch(console.error);
+}
+
+// ─── Follow operations ────────────────────────────────────────────────────────
+
+/**
+ * Follows a public board. Adds boardId to user's followingBoardIds
+ * and increments followerCount on the board.
+ */
+export async function followBoard(boardId: string, userId: string): Promise<void> {
+	const userRef = doc(db(), 'users', userId);
+	const boardRef = doc(db(), 'boards', boardId);
+
+	await updateDoc(userRef, {
+		followingBoardIds: arrayUnion(boardId)
+	});
+	await updateDoc(boardRef, {
+		followerCount: increment(1)
+	});
+}
+
+/**
+ * Unfollows a public board. Removes boardId from user's followingBoardIds
+ * and decrements followerCount on the board.
+ */
+export async function unfollowBoard(boardId: string, userId: string): Promise<void> {
+	const userRef = doc(db(), 'users', userId);
+	const boardRef = doc(db(), 'boards', boardId);
+
+	await updateDoc(userRef, {
+		followingBoardIds: arrayRemove(boardId)
+	});
+	await updateDoc(boardRef, {
+		followerCount: increment(-1)
+	});
 }
 
 // ─── Acknowledgment operations ────────────────────────────────────────────────

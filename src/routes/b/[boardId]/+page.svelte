@@ -12,9 +12,11 @@
 	import {
 		getBoard,
 		subscribeToBoardContentPaginated,
-		isContentVisible
+		isContentVisible,
+		followBoard,
+		unfollowBoard
 	} from '$lib/firebase';
-	import { userStore } from '$lib/stores';
+	import { userStore, showToast } from '$lib/stores';
 	import type { BoardDoc, ContentDoc } from '$lib/types';
 	import ContentRenderer from '$lib/components/ui/ContentRenderer.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -24,6 +26,47 @@
 	let content = $state<ContentDoc[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
+	let followBusy = $state(false);
+
+	const isFollowing = $derived(
+		$userStore.user?.followingBoardIds?.includes(boardId) ?? false
+	);
+	const isMember = $derived(
+		$userStore.user && board ? board.memberIds.includes($userStore.user.uid) : false
+	);
+
+	async function handleFollow() {
+		const user = $userStore.user;
+		if (!user || followBusy) return;
+		followBusy = true;
+		try {
+			if (isFollowing) {
+				await unfollowBoard(boardId, user.uid);
+				showToast('Unfollowed board');
+			} else {
+				await followBoard(boardId, user.uid);
+				showToast('Following board — updates will appear in your feed', 'success');
+			}
+			// Update local user store
+			userStore.update(s => {
+				if (!s.user) return s;
+				const ids = s.user.followingBoardIds ?? [];
+				return {
+					...s,
+					user: {
+						...s.user,
+						followingBoardIds: isFollowing
+							? ids.filter(id => id !== boardId)
+							: [...ids, boardId]
+					}
+				};
+			});
+		} catch {
+			showToast('Failed to update follow');
+		} finally {
+			followBusy = false;
+		}
+	}
 
 	const boardId = $derived($page.params.boardId ?? '');
 
@@ -58,6 +101,19 @@
 		goto(`/join/${boardId}`);
 	}
 </script>
+
+<svelte:head>
+	{#if board}
+		<title>{board.name} — Nearboard</title>
+		<meta property="og:title" content={board.name} />
+		<meta property="og:description" content={board.livingSummary?.headline || `A shared board with ${board.memberIds.length} member${board.memberIds.length === 1 ? '' : 's'}`} />
+		<meta property="og:image" content={`https://ogboardpreview-3ke2tgeeaa-uc.a.run.app?boardId=${boardId}`} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:type" content="website" />
+		<meta name="twitter:card" content="summary_large_image" />
+	{/if}
+</svelte:head>
 
 {#snippet navLeft()}
 	<a href="/" class="flex items-center gap-2 px-2">
@@ -96,12 +152,33 @@
 			<!-- Board header -->
 			<div class="flex flex-col items-center gap-2 mt-4 mb-4">
 				<h1 class="text-xl font-bold text-on-surface">{board.name}</h1>
-				<span class="text-[12px] text-muted">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
+				<div class="flex items-center gap-3 text-[12px] text-muted">
+					<span>{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
+					{#if board.followerCount}
+						<span>·</span>
+						<span>{board.followerCount} {board.followerCount === 1 ? 'follower' : 'followers'}</span>
+					{/if}
+				</div>
 
 				{#if board.livingSummary?.headline}
 					<p class="text-[13px] text-muted italic text-center max-w-sm leading-relaxed mt-1">
 						"{board.livingSummary.headline}"
 					</p>
+				{/if}
+
+				<!-- Follow button (for logged-in non-members) -->
+				{#if $userStore.user && !isMember}
+					<button
+						onclick={handleFollow}
+						disabled={followBusy}
+						class="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95
+							{isFollowing
+								? 'bg-surface-1 text-muted border border-border'
+								: 'bg-accent text-white'}"
+					>
+						<Icon icon={isFollowing ? 'ph:check-bold' : 'ph:plus-bold'} class="text-xs" />
+						{isFollowing ? 'Following' : 'Follow'}
+					</button>
 				{/if}
 			</div>
 

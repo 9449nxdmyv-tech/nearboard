@@ -23,3 +23,5 @@ export { processDirtyBoards } from './scheduled/processDirtyBoards.js';
 export { emailDigest } from './scheduled/emailDigest.js';
 export { digestUnsubscribe } from './triggers/digestUnsubscribe.js';
 export { cleanupTtsCache } from './scheduled/cleanupTtsCache.js';
+export { onThisDay } from './scheduled/onThisDay.js';
+export { ogBoardPreview } from './triggers/ogBoardPreview.js';

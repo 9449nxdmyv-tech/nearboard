@@ -46,6 +46,8 @@ export interface UserDoc {
 	digestTimezone?: string;
 	/** Timestamp of the last digest email sent (used as cutoff for next digest). */
 	lastDigestSentAt?: Timestamp;
+	/** IDs of public boards the user follows (read-only access, feed updates). */
+	followingBoardIds?: string[];
 	/** Number of boards owned by this user (Lever 6 — monetization). Free tier: 3 boards. */
 	ownedBoardCount?: number;
 	/** Subscription tier: 'free' | 'supporter' | 'lifetime' (Lever 6 — monetization) */
@@ -93,6 +95,8 @@ export interface BoardDoc {
 	summaryFocus?: string;
 	lastRegenerationRequestedAt?: Timestamp;
 	allowComments: boolean;
+	/** Number of users following this public board (not members). */
+	followerCount?: number;
 }
 
 export interface InviteDoc {
@@ -402,6 +406,30 @@ export interface PriceHistoryDoc {
 }
 
 // ─── Global Content Cache ─────────────────────────────────────────────────────
+
+// ─── On This Day memories ────────────────────────────────────────────────────
+
+export interface MemoryItem {
+	contentId: string;
+	boardId: string;
+	boardName: string;
+	type: string;
+	title: string;
+	imageUrl: string | null;
+	authorName: string;
+	originalDate: Timestamp;
+}
+
+export interface MemoryDoc {
+	userId: string;
+	date: string; // YYYY-MM-DD
+	items: MemoryItem[];
+	daysAgo: number; // 7, 30, or 365
+	label: string; // "1 week ago", "1 month ago", "1 year ago"
+	createdAt: Timestamp;
+}
+
+// ─── Global content cache ────────────────────────────────────────────────────
 
 export interface GlobalContentDoc {
 	/** SHA-256 hex digest of the normalized URL (= Firestore doc ID) */

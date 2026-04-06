@@ -18,7 +18,8 @@
 	import {
 		subscribeToBoardContentPaginated,
 		isContentVisible,
-		updateLastSeen
+		updateLastSeen,
+		getBoard
 	} from '$lib/firebase';
 	import type { ContentDoc } from '$lib/types';
 	import { shareContent } from '$lib/utils/share';
@@ -44,10 +45,22 @@
 
 	onMount(() => {
 		const boards = $boardStore.boards;
-		if (boards.length === 0) return;
+		const followingIds = $userStore.user?.followingBoardIds ?? [];
+		const memberBoardIds = new Set(boards.map(b => b.id));
+
+		// Only follow boards the user isn't already a member of
+		const followOnlyIds = followingIds.filter(id => !memberBoardIds.has(id));
+
+		if (boards.length === 0 && followOnlyIds.length === 0) return;
 
 		setFeedLoading(true);
 		const unsubs: (() => void)[] = [];
+
+		// Board metadata lookup (for followed boards we don't have in boardStore)
+		const boardMeta = new Map<string, { name: string; ownerId: string; allowComments: boolean }>();
+		for (const b of boards) {
+			boardMeta.set(b.id, { name: b.name, ownerId: b.ownerId, allowComments: b.allowComments ?? true });
+		}
 
 		const boardContentMap = new Map<string, ContentDoc[]>();
 		let rebuildTimer: ReturnType<typeof setTimeout>;
@@ -61,18 +74,19 @@
 			const user = $userStore.user;
 			const allItems: any[] = [];
 
-			for (const b of boards) {
-				const boardItems = boardContentMap.get(b.id) ?? [];
-				const isOwner = b.ownerId === user?.uid;
+			for (const [boardId, boardItems] of boardContentMap) {
+				const meta = boardMeta.get(boardId);
+				if (!meta) continue;
+				const isOwner = meta.ownerId === user?.uid;
 
 				for (const item of boardItems) {
 					if (isContentVisible(item, isOwner)) {
-						allItems.push({ 
-							content: item, 
-							boardName: b.name, 
-							boardId: b.id, 
+						allItems.push({
+							content: item,
+							boardName: meta.name,
+							boardId,
 							isOwner,
-							allowComments: b.allowComments ?? true
+							allowComments: meta.allowComments
 						});
 					}
 				}
@@ -81,6 +95,7 @@
 			setFeedItems(allItems);
 		}
 
+		// Subscribe to member boards
 		for (const board of boards) {
 			unsubs.push(
 				subscribeToBoardContentPaginated(board.id, (items) => {
@@ -88,6 +103,20 @@
 					rebuildFeed();
 				})
 			);
+		}
+
+		// Subscribe to followed boards (fetch metadata first)
+		for (const fId of followOnlyIds) {
+			getBoard(fId).then(b => {
+				if (!b || !b.isPublic) return;
+				boardMeta.set(fId, { name: b.name, ownerId: b.ownerId, allowComments: false });
+				unsubs.push(
+					subscribeToBoardContentPaginated(fId, (items) => {
+						boardContentMap.set(fId, items);
+						rebuildFeed();
+					})
+				);
+			}).catch(() => { /* board may have been deleted */ });
 		}
 
 		return () => {

@@ -7,7 +7,7 @@
 
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
-import type { BriefingDoc, VoiceContentDoc, BoardDoc, ContentType } from '$lib/types';
+import type { BriefingDoc, VoiceContentDoc, BoardDoc, ContentType, MemoryDoc } from '$lib/types';
 
 export interface BoardBriefing {
 	boardId: string;
@@ -50,6 +50,7 @@ export interface TodayState {
 	streaks: BoardStreak[];
 	reminders: BoardReminder[];
 	newItemCounts: BoardItemCounts[];
+	memories: MemoryDoc[];
 }
 
 const initial: TodayState = {
@@ -58,7 +59,8 @@ const initial: TodayState = {
 	unplayedVoiceNotes: [],
 	streaks: [],
 	reminders: [],
-	newItemCounts: []
+	newItemCounts: [],
+	memories: []
 };
 
 export const todayStore = writable<TodayState>(initial);
@@ -68,7 +70,7 @@ export const todayStore = writable<TodayState>(initial);
  * Fetches latest briefing, unplayed voice notes, streak info, reminders,
  * and new item counts per board.
  */
-export async function loadTodayData(boards: BoardDoc[]): Promise<void> {
+export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<void> {
 	if (!browser) return;
 	todayStore.update((s) => ({ ...s, loading: true }));
 
@@ -79,7 +81,8 @@ export async function loadTodayData(boards: BoardDoc[]): Promise<void> {
 			orderBy,
 			where,
 			getDocs,
-			limit
+			limit,
+			doc: firestoreDoc
 		} = await import('firebase/firestore');
 		const { db: getDbFn } = await import('$lib/firebase/app');
 		const db = getDbFn();
@@ -187,13 +190,26 @@ export async function loadTodayData(boards: BoardDoc[]): Promise<void> {
 			.map((r) => r.itemCounts)
 			.filter((c) => c.total > 0);
 
+		// Fetch "On This Day" memories for current user
+		let memories: MemoryDoc[] = [];
+		if (uid) {
+			const today = new Date().toISOString().slice(0, 10);
+			const memoriesSnap = await getDocs(query(
+				collection(db, 'users', uid, 'memories'),
+				where('date', '==', today),
+				orderBy('daysAgo', 'asc')
+			));
+			memories = memoriesSnap.docs.map(d => ({ ...d.data() }) as MemoryDoc);
+		}
+
 		todayStore.set({
 			loading: false,
 			briefings,
 			unplayedVoiceNotes,
 			streaks,
 			reminders,
-			newItemCounts
+			newItemCounts,
+			memories
 		});
 	} catch {
 		todayStore.update((s) => ({ ...s, loading: false }));

@@ -181,6 +181,7 @@
 		$todayStore.streaks.length === 0 &&
 		$todayStore.unplayedVoiceNotes.length === 0 &&
 		$todayStore.reminders.length === 0 &&
+		$todayStore.memories.length === 0 &&
 		visibleUnreadBoards.length === 0
 	);
 
@@ -230,6 +231,60 @@
 				</p>
 			{/if}
 		</div>
+
+		<!-- On This Day memories -->
+		{#if $todayStore.memories.length > 0}
+			{#each $todayStore.memories as memory (memory.daysAgo)}
+				<section in:fly={{ y: 8, duration: 300, delay: 50 }}>
+					<div class="flex items-center gap-2 mb-2">
+						<div class="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center">
+							<Icon icon="ph:clock-countdown-fill" class="text-violet-500 text-xs" />
+						</div>
+						<h3 class="text-[10px] font-bold text-muted uppercase tracking-widest">On This Day · {memory.label}</h3>
+					</div>
+					<div class="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory scrollbar-hide">
+						{#each memory.items as item (item.contentId)}
+							<a
+								href="/board/{item.boardId}"
+								class="shrink-0 w-[140px] snap-start bg-card rounded-card shadow-sm border border-border overflow-hidden
+									hover:border-violet-300 transition-colors group"
+							>
+								{#if item.imageUrl}
+									<img
+										src={item.imageUrl}
+										alt=""
+										width="140" height="96"
+										loading="lazy"
+										class="w-full h-24 object-cover"
+									/>
+								{:else}
+									<div class="w-full h-24 bg-gradient-to-br from-violet-50 to-violet-100 flex items-center justify-center">
+										<Icon
+											icon={item.type === 'note' ? 'ph:note' :
+												item.type === 'link' ? 'ph:link' :
+												item.type === 'photo' ? 'ph:image' :
+												item.type === 'video' ? 'ph:video-camera' :
+												item.type === 'voice' ? 'ph:microphone' :
+												item.type === 'location' ? 'ph:map-pin' :
+												item.type === 'poll' ? 'ph:chart-bar' :
+												item.type === 'list' ? 'ph:list-checks' :
+												'ph:package'}
+											class="text-2xl text-violet-300"
+										/>
+									</div>
+								{/if}
+								<div class="p-2">
+									{#if item.title}
+										<p class="text-[11px] font-medium text-primary line-clamp-2 leading-snug">{item.title}</p>
+									{/if}
+									<p class="text-[10px] text-muted mt-0.5">{item.boardName}</p>
+								</div>
+							</a>
+						{/each}
+					</div>
+				</section>
+			{/each}
+		{/if}
 
 		<!-- Streaks strip (gated to ≥3 days) -->
 		{#if $todayStore.streaks.length > 0}
