@@ -132,7 +132,7 @@
 				<button
 					onclick={handleUnlock}
 					disabled={saving}
-					class="px-6 py-3 bg-red-500 text-white rounded-lg text-sm font-medium
+					class="px-6 py-3 bg-error text-white rounded-lg text-sm font-medium
 						disabled:opacity-50 active:scale-[0.98] transition-transform"
 				>
 					{saving ? 'Unlocking...' : 'Unlock Early'}

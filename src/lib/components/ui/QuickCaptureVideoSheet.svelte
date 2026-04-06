@@ -434,8 +434,8 @@
 				<div class="flex items-center gap-2 bg-black/30 backdrop-blur-xl rounded-full px-4 py-2">
 					{#if recording}
 						<div class="relative flex h-2.5 w-2.5">
-							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-							<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-recording-indicator-pulse opacity-75"></span>
+							<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-recording-indicator-dot"></span>
 						</div>
 					{:else}
 						<div class="h-2.5 w-2.5 rounded-full bg-white/30"></div>
@@ -459,7 +459,7 @@
 				<!-- Progress bar -->
 				<div class="w-full max-w-xs sm:max-w-sm">
 					<div class="h-1 bg-white/15 rounded-full overflow-hidden">
-						<div class="h-full bg-red-500 rounded-full transition-all duration-100 ease-linear"
+						<div class="h-full bg-recording-indicator-dot rounded-full transition-all duration-100 ease-linear"
 							style="width: {progressPct}%"></div>
 					</div>
 				</div>
@@ -471,10 +471,10 @@
 						active:scale-95 transition-transform"
 					aria-label={recording ? 'Stop recording' : 'Start recording'}
 				>
-					<div class="absolute inset-0 rounded-full border-[4px] {recording ? 'border-red-500' : 'border-white'} transition-colors"></div>
+					<div class="absolute inset-0 rounded-full border-[4px] {recording ? 'border-recording-indicator-border' : 'border-white'} transition-colors"></div>
 					<div class="{recording
-						? 'w-7 h-7 sm:w-6 sm:h-6 rounded-[6px] bg-red-500'
-						: 'w-[60px] h-[60px] sm:w-[54px] sm:h-[54px] rounded-full bg-red-500'} transition-all duration-200"></div>
+						? 'w-7 h-7 sm:w-6 sm:h-6 rounded-[6px] bg-recording-indicator-dot'
+						: 'w-[60px] h-[60px] sm:w-[54px] sm:h-[54px] rounded-full bg-recording-indicator-dot'} transition-all duration-200"></div>
 				</button>
 
 				{#if !recording}

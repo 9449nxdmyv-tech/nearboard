@@ -168,7 +168,7 @@
 		</Block>
 	{:else if !board}
 		<Block class="!text-center !mt-12">
-			<p class="text-red-500 text-sm">Board not found</p>
+			<p class="text-error text-sm">Board not found</p>
 		</Block>
 	{:else}
 		<div>
@@ -380,7 +380,7 @@
 						{/if}
 						{#if isOwner && member.userId !== board?.ownerId}
 							<Button small clear onClick={() => { confirmRemoveMember = member.userId; }}>
-								<span class="text-red-500 text-xs">Remove</span>
+								<span class="text-error text-xs">Remove</span>
 							</Button>
 						{/if}
 					{/snippet}
@@ -419,7 +419,7 @@
 									Approve
 								</Button>
 								<Button small rounded outline onClick={() => handleRejectRequest(request.id)}>
-									<span class="text-red-500">Reject</span>
+									<span class="text-error">Reject</span>
 								</Button>
 							</div>
 						{/snippet}
@@ -440,7 +440,7 @@
 
 			<!-- Content moderation (owner only) -->
 			{#if isOwner && quarantined.length > 0}
-				<BlockTitle class="!text-amber-500">Flagged Content ({quarantined.length})</BlockTitle>
+				<BlockTitle class="!text-warning">Flagged Content ({quarantined.length})</BlockTitle>
 				<List inset strong>
 					{#each quarantined as item (item.id)}
 						{#snippet modAfter()}
@@ -449,7 +449,7 @@
 									Approve
 								</Button>
 								<Button small rounded outline onClick={() => handleModeration(item.id, 'quarantined')}>
-									<span class="text-red-500">Remove</span>
+									<span class="text-error">Remove</span>
 								</Button>
 							</div>
 						{/snippet}
@@ -477,10 +477,10 @@
 
 			<!-- Danger zone -->
 			{#if isOwner}
-				<BlockTitle class="!text-red-400">Danger Zone</BlockTitle>
+				<BlockTitle class="!text-error">Danger Zone</BlockTitle>
 				<Block>
 					<Button large rounded outline onClick={() => { confirmDeleteBoard = true; }}>
-						<span class="text-red-500">Delete Board</span>
+						<span class="text-error">Delete Board</span>
 					</Button>
 					<p class="text-xs text-muted mt-2 text-center">This permanently deletes the board and all content.</p>
 				</Block>

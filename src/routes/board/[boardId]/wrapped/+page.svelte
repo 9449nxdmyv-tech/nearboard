@@ -47,7 +47,7 @@
 </script>
 
 <Page>
-<div class="flex flex-col h-screen bg-gradient-to-b from-[#6C63FF] to-[#1A1A2E]">
+<div class="flex flex-col h-screen bg-gradient-to-b from-primary to-[#1A1A2E]">
 	<Header
 		title="Wrapped {new Date().getFullYear()}"
 		backHref="/board/{boardId}"

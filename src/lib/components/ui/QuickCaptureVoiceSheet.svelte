@@ -339,8 +339,8 @@
 					<!-- Timer -->
 					<div class="flex items-center gap-2.5">
 						<div class="relative flex h-3 w-3">
-							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-							<span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-recording-indicator-pulse opacity-75"></span>
+							<span class="relative inline-flex rounded-full h-3 w-3 bg-recording-indicator-dot"></span>
 						</div>
 						<span class="text-2xl font-bold text-primary tabular-nums">{timeDisplay}</span>
 					</div>
@@ -358,7 +358,7 @@
 					<!-- Progress bar -->
 					<div class="w-full max-w-xs">
 						<div class="h-1 bg-border/30 rounded-full overflow-hidden">
-							<div class="h-full bg-red-500 rounded-full transition-all duration-100 ease-linear"
+							<div class="h-full bg-recording-indicator-dot rounded-full transition-all duration-100 ease-linear"
 								style="width: {progressPct}%"></div>
 						</div>
 						<p class="text-[11px] text-muted text-center mt-1.5">{MAX_SECONDS - Math.floor(elapsed)}s remaining</p>
@@ -371,8 +371,8 @@
 							active:scale-95 transition-transform"
 						aria-label="Stop recording"
 					>
-						<div class="absolute inset-0 rounded-full border-[4px] border-red-500 transition-colors"></div>
-						<div class="w-7 h-7 rounded-[6px] bg-red-500 transition-all duration-200"></div>
+						<div class="absolute inset-0 rounded-full border-[4px] border-recording-indicator-border transition-colors"></div>
+						<div class="w-7 h-7 rounded-[6px] bg-recording-indicator-dot transition-all duration-200"></div>
 					</button>
 
 					<p class="text-[13px] text-muted font-medium">Tap to stop</p>

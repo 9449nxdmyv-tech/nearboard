@@ -63,11 +63,11 @@
 				onerror={() => (imageError = true)} />
 		{:else}
 			<div class="w-full aspect-video bg-primary flex items-center justify-center">
-				<Icon icon="ph:youtube-logo-fill" class="text-red-500 text-5xl opacity-30" />
+				<Icon icon="ph:youtube-logo-fill" class="text-youtube-red text-5xl opacity-30" />
 			</div>
 		{/if}
 		<div class="absolute inset-0 bg-black/25 flex items-center justify-center group-hover:bg-black/35 transition-colors duration-300">
-			<div class="play-btn w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-xl transition-all duration-300 group-hover:scale-105 group-hover:shadow-red-600/40 group-hover:shadow-2xl">
+			<div class="play-btn w-16 h-16 rounded-full bg-youtube-red flex items-center justify-center shadow-xl transition-all duration-300 group-hover:scale-105 group-hover:shadow-youtube-red/40 group-hover:shadow-2xl">
 				<Icon icon="ph:play-fill" class="text-white text-3xl ml-0.5" />
 			</div>
 		</div>

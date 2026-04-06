@@ -22,6 +22,8 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import MasonryGrid from '$lib/components/ui/MasonryGrid.svelte';
 
+	const boardId = $derived($page.params.boardId ?? '');
+
 	let board = $state<BoardDoc | null>(null);
 	let content = $state<ContentDoc[]>([]);
 	let loading = $state(true);
@@ -67,8 +69,6 @@
 			followBusy = false;
 		}
 	}
-
-	const boardId = $derived($page.params.boardId ?? '');
 
 	onMount(() => {
 		if (!boardId) return;

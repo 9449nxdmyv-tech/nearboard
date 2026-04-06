@@ -237,8 +237,8 @@
 			{#each $todayStore.memories as memory (memory.daysAgo)}
 				<section in:fly={{ y: 8, duration: 300, delay: 50 }}>
 					<div class="flex items-center gap-2 mb-2">
-						<div class="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center">
-							<Icon icon="ph:clock-countdown-fill" class="text-violet-500 text-xs" />
+						<div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+							<Icon icon="ph:clock-countdown-fill" class="text-primary text-xs" />
 						</div>
 						<h3 class="text-[10px] font-bold text-muted uppercase tracking-widest">On This Day · {memory.label}</h3>
 					</div>
@@ -247,7 +247,7 @@
 							<a
 								href="/board/{item.boardId}"
 								class="shrink-0 w-[140px] snap-start bg-card rounded-card shadow-sm border border-border overflow-hidden
-									hover:border-violet-300 transition-colors group"
+									hover:border-primary/30 transition-colors group"
 							>
 								{#if item.imageUrl}
 									<img
@@ -258,7 +258,7 @@
 										class="w-full h-24 object-cover"
 									/>
 								{:else}
-									<div class="w-full h-24 bg-gradient-to-br from-violet-50 to-violet-100 flex items-center justify-center">
+									<div class="w-full h-24 bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center">
 										<Icon
 											icon={item.type === 'note' ? 'ph:note' :
 												item.type === 'link' ? 'ph:link' :
@@ -269,7 +269,7 @@
 												item.type === 'poll' ? 'ph:chart-bar' :
 												item.type === 'list' ? 'ph:list-checks' :
 												'ph:package'}
-											class="text-2xl text-violet-300"
+											class="text-2xl text-primary/30"
 										/>
 									</div>
 								{/if}
@@ -313,10 +313,10 @@
 					{#each $todayStore.reminders as r}
 						<a
 							href="/board/{r.boardId}"
-							class="flex items-start gap-3 bg-amber-50 border border-amber-200/50 rounded-card p-3
-								hover:border-amber-300 transition-colors"
+							class="flex items-start gap-3 bg-reminder-bg border border-reminder-border rounded-card p-3
+								hover:border-reminder-hover-border transition-colors"
 						>
-							<div class="w-7 h-7 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+							<div class="w-7 h-7 rounded-full bg-reminder-icon-bg text-reminder-icon-text flex items-center justify-center shrink-0 mt-0.5">
 								<Icon icon="ph:bell-ringing" class="text-sm" />
 							</div>
 							<div class="flex-1 min-w-0">

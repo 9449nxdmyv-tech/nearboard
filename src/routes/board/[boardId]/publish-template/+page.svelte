@@ -172,7 +172,7 @@
 						</div>
 						<button
 							onclick={() => removeSection(i)}
-							class="text-muted hover:text-red-500 transition-colors shrink-0"
+							class="text-muted hover:text-error transition-colors shrink-0"
 							aria-label="Remove section"
 						>
 							<Icon icon="ph:x" class="text-sm" />
@@ -255,7 +255,7 @@
 		{/if}
 
 		{#if error}
-			<p class="text-red-500 text-sm text-center mb-4">{error}</p>
+			<p class="text-error text-sm text-center mb-4">{error}</p>
 		{/if}
 
 		<!-- Publish button -->

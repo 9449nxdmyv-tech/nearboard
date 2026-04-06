@@ -10,9 +10,9 @@
 
 @theme {
 	/* ─── Primary brand ─────────────────────────────── */
-	--color-primary: #007aff;
-	--color-primary-shade: #0062cc;
-	--color-primary-tint: #4da3ff;
+	--color-primary: #6c63ff;
+	--color-primary-shade: #5a52d5;
+	--color-primary-tint: #918bff;
 
 	/* ─── Accent ────────────────────────────────────── */
 	--color-accent: #ff9500;
@@ -32,14 +32,14 @@
 
 
 	/* ─── Surfaces ──────────────────────────────────── */
-	--color-surface: #ffffff;
+	--color-surface: #fafaf8;
 	--color-surface-1: #f2f2f7;
 	--color-surface-2: #e5e5ea;
 	--color-surface-3: #d1d1d6;
 
 	/* ─── Text ──────────────────────────────────────── */
 	--color-on-surface: #1c1c1e;
-	--color-on-surface-secondary: #3a3a3c;
+	--color-on-surface-secondary: #3f3d56;
 	--color-muted: #8e8e93;
 
 	/* ─── Borders ───────────────────────────────────── */

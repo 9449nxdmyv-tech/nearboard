@@ -63,7 +63,7 @@
 				<div class="flex items-center gap-3 mb-2">
 					<Icon 
 						icon={isSupporter ? 'ph:star-fill' : 'ph:user-circle'} 
-						class="text-2xl {isSupporter ? 'text-amber-400' : 'text-on-surface/60'}" 
+						class="text-2xl {isSupporter ? 'text-warning' : 'text-on-surface/60'}"
 					/>
 					<div>
 						<p class="text-sm font-medium text-primary">
@@ -75,8 +75,8 @@
 					</div>
 				</div>
 				{#if !isSupporter && ownedBoardCount >= FREE_TIER_LIMIT}
-					<div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-						<p class="text-xs text-amber-600 font-medium">
+					<div class="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg">
+						<p class="text-xs text-warning font-medium">
 							<Icon icon="ph:warning" class="inline mr-1" />
 							You've reached the free tier limit. Upgrade to create more boards.
 						</p>

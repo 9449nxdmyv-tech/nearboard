@@ -211,8 +211,8 @@
 							onclick={(e) => toggleUpvote(e, template.id)}
 							class="flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors
 								{upvotes[template.id]
-									? 'bg-red-50 text-red-500 border border-red-200'
-									: 'bg-surface text-muted border border-border hover:border-red-200 hover:text-red-400'}"
+									? 'bg-error/5 text-error border border-error/20'
+									: 'bg-surface text-muted border border-border hover:border-error/20 hover:text-error/60'}"
 							aria-label={upvotes[template.id] ? 'Remove upvote' : 'Upvote template'}
 						>
 							<Icon icon={upvotes[template.id] ? 'ph:heart-fill' : 'ph:heart'} class="text-sm" />

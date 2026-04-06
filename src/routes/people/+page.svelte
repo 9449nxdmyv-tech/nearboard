@@ -120,7 +120,7 @@
 									<span class="text-[11px] font-medium">{getBoardCount(person.uid)}</span>
 								</div>
 								{#if getOwnedCount(person.uid) > 0}
-									<div class="flex items-center gap-1 text-amber-500">
+									<div class="flex items-center gap-1 text-warning">
 										<Icon icon="ph:crown-simple-fill" class="text-[11px]" />
 										<span class="text-[11px] font-medium">{getOwnedCount(person.uid)}</span>
 									</div>

@@ -293,7 +293,7 @@
 					<button
 						onclick={() => { showCaptureSheet = true; hapticLight(); }}
 						class="absolute left-1/2 -translate-x-1/2 -top-2 z-10
-							w-12 h-12 rounded-full bg-accent text-white shadow-lg shadow-accent/30
+							w-12 h-12 rounded-full bg-primary text-white shadow-lg shadow-primary/30
 							flex items-center justify-center press-scale
 							active:shadow-sm transition-all"
 						aria-label="Add content"

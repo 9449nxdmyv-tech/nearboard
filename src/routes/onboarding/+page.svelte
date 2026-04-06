@@ -166,7 +166,7 @@
 			<div class="w-full max-w-sm">
 				<AgeGate onVerified={handleAgeVerified} />
 				{#if error}
-					<p class="text-red-500 text-sm text-center mt-4">{error}</p>
+					<p class="text-error text-sm text-center mt-4">{error}</p>
 				{/if}
 			</div>
 		</div>
@@ -331,7 +331,7 @@
 					{/if}
 
 					{#if error}
-						<p class="text-red-500 text-sm text-center">{error}</p>
+						<p class="text-error text-sm text-center">{error}</p>
 					{/if}
 				</div>
 			{/if}
@@ -358,15 +358,15 @@
 						<div class="w-4 h-4 rounded-full bg-success/20 border-[1.5px] border-card flex items-center justify-center">
 							<span class="text-[6px] text-success font-semibold">M</span>
 						</div>
-						<div class="w-4 h-4 rounded-full bg-orange-200 border-[1.5px] border-card flex items-center justify-center">
-							<span class="text-[6px] text-orange-600 font-semibold">J</span>
+						<div class="w-4 h-4 rounded-full bg-warning/20 border-[1.5px] border-card flex items-center justify-center">
+							<span class="text-[6px] text-warning font-semibold">J</span>
 						</div>
 					</div>
 					<span class="text-[9px] text-muted">3 members</span>
 				</div>
 			</div>
 			<!-- Streak badge — matches StreakBadge.svelte -->
-			<span class="inline-flex items-center gap-0.5 text-[9px] font-medium bg-orange-50 text-orange-600 rounded-full px-2 py-0.5">
+			<span class="inline-flex items-center gap-0.5 text-[9px] font-medium bg-streak-low-bg text-streak-low-text rounded-full px-2 py-0.5">
 				<Icon icon="ph:flame-fill" class="text-[8px]" />
 				12d
 			</span>
@@ -474,10 +474,10 @@
 		<!-- Orbiting items -->
 		{@render fabOrb(-55, -60, 'ph:note-pencil-fill', 'Note', 'bg-accent/10 text-accent')}
 		{@render fabOrb(55, -60, 'ph:link-bold', 'Link', 'bg-success/10 text-success')}
-		{@render fabOrb(75, 12, 'ph:camera-fill', 'Photo', 'bg-orange-100 text-orange-500')}
-		{@render fabOrb(40, 68, 'ph:microphone-fill', 'Voice', 'bg-red-100 text-red-500')}
-		{@render fabOrb(-40, 68, 'ph:chart-bar-fill', 'Poll', 'bg-purple-100 text-purple-500')}
-		{@render fabOrb(-75, 12, 'ph:map-pin-fill', 'Place', 'bg-blue-100 text-blue-500')}
+		{@render fabOrb(75, 12, 'ph:camera-fill', 'Photo', 'bg-type-photo/10 text-type-photo')}
+		{@render fabOrb(40, 68, 'ph:microphone-fill', 'Voice', 'bg-type-voice/10 text-type-voice')}
+		{@render fabOrb(-40, 68, 'ph:chart-bar-fill', 'Poll', 'bg-type-poll/10 text-type-poll')}
+		{@render fabOrb(-75, 12, 'ph:map-pin-fill', 'Place', 'bg-type-location/10 text-type-location')}
 	</div>
 
 	<!-- Example cards -->
@@ -530,7 +530,7 @@
 			<Icon icon="ph:headphones" class="text-accent/20 text-5xl" />
 			<!-- Discount badge -->
 			<div class="absolute top-2.5 right-2.5 bg-card rounded-full px-2.5 py-1 shadow-card border border-border">
-				<span class="text-[10px] font-bold text-red-500">-38%</span>
+				<span class="text-[10px] font-bold text-error">-38%</span>
 			</div>
 		</div>
 		<div class="p-4">
@@ -627,7 +627,7 @@
 
 	<!-- Smart reminder — notification style -->
 	<div class="w-full bg-card rounded-card shadow-card border border-border p-3 flex items-center gap-2.5">
-		<div class="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+		<div class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center shrink-0">
 			<Icon icon="ph:bell-ringing-fill" class="text-sm" />
 		</div>
 		<div class="flex-1 min-w-0">
