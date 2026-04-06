@@ -107,7 +107,7 @@
 		<title>{board.name} — Nearboard</title>
 		<meta property="og:title" content={board.name} />
 		<meta property="og:description" content={board.livingSummary?.headline || `A shared board with ${board.memberIds.length} member${board.memberIds.length === 1 ? '' : 's'}`} />
-		<meta property="og:image" content={`https://ogboardpreview-3ke2tgeeaa-uc.a.run.app?boardId=${boardId}`} />
+		<meta property="og:image" content={`https://us-central1-nearboard-app.cloudfunctions.net/ogBoardPreview?boardId=${boardId}`} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
 		<meta property="og:type" content="website" />
