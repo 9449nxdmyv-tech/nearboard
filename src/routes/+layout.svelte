@@ -109,6 +109,8 @@
 					userIntent: 'Quick capture'
 				} as Omit<NoteContentDoc, 'id' | 'createdAt'>);
 				showToast('Note added!', 'success');
+				showCaptureSheet = false;
+				if (!currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 			} else {
 				const url = data.url;
 				const domain = new URL(url).hostname.replace('www.', '');
@@ -163,6 +165,8 @@
 					} as Omit<LinkContentDoc, 'id' | 'createdAt'>);
 					showToast('Link added!', 'success');
 				}
+				showCaptureSheet = false;
+				if (!currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 			}
 		} catch {
 			showToast('Failed to add content', 'error');
@@ -177,6 +181,13 @@
 		}
 		captureTargetBoardId = bid;
 		captureSheetType = type;
+		showCaptureSheet = false;
+	}
+
+	function handleCaptureSheetClose() {
+		const bid = captureTargetBoardId;
+		captureSheetType = null;
+		if (bid && !currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 	}
 
 	// ─── Auth & lifecycle ────────────────────────────────────────
@@ -359,25 +370,25 @@
 
 <!-- Capture sheets -->
 {#if captureSheetType === 'photo' && captureTargetBoardId}
-	<QuickCapturePhotoSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCapturePhotoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
 
 {#if captureSheetType === 'video' && captureTargetBoardId}
-	<QuickCaptureVideoSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCaptureVideoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
 
 {#if captureSheetType === 'voice' && captureTargetBoardId}
-	<QuickCaptureVoiceSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCaptureVoiceSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
 
 {#if captureSheetType === 'list' && captureTargetBoardId}
-	<QuickCaptureListSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCaptureListSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
 
 {#if captureSheetType === 'poll' && captureTargetBoardId}
-	<QuickCapturePollSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCapturePollSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
 
 {#if captureSheetType === 'location' && captureTargetBoardId}
-	<QuickCaptureLocationSheet boardId={captureTargetBoardId} onClose={() => { captureSheetType = null; }} />
+	<QuickCaptureLocationSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
 {/if}
