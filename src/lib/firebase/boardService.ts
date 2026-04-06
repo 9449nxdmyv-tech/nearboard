@@ -530,9 +530,13 @@ export async function deleteComment(
 	commentId: string
 ): Promise<void> {
 	await deleteDoc(doc(db(), 'boards', boardId, 'content', contentId, 'comments', commentId));
-	// Decrement comment count on parent content doc
+	// Decrement comment count on parent content doc (floor at 0)
 	const contentRef = doc(db(), 'boards', boardId, 'content', contentId);
-	updateDoc(contentRef, { commentCount: increment(-1) }).catch(console.error);
+	const snap = await getDoc(contentRef);
+	const current = (snap.data()?.commentCount as number) ?? 0;
+	if (current > 0) {
+		updateDoc(contentRef, { commentCount: increment(-1) }).catch(console.error);
+	}
 }
 
 // ─── Follow operations ────────────────────────────────────────────────────────

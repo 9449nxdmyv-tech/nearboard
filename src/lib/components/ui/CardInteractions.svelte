@@ -39,7 +39,7 @@
 			aria-label="Toggle comments"
 		>
 			<Icon icon={showComments ? 'ph:chat-circle-dots-fill' : 'ph:chat-circle-dots'} class="text-lg" />
-			{#if commentCount}
+			{#if commentCount && commentCount > 0}
 				<span class="text-xs font-semibold tabular-nums">{commentCount}</span>
 			{/if}
 		</button>
