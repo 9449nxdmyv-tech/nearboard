@@ -22,7 +22,7 @@
 	import { initializeApp, getApps } from 'firebase/app';
 	import type { PageMetadata } from '$lib/types/api';
 	import { refineContentType } from '$lib/utils/contentDetector';
-	import { extractDomain, faviconUrl } from '$lib/utils/ogParser';
+	import { extractDomain, faviconUrl } from '$lib/utils/urlUtils';
 
 	// Firebase init (reads same VITE_ env vars baked at build time)
 	const firebaseConfig = {

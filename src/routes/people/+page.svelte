@@ -52,11 +52,11 @@
 </script>
 
 <svelte:head>
-	<title>People — Nearboard</title>
+	<title>Friends — Nearboard</title>
 </svelte:head>
 
 <Page>
-	<PageHeader title="People" />
+	<PageHeader title="Friends" />
 
 	<div class="px-4 sm:px-6 py-5">
 		{#if loading}
@@ -74,12 +74,12 @@
 				<div class="w-16 h-16 rounded-full bg-accent/8 flex items-center justify-center mb-4">
 					<Icon icon="ph:users" class="text-3xl text-on-surface/40" />
 				</div>
-				<p class="text-primary font-semibold text-[15px]">No board members yet</p>
-				<p class="text-sm text-muted mt-1.5 text-center max-w-[240px]">Join or create boards to see people here.</p>
+				<p class="text-primary font-semibold text-[15px]">No friends yet</p>
+				<p class="text-sm text-muted mt-1.5 text-center max-w-[240px]">Join or create boards to see friends here.</p>
 			</div>
 		{:else}
 			<p class="text-[13px] text-muted mb-4 px-1">
-				{people.length} {people.length === 1 ? 'person' : 'people'} across your boards
+				{people.length} {people.length === 1 ? 'friend' : 'friends'} across your boards
 			</p>
 			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
 				{#each people as person, i (person.uid)}
@@ -116,12 +116,12 @@
 							<!-- Stats row -->
 							<div class="flex items-center justify-center gap-3 mt-2">
 								<div class="flex items-center gap-1 text-muted">
-									<Icon icon="ph:squares-four-fill" class="text-[11px]" />
+									<Icon icon="ph:squares-four" class="text-[11px]" />
 									<span class="text-[11px] font-medium">{getBoardCount(person.uid)}</span>
 								</div>
 								{#if getOwnedCount(person.uid) > 0}
 									<div class="flex items-center gap-1 text-warning">
-										<Icon icon="ph:crown-simple-fill" class="text-[11px]" />
+										<Icon icon="ph:crown-simple" class="text-[11px]" />
 										<span class="text-[11px] font-medium">{getOwnedCount(person.uid)}</span>
 									</div>
 								{/if}

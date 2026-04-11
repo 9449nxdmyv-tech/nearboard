@@ -68,7 +68,11 @@ function createToast(
 		icon: options.icon
 	};
 
-	toastStore.update((toasts) => [...toasts, toast]);
+	toastStore.update((toasts) => {
+		// Cap at 5 visible toasts — drop oldest if over limit
+		const updated = [...toasts, toast];
+		return updated.length > 5 ? updated.slice(-5) : updated;
+	});
 
 	// Haptic feedback
 	if (type === 'success') hapticSuccess();
@@ -93,6 +97,13 @@ export function updateToast(id: string, updates: Partial<Toast>): void {
 	toastStore.update((toasts) =>
 		toasts.map((t) => (t.id === id ? { ...t, ...updates } : t))
 	);
+
+	// Schedule auto-dismiss if duration was updated
+	if (updates.duration && updates.duration > 0) {
+		setTimeout(() => {
+			dismissToast(id);
+		}, updates.duration);
+	}
 }
 
 // Convenience methods

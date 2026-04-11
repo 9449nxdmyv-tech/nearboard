@@ -65,6 +65,45 @@ export const WHATSAPP_IMPORT_MAX_CARDS = 200;
 /** WhatsApp import: only process messages from last N days */
 export const WHATSAPP_IMPORT_RECENCY_DAYS = 30;
 
+// ─── Experience Settings ─────────────────────────────────────────────────────
+
+import type { UserExperiencePreferences } from '$lib/types/firestore';
+
+/** System default experience — calm, intentional, human-centered. */
+export const DEFAULT_EXPERIENCE: UserExperiencePreferences = {
+	scrollBehavior: 'load-more',
+	videoPlayback: 'tap-to-play',
+	feedOrder: 'newest',
+	conversationMode: 'board',
+	layoutStyle: 'single-column',
+	preset: 'calm'
+};
+
+/** Preset definitions for quick experience selection. */
+export const EXPERIENCE_PRESETS: Record<'calm' | 'balanced' | 'lively', Omit<UserExperiencePreferences, 'preset' | 'updatedAt'>> = {
+	calm: {
+		scrollBehavior: 'load-more',
+		videoPlayback: 'tap-to-play',
+		feedOrder: 'newest',
+		conversationMode: 'board',
+		layoutStyle: 'single-column'
+	},
+	balanced: {
+		scrollBehavior: 'paged',
+		videoPlayback: 'wifi-autoplay',
+		feedOrder: 'most-active',
+		conversationMode: 'hybrid',
+		layoutStyle: 'single-column'
+	},
+	lively: {
+		scrollBehavior: 'infinite',
+		videoPlayback: 'muted-autoplay',
+		feedOrder: 'most-active',
+		conversationMode: 'chat',
+		layoutStyle: 'masonry'
+	}
+};
+
 /** Content types for board items */
 export const CONTENT_TYPES = {
 	NOTE: 'note',
@@ -84,7 +123,7 @@ export type ContentType = (typeof CONTENT_TYPES)[keyof typeof CONTENT_TYPES];
 export const TAB_ITEMS: { href: string; icon: string; iconActive: string; label: string }[] = [
 	{ href: '/', icon: 'ph:house', iconActive: 'ph:house-fill', label: 'Home' },
 	{ href: '/feed', icon: 'ph:globe', iconActive: 'ph:globe-hemisphere-west-fill', label: 'Feed' },
-	{ href: '/templates', icon: 'ph:layout', iconActive: 'ph:layout-fill', label: 'Templates' },
+	{ href: '/people', icon: 'ph:users-three', iconActive: 'ph:users-three-fill', label: 'Friends' },
 	{ href: '/profile', icon: 'ph:user', iconActive: 'ph:user-fill', label: 'Profile' }
 ];
 

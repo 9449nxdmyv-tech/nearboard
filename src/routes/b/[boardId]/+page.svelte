@@ -168,17 +168,14 @@
 
 				<!-- Follow button (for logged-in non-members) -->
 				{#if $userStore.user && !isMember}
-					<button
-						onclick={handleFollow}
-						disabled={followBusy}
-						class="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95
-							{isFollowing
-								? 'bg-surface-1 text-muted border border-border'
-								: 'bg-accent text-white'}"
-					>
-						<Icon icon={isFollowing ? 'ph:check-bold' : 'ph:plus-bold'} class="text-xs" />
-						{isFollowing ? 'Following' : 'Follow'}
-					</button>
+					<div class="mt-1">
+						<Button small rounded onClick={handleFollow} disabled={followBusy}
+							outline={isFollowing}
+						>
+							<Icon icon={isFollowing ? 'ph:check-bold' : 'ph:plus-bold'} class="text-xs mr-1.5" />
+							{isFollowing ? 'Following' : 'Follow'}
+						</Button>
+					</div>
 				{/if}
 			</div>
 

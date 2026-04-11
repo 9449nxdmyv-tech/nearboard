@@ -37,6 +37,12 @@
 	--color-surface-2: #e5e5ea;
 	--color-surface-3: #d1d1d6;
 
+	/* ─── Konsta UI Compatibility ───────────────────── */
+	--color-ios-light-surface: var(--color-surface);
+	--color-ios-light-surface-1: var(--color-surface-1);
+	--color-ios-light-surface-2: var(--color-surface-2);
+	--color-ios-light-surface-3: var(--color-surface-3);
+
 	/* ─── Text ──────────────────────────────────────── */
 	--color-on-surface: #1c1c1e;
 	--color-on-surface-secondary: #3f3d56;
@@ -181,6 +187,30 @@ html {
 	-webkit-tap-highlight-color: transparent;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	background-color: var(--color-surface);
+	min-height: 100%;
+
+	/* Konsta UI iOS Light surface overrides to match our design tokens */
+	--k-ios-light-surface: var(--color-surface);
+	--k-ios-light-surface-1: var(--color-surface-1);
+	--k-ios-light-surface-2: var(--color-surface-2);
+	--k-ios-light-surface-3: var(--color-surface-3);
+	
+	/* Match primary brand */
+	--k-ios-light-primary: var(--color-primary);
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background-color: var(--color-surface);
+	color: var(--color-on-surface);
+}
+
+#app {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
 }
 
 /* Hide scrollbars in scroll containers (keep scroll behavior) */
@@ -257,9 +287,9 @@ html {
 	position: relative !important;
 }
 
-/* Konsta Sheet/Actions: raise above bottom tab bar (z-40) */
-.k-sheet-backdrop, .k-sheet, .k-actions-backdrop, .k-actions {
-	z-index: 50 !important;
+/* Konsta Sheet/Actions/Popups: raise above everything including bottom tab bar (z-40) and other overlays */
+.k-sheet-backdrop, .k-sheet, .k-actions-backdrop, .k-actions, .k-popup-backdrop, .k-popup {
+	z-index: 200 !important;
 }
 
 /* Gradient text utility */

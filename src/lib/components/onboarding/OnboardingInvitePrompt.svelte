@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
+	import { Searchbar, Button } from 'konsta/svelte';
 	import { PAGE_TRANSITION } from '$lib/config/animations';
 	import { userStore, showToast } from '$lib/stores';
 	import { inviteContacts, generateInviteLink } from '$lib/firebase';
@@ -124,14 +125,14 @@
 			</div>
 		{:else if hasContactsAccess && contacts.length > 0}
 			<!-- Search -->
-			<input
-				type="text"
-				bind:value={searchQuery}
-				placeholder="Search contacts..."
-				class="w-full py-3 px-4 border border-border rounded-lg text-sm
-					bg-surface placeholder:text-muted focus:outline-none focus:border-accent
-					transition-colors mb-4"
-			/>
+			<div class="mb-4">
+				<Searchbar
+					value={searchQuery}
+					onInput={(e) => { searchQuery = e.target.value; }}
+					onClear={() => { searchQuery = ''; }}
+					placeholder="Search contacts..."
+				/>
+			</div>
 
 			<!-- Contact list -->
 			<div class="w-full flex-1 overflow-y-auto max-h-[40vh] space-y-1 mb-4">
@@ -157,21 +158,15 @@
 				{/each}
 			</div>
 
-			<button
-				onclick={handleInvite}
-				disabled={selectedIds.size === 0 || sending}
-				class="w-full py-3.5 bg-accent text-white rounded-lg font-medium
-					disabled:opacity-50 active:scale-[0.98] transition-transform
-					flex items-center justify-center gap-2"
-			>
+			<Button large rounded onClick={handleInvite} disabled={selectedIds.size === 0 || sending}>
 				{#if sending}
-					<Icon icon="ph:circle-notch-bold" class="animate-spin" />
+					<Icon icon="ph:circle-notch-bold" class="animate-spin mr-2" />
 					Sending...
 				{:else}
-					<Icon icon="ph:share-network" class="text-base" />
+					<Icon icon="ph:share-network" class="text-base mr-2" />
 					Invite {selectedIds.size || ''} {selectedIds.size === 1 ? 'person' : 'people'}
 				{/if}
-			</button>
+			</Button>
 		{:else}
 			<!-- Fallback: share link -->
 			<div class="w-full flex flex-col items-center gap-4">
@@ -184,23 +179,18 @@
 				<div class="w-full flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2.5">
 					<Icon icon="ph:link-simple" class="text-sm text-muted/25 shrink-0" />
 					<span class="text-xs text-muted truncate flex-1">{inviteLink}</span>
-					<button
-						onclick={copyLink}
-						class="shrink-0 px-3 py-1.5 bg-accent text-white text-xs rounded-full font-medium
-							active:scale-95 transition-transform flex items-center gap-1"
-					>
-						<Icon icon={linkCopied ? 'ph:check-bold' : 'ph:copy'} class="text-xs" />
+					<Button small rounded onClick={copyLink}>
+						<Icon icon={linkCopied ? 'ph:check-bold' : 'ph:copy'} class="text-xs mr-1" />
 						{linkCopied ? 'Copied!' : 'Copy'}
-					</button>
+					</Button>
 				</div>
 			</div>
 		{/if}
 
-		<button
-			onclick={handleSkip}
-			class="mt-4 w-full py-2.5 text-muted hover:text-primary transition-colors text-sm"
-		>
-			Skip for now
-		</button>
+		<div class="mt-4">
+			<Button rounded clear onClick={handleSkip} class="w-full">
+				Skip for now
+			</Button>
+		</div>
 	</div>
 </div>

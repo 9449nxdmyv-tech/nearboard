@@ -78,6 +78,8 @@ export interface ArticleEnrichment {
 	siteName: string | null;
 	/** Full article body text extracted from JSON-LD articleBody */
 	bodyText?: string | null;
+	/** Structured article content HTML extracted via Readability */
+	contentHtml?: string | null;
 }
 
 /** Structured GitHub/GitLab repository data */
@@ -91,6 +93,16 @@ export interface GithubEnrichment {
 	forks: string | null;
 }
 
+/** Structured video data (YouTube, Vimeo, etc.) */
+export interface VideoEnrichment {
+	kind: 'video';
+	author: string | null;
+	publishedDate: string | null;
+	duration: string | null;
+	views: string | null;
+	siteName: string | null;
+}
+
 /** Union of all enrichment types */
 export type LinkEnrichment =
 	| RecipeEnrichment
@@ -99,7 +111,8 @@ export type LinkEnrichment =
 	| PlaceEnrichment
 	| MusicEnrichment
 	| ArticleEnrichment
-	| GithubEnrichment;
+	| GithubEnrichment
+	| VideoEnrichment;
 
 /** AI-powered content classification */
 export interface ContentClassification {

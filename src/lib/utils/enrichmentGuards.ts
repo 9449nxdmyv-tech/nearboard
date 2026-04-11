@@ -12,7 +12,8 @@ import type {
 	PlaceEnrichment,
 	MusicEnrichment,
 	ArticleEnrichment,
-	GithubEnrichment
+	GithubEnrichment,
+	VideoEnrichment
 } from '$lib/types/api';
 
 /**
@@ -74,6 +75,14 @@ export function isGithubEnrichment(e: LinkEnrichment | null | undefined): e is G
 }
 
 /**
+ * Type guard to check if enrichment is a VideoEnrichment.
+ */
+export function isVideoEnrichment(e: LinkEnrichment | null | undefined): e is VideoEnrichment {
+	if (e?.kind !== 'video') return false;
+	return !!(e.author || e.siteName || e.publishedDate);
+}
+
+/**
  * Validates that enrichment has minimum required data for rendering.
  * Returns false if enrichment exists but is too sparse to use.
  */
@@ -88,6 +97,7 @@ export function isValidEnrichment(e: LinkEnrichment | null | undefined): boolean
 		case 'music': return isMusicEnrichment(e);
 		case 'article': return isArticleEnrichment(e);
 		case 'github': return isGithubEnrichment(e);
+		case 'video': return isVideoEnrichment(e);
 		default:
 			// Unknown kind - treat as invalid
 			return false;

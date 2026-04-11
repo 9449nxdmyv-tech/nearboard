@@ -14,6 +14,35 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type AgeGroup = 'adult' | 'teen';
 
+// ─── Experience Settings ─────────────────────────────────────────────────────
+
+export type ScrollBehavior = 'load-more' | 'paged' | 'infinite';
+export type VideoPlayback = 'tap-to-play' | 'wifi-autoplay' | 'muted-autoplay' | 'full-autoplay';
+export type FeedOrder = 'newest' | 'oldest' | 'most-active' | 'curated';
+export type ConversationMode = 'board' | 'hybrid' | 'chat';
+export type LayoutStyle = 'single-column' | 'masonry' | 'compact-grid';
+export type ExperiencePreset = 'calm' | 'balanced' | 'lively' | 'custom';
+
+export interface UserExperiencePreferences {
+	scrollBehavior: ScrollBehavior;
+	videoPlayback: VideoPlayback;
+	feedOrder: FeedOrder;
+	conversationMode: ConversationMode;
+	layoutStyle: LayoutStyle;
+	preset?: ExperiencePreset;
+	updatedAt?: Timestamp;
+}
+
+export interface BoardExperienceOverrides {
+	enabled: boolean;
+	scrollBehavior?: ScrollBehavior;
+	videoPlayback?: VideoPlayback;
+	feedOrder?: FeedOrder;
+	conversationMode?: ConversationMode;
+	layoutStyle?: LayoutStyle;
+	updatedAt?: Timestamp;
+}
+
 export interface UserDoc {
 	uid: string;
 	displayName: string;
@@ -54,6 +83,8 @@ export interface UserDoc {
 	subscriptionTier?: 'free' | 'supporter' | 'lifetime';
 	/** Timestamp when supporter/lifetime subscription started */
 	subscriptionStartedAt?: Timestamp;
+	/** User-controlled social experience preferences (global defaults). */
+	experiencePreferences?: UserExperiencePreferences;
 }
 
 export interface BoardDoc {
@@ -97,6 +128,8 @@ export interface BoardDoc {
 	allowComments: boolean;
 	/** Number of users following this public board (not members). */
 	followerCount?: number;
+	/** Per-board experience overrides (inherit from user global when disabled). */
+	experienceOverrides?: BoardExperienceOverrides;
 }
 
 export interface InviteDoc {

@@ -238,7 +238,7 @@
 				<section in:fly={{ y: 8, duration: 300, delay: 50 }}>
 					<div class="flex items-center gap-2 mb-2">
 						<div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-							<Icon icon="ph:clock-countdown-fill" class="text-primary text-xs" />
+							<Icon icon="ph:clock-countdown" class="text-primary text-xs" />
 						</div>
 						<h3 class="text-[10px] font-bold text-muted uppercase tracking-widest">On This Day · {memory.label}</h3>
 					</div>

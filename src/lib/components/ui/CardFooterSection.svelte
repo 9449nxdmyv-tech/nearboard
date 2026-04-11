@@ -25,6 +25,7 @@
 		commentCount,
 		acknowledgments,
 		expandComments = false,
+		isDetail = false,
 		onEdit,
 		onDelete,
 		onShare
@@ -40,6 +41,7 @@
 		commentCount?: number;
 		acknowledgments?: Record<string, { type: 'heart'; createdAt: any }>;
 		expandComments?: boolean;
+		isDetail?: boolean;
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onShare?: () => void;
@@ -52,27 +54,11 @@
 	const ackCount = $derived(acknowledgments ? Object.keys(acknowledgments).length : 0);
 </script>
 
-<!-- Author line + metrics + overflow menu -->
+<!-- Author line + overflow menu -->
 <div class="px-3 sm:px-4 pt-2.5 pb-2 flex items-center gap-2">
 	<div class="flex-1 min-w-0">
 		<CardFooter {authorName} {authorPhotoURL} {createdAt} />
 	</div>
-	{#if ackCount > 0 || (commentCount && commentCount > 0)}
-		<div class="flex items-center gap-3 text-muted/60 shrink-0">
-			{#if ackCount > 0}
-				<span class="inline-flex items-center gap-1">
-					<Icon icon="ph:heart-fill" class="text-[13px] text-error/80" />
-					<span class="text-[11px] font-bold tabular-nums text-on-surface/60">{ackCount}</span>
-				</span>
-			{/if}
-			{#if commentCount && commentCount > 0}
-				<span class="inline-flex items-center gap-1">
-					<Icon icon="ph:chat-circle-dots-fill" class="text-[13px]" />
-					<span class="text-[11px] font-bold tabular-nums text-on-surface/60">{commentCount}</span>
-				</span>
-			{/if}
-		</div>
-	{/if}
 	{#if onDelete || onEdit}
 		<div class="relative shrink-0">
 			<button
@@ -111,7 +97,7 @@
 </div>
 
 <!-- Interaction bar (always visible) -->
-<CardInteractions {boardId} {contentId} {acknowledgments} {commentCount} bind:showComments {onShare} />
+<CardInteractions {boardId} {contentId} {acknowledgments} {commentCount} bind:showComments {onShare} {isDetail} />
 
 <!-- Comments section (toggleable) -->
 {#if showComments && allowComments}

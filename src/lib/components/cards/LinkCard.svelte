@@ -8,7 +8,7 @@
 <script lang="ts">
 	import type { LinkCardProps } from '$lib/types/ui';
 	import Card from '$lib/components/ui/Card.svelte';
-	import { extractYouTubeId } from '$lib/utils/ogParser';
+	import { extractYouTubeId } from '$lib/utils/urlUtils';
 	import {
 		isRecipeEnrichment,
 		isMovieEnrichment,
@@ -99,7 +99,7 @@
 						onerror={() => { ytImageError = true; }} />
 				{:else}
 					<div class="w-full aspect-video bg-on-surface flex items-center justify-center">
-						<Icon icon="ph:youtube-logo-fill" class="text-[color:var(--color-youtube-red)] text-5xl opacity-30" />
+						<Icon icon="ph:youtube-logo" class="text-[color:var(--color-youtube-red)] text-5xl opacity-30" />
 					</div>
 				{/if}
 				<div class="absolute inset-0 bg-black/25 flex items-center justify-center group-hover:bg-black/35 transition-colors">
@@ -150,19 +150,17 @@
 	{#if !image || imageError}
 		<!-- Compact fallback with icon + source -->
 		<div class="flex items-center gap-2.5 mb-2">
-			<div class="w-9 h-9 rounded-[var(--radius-sm)] bg-type-link/10 flex items-center justify-center shrink-0">
-				<Icon icon={getVariantIcon()} class="text-lg text-type-link" />
+			<div class="w-9 h-9 rounded-[var(--radius-sm)] bg-primary/10 flex items-center justify-center shrink-0">
+				<Icon icon={getVariantIcon()} class="text-lg text-primary" />
 			</div>
 			<LinkSourceBar {domain} {favicon} />
 		</div>
 	{/if}
 
-	<a href={url} target="_blank" rel="noopener noreferrer" class="block group">
-		<h3 class="font-semibold text-[15px] text-on-surface leading-snug group-hover:text-primary transition-colors">{title}</h3>
-	</a>
+	<h3 class="font-semibold text-[15px] text-on-surface leading-snug">{title}</h3>
 
 	{#if price}
-		<div class="text-sm font-bold text-type-product mt-2">{price}</div>
+		<div class="text-sm font-bold text-primary mt-2">{price}</div>
 	{/if}
 
 	<!-- ═══ Enrichment-aware body ═══ -->

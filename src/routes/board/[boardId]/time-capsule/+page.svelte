@@ -13,7 +13,7 @@
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { lockTimeCapsule, unlockTimeCapsule, subscribeToBoard } from '$lib/firebase';
 	import { userStore } from '$lib/stores';
-	import { Page } from 'konsta/svelte';
+	import { Page, List, ListInput, Button, Block } from 'konsta/svelte';
 	import { onMount } from 'svelte';
 	import type { BoardDoc } from '$lib/types';
 
@@ -100,7 +100,7 @@
 			<p class="text-muted text-sm">Only the board owner can manage the time capsule.</p>
 		{:else if isLocked}
 			<div in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration }} class="bg-card shadow-card rounded-card p-6 text-center">
-				<Icon icon="ph:lock-fill" class="text-4xl text-on-surface mx-auto mb-3" />
+				<Icon icon="ph:lock" class="text-4xl text-on-surface mx-auto mb-3" />
 				<h2 class="font-display text-lg font-semibold text-primary mb-2">Board is Locked</h2>
 				<p class="text-sm text-muted mb-4">
 					This board is sealed as a time capsule. It will automatically unlock on
@@ -129,14 +129,9 @@
 					</div>
 				{/if}
 
-				<button
-					onclick={handleUnlock}
-					disabled={saving}
-					class="px-6 py-3 bg-error text-white rounded-lg text-sm font-medium
-						disabled:opacity-50 active:scale-[0.98] transition-transform"
-				>
+				<Button large rounded onClick={handleUnlock} disabled={saving} colors={{ fillBgIos: 'bg-error active:bg-error/80', fillBgMaterial: 'bg-error active:bg-error/80' }}>
 					{saving ? 'Unlocking...' : 'Unlock Early'}
-				</button>
+				</Button>
 			</div>
 		{:else}
 			<div in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration }} class="bg-card shadow-card rounded-card p-6">
@@ -146,24 +141,22 @@
 					Lock this board until a future date. All content will be hidden from members until then.
 				</p>
 
-				<label for="unlock-date" class="block text-sm font-medium text-primary mb-2">Unlock Date</label>
-				<input
-					id="unlock-date"
-					type="date"
-					bind:value={unlockDate}
-					min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-					class="w-full py-3 px-4 border border-border rounded-lg text-sm bg-surface
-						focus:outline-none focus:border-accent transition-colors mb-6"
-				/>
+				<div class="mb-6">
+					<List inset strong outline>
+						<ListInput
+							outline
+							label="Unlock Date"
+							type="date"
+							value={unlockDate}
+							onInput={(e) => { unlockDate = e.target.value; }}
+							min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+						/>
+					</List>
+				</div>
 
-				<button
-					onclick={requestLock}
-					disabled={saving || !unlockDate}
-					class="w-full px-6 py-3 bg-accent text-white rounded-lg text-sm font-medium
-						disabled:opacity-50 active:scale-[0.98] transition-transform"
-				>
+				<Button large rounded onClick={requestLock} disabled={saving || !unlockDate} class="w-full">
 					{saving ? 'Locking...' : 'Lock Board'}
-				</button>
+				</Button>
 			</div>
 		{/if}
 	</div>

@@ -33,7 +33,7 @@
 <BottomSheet title="Already planning in WhatsApp?" open={showOffer} onClose={onskip}>
 	<div class="flex flex-col items-center text-center gap-4 py-2">
 		<div class="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
-			<Icon icon="ph:whatsapp-logo-fill" class="text-2xl text-success" />
+			<Icon icon="ph:whatsapp-logo" class="text-2xl text-success" />
 		</div>
 		<p class="text-sm text-primary leading-relaxed">
 			Import your chat and we'll turn it into an organized board instantly.

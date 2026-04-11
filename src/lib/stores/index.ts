@@ -30,3 +30,4 @@ export {
 export type { OnboardingPath, OnboardingStep } from './onboardingStore';
 export { uploadStore, queuePhotoUpload, queueVideoUpload } from './uploadStore';
 export type { UploadJob } from './uploadStore';
+export { globalExperience, getEffectiveExperience } from './experienceStore';

@@ -27,9 +27,11 @@
 	} from '$lib/firebase';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import WhatsAppImportSheet from '$lib/components/ui/WhatsAppImportSheet.svelte';
-	import NativeSwitch from '$lib/components/ui/NativeSwitch.svelte';
+	import { Toggle } from 'konsta/svelte';
+	import { hapticLight } from '$lib/utils/haptics';
 	import { avatarInitial } from '$lib/utils/textFormatter';
-	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc } from '$lib/types';
+	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, ConversationMode, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
+	import { globalExperience, getEffectiveExperience } from '$lib/stores';
 
 	const boardId = $derived($page.params.boardId ?? '');
 
@@ -171,7 +173,7 @@
 			<p class="text-error text-sm">Board not found</p>
 		</Block>
 	{:else}
-		<div>
+		<div class="pt-2">
 			<!-- Board info -->
 			<BlockTitle>Board Info</BlockTitle>
 			<List inset strong>
@@ -187,13 +189,17 @@
 			<BlockTitle>Invite Link</BlockTitle>
 			<Block>
 				<p class="text-xs text-muted mb-2">Share this link to invite others:</p>
-				<div class="flex items-center gap-2">
-					<code class="flex-1 text-xs text-on-surface bg-surface-1 px-3 py-2.5 rounded-lg truncate">
+				<div class="flex gap-2 items-stretch w-full">
+					<code class="flex-1 w-0 text-xs text-on-surface bg-surface-1 px-3 py-2.5 rounded-lg overflow-hidden text-ellipsis whitespace-nowrap">
 						{inviteLink}
 					</code>
-					<Button small rounded onClick={copyInvite}>
+					<button
+						type="button"
+						onclick={copyInvite}
+						class="shrink-0 px-4 py-2 text-sm font-medium rounded-full bg-primary text-white active:opacity-80 transition-opacity"
+					>
 						{copied ? 'Copied!' : 'Copy'}
-					</Button>
+					</button>
 				</div>
 			</Block>
 
@@ -201,10 +207,11 @@
 			<BlockTitle>Settings</BlockTitle>
 			{#snippet summaryAfter()}
 				{#if isOwner}
-					<NativeSwitch
+					<Toggle
 						checked={board?.enableLivingSummary ?? false}
-						onchange={async () => {
+						onChange={async () => {
 							if (!board) return;
+							hapticLight();
 							const newState = !board.enableLivingSummary;
 							await updateBoard(boardId, { enableLivingSummary: newState });
 							board = { ...board, enableLivingSummary: newState };
@@ -216,10 +223,11 @@
 			{/snippet}
 			{#snippet commentsAfter()}
 				{#if isOwner}
-					<NativeSwitch
+					<Toggle
 						checked={board?.allowComments ?? false}
-						onchange={async () => {
+						onChange={async () => {
 							if (!board) return;
+							hapticLight();
 							const newState = !board.allowComments;
 							await updateBoard(boardId, { allowComments: newState });
 							board = { ...board, allowComments: newState };
@@ -266,8 +274,9 @@
 						{/each}
 					</Segmented>
 				</Block>
-				<List inset strong>
+				<List inset strong outline>
 					<ListInput
+						outline
 						label="Summary Focus"
 						type="text"
 						placeholder="Leave blank for automatic focus"
@@ -315,11 +324,12 @@
 				</p>
 			</Block>
 			{#snippet digestMuteAfter()}
-				<NativeSwitch
+				<Toggle
 					checked={myDigestMuted}
 					disabled={savingDigestMute}
-					onchange={async () => {
+					onChange={async () => {
 						if (!currentUserId) return;
+						hapticLight();
 						savingDigestMute = true;
 						const newVal = !myDigestMuted;
 						await updateMemberDigestMuted(boardId, currentUserId, newVal);

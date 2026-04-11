@@ -43,14 +43,14 @@
 				onerror={() => { mapError = true; }}
 			/>
 			<div class="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
-				<Icon icon="ph:map-pin-fill" class="text-xs text-white" />
+				<Icon icon="ph:map-pin" class="text-xs text-white" />
 				<span class="text-[11px] text-white/90 font-medium">{name || 'Location'}</span>
 			</div>
 		</div>
 	{:else}
 		<div class="h-32 bg-surface-1 flex items-center justify-center">
 			<div class="w-14 h-14 rounded-full bg-surface-2 flex items-center justify-center">
-				<Icon icon="ph:map-pin-fill" class="text-2xl text-on-surface/40" />
+				<Icon icon="ph:map-pin" class="text-2xl text-on-surface/40" />
 			</div>
 		</div>
 	{/if}
@@ -81,7 +81,7 @@
 		{/if}
 
 		<a href={getGoogleMapsUrl()} target="_blank" rel="noopener noreferrer">
-			<Button rounded class="w-full">
+			<Button small rounded class="w-full">
 				<Icon icon="ph:map-trifold" class="mr-2" />
 				Open in Maps
 			</Button>

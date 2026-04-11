@@ -117,24 +117,24 @@
 			<!-- Static skeleton mosaic for unauthenticated visitors -->
 			<div class="flex w-full h-full bg-surface">
 				<div class="flex-1 flex flex-col">
-					<div class="flex-1 bg-type-note/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:note" class="text-on-surface text-5xl opacity-60" />
 					</div>
-					<div class="flex-1 bg-type-link/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:link" class="text-on-surface text-5xl opacity-60" />
 					</div>
-					<div class="flex-1 bg-type-list/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:list-checks" class="text-on-surface text-5xl opacity-60" />
 					</div>
 				</div>
 				<div class="flex-1 flex flex-col">
-					<div class="flex-1 bg-type-photo/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:image" class="text-on-surface text-5xl opacity-60" />
 					</div>
-					<div class="flex-1 bg-type-location/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:map-pin" class="text-on-surface text-5xl opacity-60" />
 					</div>
-					<div class="flex-1 bg-type-voice/10 flex items-center justify-center">
+					<div class="flex-1 bg-primary/10 flex items-center justify-center">
 						<Icon icon="ph:waveform" class="text-on-surface text-5xl opacity-60" />
 					</div>
 				</div>

@@ -23,8 +23,14 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 
-	const BAR_COUNT = 48;
-	const barHeights = Array.from({ length: BAR_COUNT }, () => 12 + Math.random() * 20);
+	let waveformWidth = $state(0);
+	const barCount = $derived(Math.max(16, Math.floor((waveformWidth - 16) / 6)));
+	const barHeights = $derived(
+		Array.from({ length: barCount }, (_, i) => {
+			const x = Math.sin(i * 127.1 + barCount * 0.01) * 43758.5453;
+			return 12 + (x - Math.floor(x)) * 20;
+		})
+	);
 
 	$effect(() => {
 		duration = durationMs / 1000;
@@ -86,18 +92,19 @@
 	<div
 		class="relative w-full h-14 bg-surface-1 rounded-xl cursor-pointer flex items-center px-2 overflow-hidden"
 		onclick={seek}
+		bind:clientWidth={waveformWidth}
 	>
 		<!-- Progress fill -->
-		<div class="absolute inset-0 bg-type-voice/8 origin-left transition-[transform] duration-100"
+		<div class="absolute inset-0 bg-primary/8 origin-left transition-[transform] duration-100"
 			style="transform: scaleX({progress / 100})"></div>
 
 		<!-- Bars -->
 		<div class="relative flex items-end gap-[2px] flex-1 h-full py-2">
 			{#each barHeights as h, i}
 				<div
-					class="flex-1 min-w-[2px] max-w-[4px] rounded-full transition-colors duration-100
-						{i / BAR_COUNT < progress / 100 ? 'bg-type-voice' : 'bg-type-voice/20'}"
-					style="height: {h}px"
+					class="flex-1 rounded-full transition-colors duration-100
+						{i / barHeights.length < progress / 100 ? 'bg-primary' : 'bg-primary/20'}"
+					style="height: {h}px; min-width: 2px;"
 				></div>
 			{/each}
 		</div>
@@ -105,11 +112,11 @@
 		<!-- Centered play/pause overlay -->
 		<button
 			onclick={(e) => { e.stopPropagation(); togglePlayback(); }}
-			class="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-type-voice/15
+			class="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-primary/15
 				flex items-center justify-center press-scale backdrop-blur-sm"
 		>
 			<Icon icon={playing ? 'ph:pause-fill' : 'ph:play-fill'}
-				class="text-base text-type-voice {playing ? '' : 'ml-0.5'}" />
+				class="text-base text-primary {playing ? '' : 'ml-0.5'}" />
 		</button>
 	</div>
 

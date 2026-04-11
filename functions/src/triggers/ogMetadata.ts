@@ -14,6 +14,8 @@
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
 import { enrichUrl, type EnrichmentResult } from '../utils/enrichmentService.js';
 import { fetchOEmbed } from '../utils/oembedService.js';
 import { extractEnrichmentFromJsonLd, str, personName, formatIsoDuration, extractIngredients, extractInstructions } from '../utils/jsonLdParser.js';
@@ -234,9 +236,27 @@ function parseOgTags(html: string, url: string): PageMetadata {
 		if (!finalImage) finalImage = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
 	}
 
+	// Extract generic author for videos (YouTube channel, Vimeo user, etc.)
+	const videoAuthor = 
+		get(/<meta[^>]+name="author"[^>]+content="([^"]*)"/i) ??
+		get(/<link[^>]+itemprop="name"[^>]+content="([^"]*)"/i) ??
+		get(/<meta[^>]+(?:property|name)="twitter:creator"[^>]+content="([^"]*)"/i);
+
 	// Domain-based enrichment fallbacks
 	let urlDomain = '';
 	try { urlDomain = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { /* */ }
+
+	// Video enrichment fallback
+	if (!enrichment && (type === 'video' || urlDomain.includes('youtube.com') || urlDomain.includes('youtu.be') || urlDomain.includes('vimeo.com'))) {
+		enrichment = {
+			kind: 'video',
+			author: videoAuthor,
+			publishedDate: get(/<meta[^>]+(?:property|name)="article:published_time"[^>]+content="([^"]*)"/i)?.slice(0, 10) ?? null,
+			duration: null,
+			views: null,
+			siteName: siteName ?? (urlDomain.includes('youtube') ? 'YouTube' : urlDomain.includes('vimeo') ? 'Vimeo' : null)
+		} as any;
+	}
 
 	// Article fallback
 	if (!enrichment && (type === 'article' || ogType === 'article')) {
@@ -245,7 +265,46 @@ function parseOgTags(html: string, url: string): PageMetadata {
 		const articleDate = get(/<meta[^>]+(?:property|name)="(?:article:published_time|date)"[^>]+content="([^"]*)"/i) ??
 			get(/<meta[^>]+content="([^"]*)"[^>]+(?:property|name)="article:published_time"/i);
 		if (articleAuthor || articleDate) {
-			enrichment = { kind: 'article', author: articleAuthor, publishedDate: articleDate ? articleDate.slice(0, 10) : null, readingTime: null, siteName };
+			enrichment = { kind: 'article', author: articleAuthor, publishedDate: articleDate ? articleDate.slice(0, 10) : null, readingTime: null, siteName, bodyText: null };
+		}
+	}
+
+	// ─── Article content extraction via Readability ───
+	if (type === 'article' || (enrichment && enrichment.kind === 'article')) {
+		try {
+			const dom = new JSDOM(html, { url });
+			const reader = new Readability(dom.window.document);
+			const article = reader.parse();
+
+			if (article && article.content) {
+				// Note: Firebase Cloud Function environment doesn't have DOMPurify installed here yet,
+				// and we want to keep it lightweight. We'll store the content and let the frontend
+				// sanitize it upon display. We'll only cap the size to prevent Firestore bloat.
+				const contentHtml = article.content.length > 30000 ? article.content.slice(0, 30000) + '...' : article.content;
+
+				if (enrichment && enrichment.kind === 'article') {
+					const art = enrichment as any;
+					art.contentHtml = contentHtml;
+					if (!art.bodyText && article.textContent) {
+						art.bodyText = article.textContent.trim().slice(0, 10000);
+					}
+					if (article.byline && !art.author) art.author = article.byline;
+					if (article.siteName && !art.siteName) art.siteName = article.siteName;
+				} else if (!enrichment) {
+					enrichment = {
+						kind: 'article',
+						author: article.byline || null,
+						publishedDate: null,
+						readingTime: `${Math.max(1, Math.round(article.textContent.split(/\s+/).length / 200))} min read`,
+						siteName: article.siteName || null,
+						bodyText: article.textContent.trim().slice(0, 10000),
+						contentHtml: contentHtml
+					} as any;
+					type = 'article';
+				}
+			}
+		} catch (e) {
+			console.error('Failed to parse article with Readability:', e);
 		}
 	}
 
@@ -362,7 +421,7 @@ function parseOgTags(html: string, url: string): PageMetadata {
 	if (!enrichment && matchesDomain(urlDomain, ARTICLE_DOMAINS)) {
 		const articleAuthor = get(/<meta[^>]+(?:property|name)="(?:article:author|author)"[^>]+content="([^"]*)"/i);
 		const articleDate = get(/<meta[^>]+(?:property|name)="(?:article:published_time|date)"[^>]+content="([^"]*)"/i);
-		enrichment = { kind: 'article', author: articleAuthor, publishedDate: articleDate ? articleDate.slice(0, 10) : null, readingTime: null, siteName };
+		enrichment = { kind: 'article', author: articleAuthor, publishedDate: articleDate ? articleDate.slice(0, 10) : null, readingTime: null, siteName, bodyText: null };
 	}
 
 	return {

@@ -7,9 +7,13 @@
 	import Icon from '@iconify/svelte';
 	import { Page, List, ListItem, ListInput, Button, Block, BlockTitle, Segmented, SegmentedButton } from 'konsta/svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-	import NativeSwitch from '$lib/components/ui/NativeSwitch.svelte';
-	import { userStore, notificationStore, showToast, requestNotificationPermission } from '$lib/stores';
+	import { Toggle } from 'konsta/svelte';
+	import { hapticLight } from '$lib/utils/haptics';
+	import { userStore, notificationStore, showToast, requestNotificationPermission, globalExperience } from '$lib/stores';
 	import { signOut, uploadAvatar, updateDisplayName, updatePhotoURL, updateUserFields, deleteAccount } from '$lib/firebase';
+	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
+	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
+	import type { ScrollBehavior, VideoPlayback, FeedOrder, ConversationMode, LayoutStyle, ExperiencePreset, UserExperiencePreferences } from '$lib/types/firestore';
 	import { shareContent } from '$lib/native';
 	import { getFunctions, httpsCallable } from 'firebase/functions';
 	import { app } from '$lib/firebase/app';
@@ -34,6 +38,40 @@
 	let sendingPreview = $state(false);
 	let confirmDeleteAccount = $state(false);
 	let deleting = $state(false);
+	// ── Experience settings ──
+	const experience = $derived($globalExperience);
+	let savingExperience = $state(false);
+
+	async function saveExperience(updates: Partial<UserExperiencePreferences>) {
+		if (!user) return;
+		savingExperience = true;
+		const current = user.experiencePreferences ?? {};
+		const merged = { ...current, ...updates, updatedAt: null };
+		// Detect preset after merge
+		const full: UserExperiencePreferences = {
+			scrollBehavior: merged.scrollBehavior ?? experience.scrollBehavior,
+			videoPlayback: merged.videoPlayback ?? experience.videoPlayback,
+			feedOrder: merged.feedOrder ?? experience.feedOrder,
+			conversationMode: merged.conversationMode ?? experience.conversationMode,
+			layoutStyle: merged.layoutStyle ?? experience.layoutStyle
+		};
+		full.preset = detectPreset(full);
+		await updateUserFields(user.uid, { experiencePreferences: full });
+		userStore.update((s) => s.user ? { ...s, user: { ...s.user, experiencePreferences: full } } : s);
+		savingExperience = false;
+	}
+
+	async function selectPreset(preset: 'calm' | 'balanced' | 'lively') {
+		if (!user) return;
+		hapticLight();
+		const prefs = applyPreset(preset);
+		savingExperience = true;
+		await updateUserFields(user.uid, { experiencePreferences: prefs });
+		userStore.update((s) => s.user ? { ...s, user: { ...s.user, experiencePreferences: prefs } } : s);
+		showToast(`${preset.charAt(0).toUpperCase() + preset.slice(1)} experience applied`, 'success');
+		savingExperience = false;
+	}
+
 	const referralLink = $derived(user ? `${window.location.origin}/refer/${user.uid}` : '');
 	const detectedTimezone = $derived(user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
 	const canNativeShare = $derived(typeof navigator !== 'undefined' && !!navigator.share);
@@ -120,7 +158,7 @@
 
 <Page>
 	<Header title="Profile" />
-	<div>
+	<div class="pt-2">
 		<!-- Avatar + email -->
 		<Block class="!flex items-center gap-4">
 			<button
@@ -148,7 +186,7 @@
 					{#if uploadingAvatar}
 						<Icon icon="ph:spinner" class="text-xs animate-spin" />
 					{:else}
-						<Icon icon="ph:camera-fill" class="text-xs" />
+						<Icon icon="ph:camera" class="text-xs" />
 					{/if}
 				</div>
 				<input
@@ -172,8 +210,9 @@
 
 		<!-- Display name -->
 		<BlockTitle>Display Name</BlockTitle>
-		<List inset strong>
+		<List inset strong outline>
 			<ListInput
+				outline
 				type="text"
 				placeholder="Your display name"
 				value={displayName}
@@ -182,7 +221,7 @@
 				onClear={() => { displayName = ''; }}
 			/>
 		</List>
-		<Block class="!-mt-2">
+		<Block class="pt-0">
 			<Button
 				rounded
 				onClick={handleSave}
@@ -242,49 +281,47 @@
 		<!-- Quiet Hours -->
 		{#if $notificationStore.permission === 'granted'}
 			<BlockTitle>Quiet Hours</BlockTitle>
-			<Block>
-				<div class="flex items-center gap-3">
-					<div class="flex-1">
-						<label class="text-xs font-medium text-muted mb-1 block">From</label>
-						<select
-							class="w-full py-2.5 px-3 border border-border/60 rounded-lg text-sm bg-card focus:outline-none focus:border-primary"
-							bind:value={quietStart}
-							onchange={saveQuietHours}
-						>
-							<option value={undefined}>Off</option>
-							{#each Array.from({ length: 24 }, (_, i) => i) as h}
-								<option value={h}>{h.toString().padStart(2, '0')}:00</option>
-							{/each}
-						</select>
-					</div>
-					<span class="text-xs text-muted mt-5">to</span>
-					<div class="flex-1">
-						<label class="text-xs font-medium text-muted mb-1 block">To</label>
-						<select
-							class="w-full py-2.5 px-3 border border-border/60 rounded-lg text-sm bg-card focus:outline-none focus:border-primary"
-							bind:value={quietEnd}
-							onchange={saveQuietHours}
-						>
-							<option value={undefined}>Off</option>
-							{#each Array.from({ length: 24 }, (_, i) => i) as h}
-								<option value={h}>{h.toString().padStart(2, '0')}:00</option>
-							{/each}
-						</select>
-					</div>
-				</div>
-				{#if detectedTimezone}
-					<p class="text-xs text-muted mt-2">Timezone: {detectedTimezone}</p>
-				{/if}
-			</Block>
+			<List inset strong outline>
+				<ListInput
+					outline
+					label="From"
+					type="select"
+					value={quietStart}
+					onInput={(e) => { quietStart = e.target.value === '' ? undefined : Number(e.target.value); saveQuietHours(); }}
+				>
+					<option value="">Off</option>
+					{#each Array.from({ length: 24 }, (_, i) => i) as h}
+						<option value={h}>{h.toString().padStart(2, '0')}:00</option>
+					{/each}
+				</ListInput>
+				<ListInput
+					outline
+					label="To"
+					type="select"
+					value={quietEnd}
+					onInput={(e) => { quietEnd = e.target.value === '' ? undefined : Number(e.target.value); saveQuietHours(); }}
+				>
+					<option value="">Off</option>
+					{#each Array.from({ length: 24 }, (_, i) => i) as h}
+						<option value={h}>{h.toString().padStart(2, '0')}:00</option>
+					{/each}
+				</ListInput>
+			</List>
+			{#if detectedTimezone}
+				<Block class="pt-0">
+					<p class="text-xs text-muted">Timezone: {detectedTimezone}</p>
+				</Block>
+			{/if}
 		{/if}
 
 		<!-- Email Digest -->
 		<BlockTitle>Daily Email Digest</BlockTitle>
 		{#snippet digestAfter()}
-			<NativeSwitch
+			<Toggle
 				checked={digestEnabled}
-				onchange={async () => {
+				onChange={async () => {
 					if (!user) return;
+					hapticLight();
 					digestEnabled = !digestEnabled;
 					savingDigest = true;
 					await updateUserFields(user.uid, { digestEnabled });
@@ -300,8 +337,11 @@
 				subtitle="Get a daily summary of your board activity"
 				after={digestAfter}
 			/>
-			{#if digestEnabled}
+		</List>
+		{#if digestEnabled}
+			<List inset strong outline>
 				<ListInput
+					outline
 					label="Send time"
 					type="time"
 					value={digestTime}
@@ -317,10 +357,10 @@
 						savingDigest = false;
 					}}
 				/>
-			{/if}
-		</List>
+			</List>
+		{/if}
 		{#if digestEnabled}
-			<Block class="!-mt-2">
+			<Block class="pt-0">
 				{#if detectedTimezone}
 					<p class="text-xs text-muted mb-3">Timezone: {detectedTimezone}</p>
 				{/if}
@@ -347,6 +387,113 @@
 				</Button>
 			</Block>
 		{/if}
+
+		<!-- Experience Settings -->
+		<BlockTitle>Experience</BlockTitle>
+		<Block>
+			<p class="text-xs text-muted mb-4">
+				Choose whether Nearboard feels calmer and more intentional, or more immersive and chat-like.
+			</p>
+
+			<!-- Preset picker -->
+			<Segmented strong rounded>
+				{#each ['calm', 'balanced', 'lively'] as preset}
+					<SegmentedButton
+						active={experience.preset === preset}
+						onClick={() => selectPreset(preset as 'calm' | 'balanced' | 'lively')}
+					>
+						{preset.charAt(0).toUpperCase() + preset.slice(1)}
+					</SegmentedButton>
+				{/each}
+			</Segmented>
+			{#if experience.preset === 'custom'}
+				<p class="text-[11px] text-muted text-center mt-2">Custom — you've changed individual settings below</p>
+			{/if}
+		</Block>
+
+		<BlockTitle>Customize Experience</BlockTitle>
+		<List inset strong outline>
+			<!-- Scroll behavior -->
+			<ListInput
+				outline
+				label="Scroll behavior"
+				type="select"
+				value={experience.scrollBehavior}
+				onInput={(e) => saveExperience({ scrollBehavior: e.target.value as ScrollBehavior })}
+				disabled={savingExperience}
+			>
+				<option value="load-more">Load more</option>
+				<option value="paged">Paged sections</option>
+				<option value="infinite">Infinite scroll</option>
+			</ListInput>
+
+			<!-- Video playback -->
+			<ListInput
+				outline
+				label="Video playback"
+				type="select"
+				value={experience.videoPlayback}
+				onInput={(e) => saveExperience({ videoPlayback: e.target.value as VideoPlayback })}
+				disabled={savingExperience}
+			>
+				<option value="tap-to-play">Tap to play</option>
+				<option value="wifi-autoplay">Autoplay on Wi-Fi</option>
+				<option value="muted-autoplay">Autoplay muted</option>
+				<option value="full-autoplay">Full autoplay</option>
+			</ListInput>
+
+			<!-- Feed order -->
+			<ListInput
+				outline
+				label="Feed order"
+				type="select"
+				value={experience.feedOrder}
+				onInput={(e) => saveExperience({ feedOrder: e.target.value as FeedOrder })}
+				disabled={savingExperience}
+			>
+				<option value="newest">Newest first</option>
+				<option value="oldest">Oldest first</option>
+				<option value="most-active">Most active</option>
+				<option value="curated">Board curated</option>
+			</ListInput>
+
+			<!-- Conversation mode -->
+			<ListInput
+				outline
+				label="Board vs Chat"
+				type="select"
+				value={experience.conversationMode}
+				onInput={(e) => saveExperience({ conversationMode: e.target.value as ConversationMode })}
+				disabled={savingExperience}
+			>
+				<option value="board">Board mode</option>
+				<option value="hybrid">Hybrid mode</option>
+				<option value="chat">Chat mode</option>
+			</ListInput>
+
+			<!-- Layout style -->
+			<ListInput
+				outline
+				label="Layout style"
+				type="select"
+				value={experience.layoutStyle}
+				onInput={(e) => saveExperience({ layoutStyle: e.target.value as LayoutStyle })}
+				disabled={savingExperience}
+			>
+				<option value="single-column">Single column</option>
+				<option value="masonry">Masonry</option>
+				<option value="compact-grid">Compact grid</option>
+			</ListInput>
+		</List>
+		<Block class="pt-0">
+			<div class="space-y-2 text-[11px] text-muted leading-relaxed">
+				<p><strong>Scroll:</strong> Load more creates natural stopping points. Infinite scroll feels faster, but more continuous.</p>
+				<p><strong>Video:</strong> Tap-to-play keeps browsing intentional. Autoplay makes media feel more immersive.</p>
+				<p><strong>Feed:</strong> Newest first is the clearest default. Most active surfaces the busiest conversations.</p>
+				<p><strong>Board vs Chat:</strong> Choose whether boards feel more like shared collections or active conversations.</p>
+				<p><strong>Layout:</strong> Single column is easier to scan. Masonry is better for discovery-heavy boards.</p>
+			</div>
+		</Block>
 
 		<!-- Quick links -->
 		<BlockTitle>Quick Links</BlockTitle>
@@ -381,16 +528,23 @@
 				<p class="text-xs text-muted mb-3">
 					Share Nearboard with your friends and help grow our community.
 				</p>
-				<div class="flex gap-2 items-center">
-					<code class="flex-1 text-xs text-on-surface bg-surface-1 px-3 py-2.5 rounded-lg truncate">
-						{referralLink}
-					</code>
-					<Button small rounded onClick={copyReferralLink}>
-						{referralCopied ? 'Copied!' : 'Copy'}
-					</Button>
+				<div class="flex flex-col gap-3">
+					<div class="flex gap-2 items-stretch w-full">
+						<code class="flex-1 w-0 text-xs text-on-surface bg-surface-1 px-3 py-2.5 rounded-lg overflow-hidden text-ellipsis whitespace-nowrap">
+							{referralLink}
+						</code>
+						<button
+							type="button"
+							onclick={copyReferralLink}
+							class="shrink-0 px-4 py-2 text-sm font-medium rounded-full bg-primary text-white active:opacity-80 transition-opacity"
+						>
+							{referralCopied ? 'Copied!' : 'Copy'}
+						</button>
+					</div>
 					{#if canNativeShare}
-						<Button small rounded outline onClick={handleShareReferral}>
-							Share
+						<Button small rounded outline onClick={handleShareReferral} class="w-full">
+							<Icon icon="ph:share-fat" class="text-base mr-1.5" />
+							Share with Friends
 						</Button>
 					{/if}
 				</div>
@@ -398,7 +552,7 @@
 		{/if}
 
 		<!-- Sign out -->
-		<Block class="!mt-8">
+		<Block class="mt-6">
 			<Button large rounded clear onClick={handleSignOut}>
 				<span class="text-error">Sign Out</span>
 			</Button>

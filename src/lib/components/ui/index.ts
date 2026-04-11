@@ -22,8 +22,7 @@ export { default as KeyboardShortcutsHelp } from './KeyboardShortcutsHelp.svelte
 export { default as LivingSummaryCard } from './LivingSummaryCard.svelte';
 export { default as MapView } from './MapView.svelte';
 export { default as MasonryGrid } from './MasonryGrid.svelte';
-export { default as NativeSelect } from './NativeSelect.svelte';
-export { default as NativeSwitch } from './NativeSwitch.svelte';
+export { default as ChatInput } from './ChatInput.svelte';
 export { default as NudgeCard } from './NudgeCard.svelte';
 export { default as OfflineBanner } from './OfflineBanner.svelte';
 export { default as PageHeader } from './PageHeader.svelte';

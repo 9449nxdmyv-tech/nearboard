@@ -10,10 +10,10 @@
 	import { toastStore, dismissToast, type Toast } from '$lib/stores/toastStore';
 
 	const iconMap: Record<Toast['type'], string> = {
-		success: 'ph:check-circle-fill',
-		error: 'ph:warning-circle-fill',
-		info: 'ph:info-fill',
-		warning: 'ph:warning-fill',
+		success: 'ph:check-circle',
+		error: 'ph:warning-circle',
+		info: 'ph:info',
+		warning: 'ph:warning',
 		loading: 'ph:circle-notch'
 	};
 

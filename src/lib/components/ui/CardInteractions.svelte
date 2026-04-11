@@ -13,7 +13,8 @@
 		acknowledgments = {},
 		commentCount = 0,
 		showComments = $bindable(false),
-		onShare
+		onShare,
+		isDetail = false
 	}: {
 		boardId: string;
 		contentId: string;
@@ -21,38 +22,41 @@
 		commentCount?: number;
 		showComments?: boolean;
 		onShare?: () => void;
+		isDetail?: boolean;
 	} = $props();
 </script>
 
-<div class="flex items-center px-1 py-1 border-t border-surface-1">
+<div class="flex items-center px-1 py-1 border-t border-surface-1 {isDetail ? 'gap-8 px-8 py-3 justify-around' : ''}">
 	<!-- Fave / Heart -->
-	<div class="flex-1 flex justify-center">
-		<CardAcknowledgmentButton {boardId} {contentId} {acknowledgments} />
+	<div class={isDetail ? '' : 'flex-1 flex justify-center'}>
+		<CardAcknowledgmentButton {boardId} {contentId} {acknowledgments} {isDetail} />
 	</div>
 
 	<!-- Comments toggle -->
-	<div class="flex-1 flex justify-center">
+	<div class={isDetail ? '' : 'flex-1 flex justify-center'}>
 		<button
 			onclick={() => { hapticLight(); showComments = !showComments; }}
-			class="flex items-center gap-1.5 py-2 px-3 transition-colors duration-200 press-scale
-				{showComments ? 'text-accent' : 'text-muted'}"
+			class="flex items-center justify-center gap-1.5 transition-all duration-200 press-scale
+				{isDetail ? 'px-3 py-2 text-accent' : 'py-2 px-3 text-muted'}
+				{!isDetail && showComments ? 'text-accent' : ''}"
 			aria-label="Toggle comments"
 		>
-			<Icon icon={showComments ? 'ph:chat-circle-dots-fill' : 'ph:chat-circle-dots'} class="text-lg" />
+			<Icon icon={showComments ? 'ph:chat-circle-dots-fill' : 'ph:chat-circle-dots'} class={isDetail ? 'text-xl' : 'text-lg'} />
 			{#if commentCount && commentCount > 0}
-				<span class="text-xs font-semibold tabular-nums">{commentCount}</span>
+				<span class="{isDetail ? 'text-sm' : 'text-xs'} font-semibold tabular-nums">{commentCount}</span>
 			{/if}
 		</button>
 	</div>
 
 	<!-- Share -->
-	<div class="flex-1 flex justify-center">
+	<div class={isDetail ? '' : 'flex-1 flex justify-center'}>
 		<button
 			onclick={() => { hapticLight(); onShare?.(); }}
-			class="flex items-center gap-1.5 py-2 px-3 text-muted transition-colors duration-200 press-scale"
+			class="flex items-center justify-center transition-all duration-200 press-scale
+				{isDetail ? 'px-3 py-2 text-primary' : 'py-2 px-3 text-muted'}"
 			aria-label="Share"
 		>
-			<Icon icon="ph:share-network" class="text-lg" />
+			<Icon icon="ph:share-network" class={isDetail ? 'text-xl' : 'text-lg'} />
 		</button>
 	</div>
 </div>

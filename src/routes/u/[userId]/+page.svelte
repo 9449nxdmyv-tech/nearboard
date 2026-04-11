@@ -8,7 +8,8 @@
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import { CARD_ENTRANCE } from '$lib/config/animations';
-	import { avatarInitial } from '$lib/utils/textFormatter';
+	import { avatarInitial, summaryPreview } from '$lib/utils/textFormatter';
+	import { relativeTime } from '$lib/utils/dateFormatter';
 	import BoardPreviewMosaic from '$lib/components/ui/BoardPreviewMosaic.svelte';
 	import StreakBadge from '$lib/components/ui/StreakBadge.svelte';
 	import AvatarStack from '$lib/components/ui/AvatarStack.svelte';
@@ -246,80 +247,99 @@
 						<p class="text-sm text-muted">No boards yet.</p>
 					</div>
 				{:else}
-					<div class={boards.length === 1 ? 'max-w-sm mx-auto' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'}>
+					<div class="profile-board-grid grid grid-cols-2 lg:grid-cols-3 gap-3">
 						{#each boards as board, i (board.id)}
 							{@const isPrivate = !board.isPublic}
+							{@const canAccess = isMember(board)}
 							<div
 								in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration, delay: Math.min(i * 50, 400) }}
 							>
-								{#if isPrivate}
-									<!-- Private board — blurred, no title -->
-									<div class="group relative bg-card rounded-card shadow-card border border-border/50 overflow-hidden">
-										<div class="relative h-32 sm:h-36 overflow-hidden">
-											<div class="blur-lg scale-110 h-full">
-												<BoardPreviewMosaic boardId={board.id} />
-											</div>
-											<!-- Lock overlay -->
-											<div class="absolute inset-0 bg-card/40 backdrop-blur-sm flex items-center justify-center">
-												<div class="flex flex-col items-center gap-1.5">
-													<div class="w-10 h-10 rounded-full bg-primary/8 flex items-center justify-center">
-														<Icon icon="ph:lock-simple-fill" class="text-lg text-on-surface/60" />
-													</div>
-													<span class="text-[11px] font-semibold text-muted">Private</span>
-												</div>
+								{#if isPrivate && !canAccess}
+									<!-- Private board — blurred lock card -->
+									<div class="profile-board-card group relative rounded-2xl overflow-hidden aspect-[3/4]">
+										<div class="absolute inset-0 bg-surface-1">
+											<div class="blur-lg scale-110 w-full h-full">
+												<BoardPreviewMosaic boardId={board.id} height="100%" />
 											</div>
 										</div>
-										<div class="px-4 py-3 flex items-center justify-between">
-											<span class="text-[13px] text-muted font-medium">Private Board</span>
-											<span class="text-[11px] text-muted/60">
+										<div class="absolute inset-0 bg-card/50 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+											<div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+												<Icon icon="ph:lock-simple" class="text-xl text-white/70" />
+											</div>
+											<span class="text-[12px] font-semibold text-white/60">Private</span>
+											<span class="text-[10px] text-white/40">
 												{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}
 											</span>
 										</div>
+										<div class="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none"></div>
 									</div>
 								{:else}
-									<!-- Public board — full card like home page style -->
+									<!-- Accessible board — home-page style card -->
 									<a
-										href={isMember(board) ? `/board/${board.id}` : undefined}
-										class="group relative block bg-card rounded-card shadow-card border border-border/50 overflow-hidden
-											hover:shadow-lg hover:border-accent/20 transition-all duration-200"
+										href={canAccess ? `/board/${board.id}` : undefined}
+										class="profile-board-card group relative block rounded-2xl overflow-hidden aspect-[3/4]"
 									>
-										<!-- Mosaic preview -->
-										<div class="relative h-36 sm:h-40 overflow-hidden">
-											<div class="h-full group-hover:scale-[1.03] transition-transform duration-500">
-												<BoardPreviewMosaic boardId={board.id} />
-											</div>
-											<!-- Gradient overlay -->
-											<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-
-											<!-- Board name over image -->
-											<div class="absolute bottom-0 inset-x-0 p-3.5">
-												<div class="flex items-center gap-2">
-													<h3 class="text-[15px] font-bold text-white flex-1 truncate drop-shadow-md">
-														{board.name}
-													</h3>
-													<StreakBadge streak={board.streak} />
-												</div>
-											</div>
+										<!-- Background mosaic -->
+										<div class="absolute inset-0 bg-surface-1">
+											<BoardPreviewMosaic boardId={board.id} height="100%" />
 										</div>
 
-										<!-- Footer -->
-										<div class="px-3.5 py-3 flex items-center justify-between">
-											<AvatarStack uids={board.memberIds} boardId={board.id} size="xs" />
+										<!-- Gradient scrim -->
+										<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
 
-											{#if isMember(board)}
-												<span class="text-[11px] font-semibold text-accent">Open</span>
-											{:else if hasPendingRequest(board.id)}
-												<span class="text-[11px] font-semibold text-muted/60 bg-border/40 px-2.5 py-1 rounded-full">Pending</span>
-											{:else}
-												<button
-													onclick={(e) => { e.stopPropagation(); e.preventDefault(); handleRequestToJoin(board.id); }}
-													disabled={requestingBoard === board.id}
-													class="text-[11px] font-semibold text-white bg-accent px-3 py-1.5 rounded-full
-														hover:bg-accent/90 active:scale-[0.97] transition-all disabled:opacity-50"
-												>
-													{requestingBoard === board.id ? 'Sending...' : 'Join'}
-												</button>
+										<!-- Inner highlight border -->
+										<div class="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/15 pointer-events-none"></div>
+
+										<!-- Sheen sweep -->
+										<div class="profile-board-card-sheen absolute inset-0 pointer-events-none"></div>
+
+										<!-- Top-left: content count pill -->
+										{#if board.contentCount}
+											<div class="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm">
+												<Icon icon="ph:note" class="text-[10px] text-white/80" />
+												<span class="text-[10px] text-white/90 font-medium tabular-nums">{board.contentCount}</span>
+											</div>
+										{/if}
+
+										<!-- Top-right: private lock badge -->
+										{#if isPrivate}
+											<div class="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm">
+												<Icon icon="ph:lock-simple" class="text-[10px] text-white/80" />
+											</div>
+										{/if}
+
+										<!-- Overlaid info at bottom -->
+										<div class="absolute bottom-0 left-0 right-0 p-3 flex flex-col gap-1.5">
+											<div class="flex items-center gap-2">
+												<h3 class="font-semibold text-[14px] text-white leading-snug truncate flex-1 drop-shadow-sm">{board.name}</h3>
+												{#if board.streak > 0}
+													<StreakBadge streak={board.streak} size="sm" />
+												{/if}
+											</div>
+
+											{#if board.livingSummary?.headline || board.livingSummary?.content}
+												<p class="text-[11px] text-white/70 line-clamp-2 italic leading-relaxed drop-shadow-sm">
+													"{board.livingSummary.headline || summaryPreview(board.livingSummary.content, 50)}"
+												</p>
 											{/if}
+
+											<div class="flex items-center justify-between gap-2 mt-0.5">
+												<AvatarStack uids={board.memberIds} boardId={board.id} size="sm" />
+												{#if canAccess}
+													<span class="text-[10px] text-white/80 font-semibold bg-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">Open</span>
+												{:else if hasPendingRequest(board.id)}
+													<span class="text-[10px] text-white/60 font-medium bg-white/10 px-2 py-0.5 rounded-full">Pending</span>
+												{:else}
+													<button
+														onclick={(e) => { e.stopPropagation(); e.preventDefault(); handleRequestToJoin(board.id); }}
+														disabled={requestingBoard === board.id}
+														class="text-[10px] font-semibold text-white bg-accent px-2.5 py-1 rounded-full
+															hover:bg-accent/90 active:scale-[0.97] transition-all disabled:opacity-50"
+													>
+														{requestingBoard === board.id ? 'Sending...' : 'Join'}
+													</button>
+												{/if}
+											</div>
 										</div>
 									</a>
 								{/if}
@@ -335,4 +355,51 @@
 <style>
 	.w-22 { width: 5.5rem; }
 	.h-22 { height: 5.5rem; }
+
+	.profile-board-grid {
+		perspective: 800px;
+	}
+
+	.profile-board-card {
+		transform-style: preserve-3d;
+		transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+					box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+		box-shadow:
+			0 2px 8px rgb(0 0 0 / 0.12),
+			0 1px 3px rgb(0 0 0 / 0.08);
+		will-change: transform;
+	}
+
+	.profile-board-card:hover {
+		transform: rotateX(2deg) rotateY(-1.5deg) translateY(-4px) scale(1.02);
+		box-shadow:
+			0 12px 32px rgb(0 0 0 / 0.18),
+			0 4px 12px rgb(0 0 0 / 0.1);
+	}
+
+	.profile-board-card:active {
+		transform: rotateX(0deg) rotateY(0deg) translateY(0) scale(0.98);
+		box-shadow:
+			0 2px 6px rgb(0 0 0 / 0.15),
+			0 1px 2px rgb(0 0 0 / 0.08);
+		transition-duration: 0.1s;
+	}
+
+	.profile-board-card-sheen {
+		background: linear-gradient(
+			120deg,
+			transparent 30%,
+			rgb(255 255 255 / 0.15) 45%,
+			rgb(255 255 255 / 0.25) 50%,
+			rgb(255 255 255 / 0.15) 55%,
+			transparent 70%
+		);
+		background-size: 250% 100%;
+		background-position: 200% 0;
+		transition: background-position 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.profile-board-card:hover .profile-board-card-sheen {
+		background-position: -50% 0;
+	}
 </style>

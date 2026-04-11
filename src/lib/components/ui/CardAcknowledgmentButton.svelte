@@ -14,11 +14,13 @@
 	let {
 		boardId,
 		contentId,
-		acknowledgments = {}
+		acknowledgments = {},
+		isDetail = false
 	}: {
 		boardId: string;
 		contentId: string;
 		acknowledgments?: Record<string, { type: 'heart'; createdAt: any }>;
+		isDetail?: boolean;
 	} = $props();
 
 	const user = $derived($userStore.user);
@@ -46,8 +48,9 @@
 
 <button
 	onclick={handleToggle}
-	class="relative flex items-center gap-1.5 py-2 px-3 transition-colors duration-200 active:scale-95
-		{hasFaved ? 'text-error' : 'text-muted'}"
+	class="relative flex items-center justify-center gap-1.5 transition-all duration-200 press-scale
+		{isDetail ? 'px-3 py-2 text-error' : 'py-2 px-3 text-muted'}
+		{!isDetail && hasFaved ? 'text-error' : ''}"
 	aria-label={hasFaved ? 'Unfave' : 'Fave'}
 >
 	<!-- Burst particles -->
@@ -62,13 +65,13 @@
 
 	{#if hasFaved}
 		<span class="heart-pop" class:heart-tap={justTapped} in:scale={{ duration: 300, easing: quintOut }}>
-			<Icon icon="ph:heart-fill" class="text-lg" />
+			<Icon icon="ph:heart-fill" class={isDetail ? 'text-xl' : 'text-lg'} />
 		</span>
 	{:else}
-		<Icon icon="ph:heart" class="text-lg" />
+		<Icon icon="ph:heart" class={isDetail ? 'text-xl' : 'text-lg'} />
 	{/if}
 	{#if faveCount > 0}
-		<span class="text-xs font-semibold tabular-nums" class:count-bump={justTapped}>{faveCount}</span>
+		<span class="{isDetail ? 'text-sm' : 'text-xs'} font-semibold tabular-nums" class:count-bump={justTapped}>{faveCount}</span>
 	{/if}
 </button>
 

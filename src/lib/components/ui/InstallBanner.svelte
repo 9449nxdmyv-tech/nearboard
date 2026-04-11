@@ -89,7 +89,7 @@
 				<!-- Main prompt -->
 				<div class="flex items-center gap-3 p-4" in:fade={{ duration: 150 }}>
 					<div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-						<Icon icon="ph:device-mobile-fill" class="text-xl text-on-surface" />
+						<Icon icon="ph:device-mobile" class="text-xl text-on-surface" />
 					</div>
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-medium text-primary">Get the Nearboard app</p>

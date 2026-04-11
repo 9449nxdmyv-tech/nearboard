@@ -11,7 +11,7 @@
 	import Header from '$lib/components/ui/Header.svelte';
 	import { publishTemplate, subscribeToBoard, subscribeToBoardContent } from '$lib/firebase';
 	import { userStore } from '$lib/stores';
-	import { Page } from 'konsta/svelte';
+	import { Page, List, ListInput, Button, Block, BlockTitle } from 'konsta/svelte';
 	import { onMount } from 'svelte';
 	import type { BoardDoc, BoardTemplate, ContentType, ContentDoc, TemplateSectionDoc } from '$lib/types';
 
@@ -132,144 +132,159 @@
 <Page>
 	<Header title="Publish Template" subtitle="Share this board's structure with others" backHref="/board/{boardId}" />
 
-	<div class="px-6 py-6" in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration }}>
-		<!-- Name -->
-		<label for="tpl-name" class="block text-sm font-medium text-primary mb-1">Template Name</label>
-		<input
-			id="tpl-name"
-			type="text"
-			bind:value={name}
-			placeholder="e.g. Family Weekly Planner"
-			maxlength={60}
-			class="w-full py-3 px-4 border border-border rounded-lg text-sm bg-card
-				placeholder:text-muted focus:outline-none focus:border-accent transition-colors mb-4"
-		/>
-
-		<!-- Description -->
-		<label for="tpl-desc" class="block text-sm font-medium text-primary mb-1">Description</label>
-		<textarea
-			id="tpl-desc"
-			bind:value={description}
-			placeholder="Describe what this template is for..."
-			rows={3}
-			maxlength={200}
-			class="w-full py-3 px-4 border border-border rounded-lg text-sm bg-card
-				placeholder:text-muted focus:outline-none focus:border-accent transition-colors resize-none mb-4"
-		></textarea>
+	<div in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration }}>
+		<!-- Name & Description -->
+		<List inset strong outline>
+			<ListInput
+				outline
+				label="Template Name"
+				type="text"
+				placeholder="e.g. Family Weekly Planner"
+				value={name}
+				onInput={(e) => { name = e.target.value; }}
+				maxlength={60}
+			/>
+			<ListInput
+				outline
+				label="Description"
+				type="textarea"
+				placeholder="Describe what this template is for..."
+				value={description}
+				onInput={(e) => { description = e.target.value; }}
+				maxlength={200}
+				inputClass="!h-20 resize-none"
+			/>
+		</List>
 
 		<!-- Sections -->
-		<h2 class="text-sm font-medium text-primary mb-2">Sections</h2>
-		<p class="text-xs text-muted mb-3">Define the starter content sections for this template.</p>
+		<BlockTitle>Sections</BlockTitle>
+		<Block class="!pt-0">
+			<p class="text-xs text-muted">Define the starter content sections for this template.</p>
+		</Block>
 
 		{#if sections.length > 0}
-			<div class="flex flex-col gap-2 mb-4">
+			<List inset strong>
 				{#each sections as section, i}
-					<div class="flex items-center gap-2 bg-card rounded-lg px-3 py-2 border border-border">
-						<Icon icon={CONTENT_TYPES.find(t => t.value === section.contentType)?.icon ?? 'ph:note-pencil'} class="text-base text-on-surface/60 shrink-0" />
-						<div class="flex-1 min-w-0">
-							<span class="text-sm text-primary">{section.title}</span>
-							<span class="text-xs text-muted ml-1">({section.contentType})</span>
-						</div>
+					{#snippet sectionMedia()}
+						<Icon icon={CONTENT_TYPES.find(t => t.value === section.contentType)?.icon ?? 'ph:note-pencil'} class="text-base text-on-surface/60" />
+					{/snippet}
+					{#snippet sectionAfter()}
 						<button
 							onclick={() => removeSection(i)}
-							class="text-muted hover:text-error transition-colors shrink-0"
+							class="p-1.5 text-muted hover:text-error transition-colors"
 							aria-label="Remove section"
 						>
 							<Icon icon="ph:x" class="text-sm" />
 						</button>
-					</div>
+					{/snippet}
+					<li class="flex items-center gap-3 px-4 py-3">
+						{@render sectionMedia()}
+						<div class="flex-1 min-w-0">
+							<span class="text-sm text-primary">{section.title}</span>
+							<span class="text-xs text-muted ml-1">({section.contentType})</span>
+						</div>
+						{@render sectionAfter()}
+					</li>
 				{/each}
-			</div>
+			</List>
 		{/if}
 
 		<!-- Add section form -->
-		<div class="bg-card border border-border rounded-card p-4 mb-6">
-			<div class="flex gap-2 mb-2">
-				<input
-					type="text"
-					bind:value={sectionTitle}
-					placeholder="Section title"
-					class="flex-1 py-2 px-3 border border-border rounded-lg text-sm bg-surface
-						placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
-				/>
-				<select
-					bind:value={sectionType}
-					class="py-2 px-3 border border-border rounded-lg text-sm bg-surface"
-				>
-					{#each CONTENT_TYPES as ct}
-						<option value={ct.value}>{ct.label}</option>
-					{/each}
-				</select>
-			</div>
-			<input
+		<List inset strong outline>
+			<ListInput
+				outline
+				label="Section title"
 				type="text"
-				bind:value={sectionPlaceholder}
-				placeholder="Placeholder text (optional)"
-				class="w-full py-2 px-3 border border-border rounded-lg text-sm bg-surface
-					placeholder:text-muted focus:outline-none focus:border-accent transition-colors mb-2"
+				placeholder="e.g. Inspiration"
+				value={sectionTitle}
+				onInput={(e) => { sectionTitle = e.target.value; }}
 			/>
-			<button
-				onclick={addSection}
-				disabled={!sectionTitle.trim()}
-				class="w-full py-2 text-accent text-sm font-medium disabled:opacity-30"
+			<ListInput
+				outline
+				label="Content type"
+				type="select"
+				value={sectionType}
+				onInput={(e) => { sectionType = e.target.value; }}
 			>
+				{#each CONTENT_TYPES as ct}
+					<option value={ct.value}>{ct.label}</option>
+				{/each}
+			</ListInput>
+			<ListInput
+				outline
+				label="Placeholder (optional)"
+				type="text"
+				placeholder="Add a note..."
+				value={sectionPlaceholder}
+				onInput={(e) => { sectionPlaceholder = e.target.value; }}
+			/>
+		</List>
+
+		<Block class="!pt-0">
+			<Button small clear onClick={addSection} disabled={!sectionTitle.trim()}>
 				+ Add Section
-			</button>
-		</div>
+			</Button>
+		</Block>
 
 		<!-- Template preview -->
 		{#if name.trim() && description.trim() && sections.length > 0 && board}
-			<h2 class="text-sm font-medium text-primary mb-2">Preview</h2>
-			<p class="text-xs text-muted mb-3">How your template will appear in the marketplace.</p>
-			<div class="bg-card rounded-card shadow-card p-4 mb-6">
-				<div class="flex items-start justify-between mb-2">
-					<div class="flex items-center gap-2">
-						<div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-							<Icon icon={CATEGORY_ICON[board.template] ?? 'ph:sparkle'} class="text-lg text-on-surface" />
+			<BlockTitle>Preview</BlockTitle>
+			<Block>
+				<p class="text-xs text-muted mb-3">How your template will appear in the marketplace.</p>
+				<div class="bg-card rounded-card shadow-card p-4">
+					<div class="flex items-start justify-between mb-2">
+						<div class="flex items-center gap-2">
+							<div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+								<Icon icon={CATEGORY_ICON[board.template] ?? 'ph:sparkle'} class="text-lg text-on-surface" />
+							</div>
+							<div>
+								<h3 class="font-semibold text-sm text-primary">{name.trim()}</h3>
+								<p class="text-xs text-muted">by {$userStore.user?.displayName || $userStore.user?.email || 'You'}</p>
+							</div>
 						</div>
-						<div>
-							<h3 class="font-semibold text-sm text-primary">{name.trim()}</h3>
-							<p class="text-xs text-muted">by {$userStore.user?.displayName || $userStore.user?.email || 'You'}</p>
-						</div>
+						<span class="text-xs text-muted">0 clones</span>
 					</div>
-					<span class="text-xs text-muted">0 clones</span>
+
+					<span class="inline-block px-2.5 py-1 bg-accent/10 text-accent text-xs font-medium rounded-full capitalize mb-3">
+						{board.template}
+					</span>
+
+					<p class="text-xs text-muted mb-3 leading-relaxed line-clamp-2">{description.trim()}</p>
+
+					<div class="flex gap-1.5 flex-wrap">
+						{#each sections.slice(0, 3) as section}
+							<span class="px-2 py-0.5 bg-surface rounded-full text-[10px] text-muted border border-border">
+								{section.title}
+							</span>
+						{/each}
+						{#if sections.length > 3}
+							<span class="px-2 py-0.5 text-[10px] text-muted">+{sections.length - 3}</span>
+						{/if}
+					</div>
 				</div>
-
-				<span class="inline-block px-2.5 py-1 bg-accent/10 text-accent text-xs font-medium rounded-full capitalize mb-3">
-					{board.template}
-				</span>
-
-				<p class="text-xs text-muted mb-3 leading-relaxed line-clamp-2">{description.trim()}</p>
-
-				<div class="flex gap-1.5 flex-wrap">
-					{#each sections.slice(0, 3) as section}
-						<span class="px-2 py-0.5 bg-surface rounded-full text-[10px] text-muted border border-border">
-							{section.title}
-						</span>
-					{/each}
-					{#if sections.length > 3}
-						<span class="px-2 py-0.5 text-[10px] text-muted">+{sections.length - 3}</span>
-					{/if}
-				</div>
-			</div>
+			</Block>
 		{/if}
 
 		{#if error}
-			<p class="text-error text-sm text-center mb-4">{error}</p>
+			<Block>
+				<p class="text-error text-sm text-center">{error}</p>
+			</Block>
 		{/if}
 
 		<!-- Publish button -->
-		<button
-			onclick={handlePublish}
-			disabled={saving || !name.trim() || !description.trim() || sections.length === 0}
-			class="w-full py-3 bg-accent text-white rounded-lg text-sm font-medium
-				disabled:opacity-50 active:scale-[0.98] transition-transform"
-		>
-			{saving ? 'Publishing...' : 'Publish Template'}
-		</button>
-
-		<p class="text-xs text-muted text-center mt-3">
-			Published templates are visible to all Nearboard users.
-		</p>
+		<Block>
+			<Button
+				large
+				rounded
+				onClick={handlePublish}
+				disabled={saving || !name.trim() || !description.trim() || sections.length === 0}
+				class="w-full"
+			>
+				{saving ? 'Publishing...' : 'Publish Template'}
+			</Button>
+			<p class="text-xs text-muted text-center mt-3">
+				Published templates are visible to all Nearboard users.
+			</p>
+		</Block>
 	</div>
 </Page>

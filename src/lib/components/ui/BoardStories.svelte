@@ -185,7 +185,7 @@
 							/>
 						{:else}
 							<div class="w-full h-full bg-surface-1 flex items-center justify-center">
-								<Icon icon="ph:video-camera-fill" class="text-xl text-muted/40" />
+								<Icon icon="ph:video-camera" class="text-xl text-muted/40" />
 							</div>
 						{/if}
 					</div>

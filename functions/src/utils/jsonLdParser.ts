@@ -264,6 +264,14 @@ export function parseArticle(data: Record<string, unknown>): ArticleEnrichment |
 		: null;
 	const publisher = data.publisher as Record<string, unknown> | undefined;
 
+	// Extract article body text from JSON-LD (many news sites include it)
+	let bodyText: string | null = null;
+	const rawBody = str(data.articleBody) ?? str(data.text);
+	if (rawBody && rawBody.length > 50) {
+		// Cap at ~10k chars to avoid storing massive articles
+		bodyText = rawBody.length > 10000 ? rawBody.slice(0, 10000) + '…' : rawBody;
+	}
+
 	return {
 		kind: 'article',
 		author,
@@ -272,6 +280,7 @@ export function parseArticle(data: Record<string, unknown>): ArticleEnrichment |
 			? `${Math.max(1, Math.round(wordCount / 200))} min read`
 			: null,
 		siteName: publisher ? str(publisher.name) : null,
+		bodyText
 	};
 }
 

@@ -304,7 +304,7 @@
 					<div class="flex items-center justify-center gap-[3px] h-16">
 						{#each waveformBars as _, i}
 							<div
-								class="w-[3px] rounded-full bg-type-voice/20 transition-all duration-500"
+								class="w-[3px] rounded-full bg-primary/20 transition-all duration-500"
 								style="height: {8 + Math.sin(i * 0.4) * 6}px"
 							></div>
 						{/each}
@@ -318,14 +318,14 @@
 						aria-label="Start recording"
 					>
 						<div class="absolute inset-0 rounded-full border-[4px] border-type-voice/30 group-hover:border-type-voice/50 transition-colors"></div>
-						<div class="w-14 h-14 rounded-full bg-type-voice flex items-center justify-center shadow-lg
+						<div class="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-lg
 							group-hover:scale-105 transition-transform">
-							<Icon icon="ph:microphone-fill" class="text-2xl text-white" />
+							<Icon icon="ph:microphone" class="text-2xl text-white" />
 						</div>
 					</button>
 
 					<div class="text-center">
-						<p class="text-[15px] font-semibold text-type-voice">Tap to record</p>
+						<p class="text-[15px] font-semibold text-primary">Tap to record</p>
 						<p class="text-[13px] text-muted mt-1">
 							Up to {MAX_SECONDS} seconds
 							<span class="hidden sm:inline">&middot; or press Space</span>
@@ -349,7 +349,7 @@
 					<div class="flex items-center justify-center gap-[3px] h-20 w-full max-w-xs">
 						{#each waveformBars as bar, i}
 							<div
-								class="w-[3px] rounded-full bg-type-voice transition-all duration-75"
+								class="w-[3px] rounded-full bg-primary transition-all duration-75"
 								style="height: {Math.max(4, bar * 80)}px"
 							></div>
 						{/each}
@@ -389,7 +389,7 @@
 								{@const barPct = (i / waveformBars.length) * 100}
 								<div
 									class="w-[3px] rounded-full transition-colors duration-100
-										{barPct <= playbackProgress ? 'bg-type-voice' : 'bg-type-voice/20'}"
+										{barPct <= playbackProgress ? 'bg-primary' : 'bg-primary/20'}"
 									style="height: {Math.max(4, bar * 80)}px"
 								></div>
 							{/each}
@@ -407,7 +407,7 @@
 					<!-- Play / Pause button -->
 					<button
 						onclick={togglePlayback}
-						class="w-16 h-16 rounded-full bg-type-voice flex items-center justify-center shadow-lg
+						class="w-16 h-16 rounded-full bg-primary flex items-center justify-center shadow-lg
 							active:scale-95 hover:scale-105 transition-transform"
 						aria-label={playing ? 'Pause' : 'Play'}
 					>

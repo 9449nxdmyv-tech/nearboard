@@ -193,7 +193,7 @@
 		title={board?.name || 'Board'}
 		backHref="/"
 		actions={[
-			{ icon: showFabMenu ? 'ph:x-bold' : 'ph:dots-three-outline-vertical-fill', onClick: () => { showFabMenu = !showFabMenu; }, label: 'Board actions' }
+			{ icon: showFabMenu ? 'ph:x-bold' : 'ph:dots-three-outline-vertical', onClick: () => { showFabMenu = !showFabMenu; }, label: 'Board actions' }
 		]}
 	/>
 

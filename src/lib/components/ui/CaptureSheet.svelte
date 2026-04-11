@@ -12,6 +12,7 @@
 	import { extractMetadata } from '$lib/api';
 	import type { BoardDoc, PageMetadata } from '$lib/types';
 	import SheetHeader from './SheetHeader.svelte';
+	import ChatInput from './ChatInput.svelte';
 
 	export type CaptureType = 'note' | 'link' | 'photo' | 'video' | 'voice' | 'list' | 'poll' | 'location';
 
@@ -134,13 +135,13 @@
 		onClose();
 	}
 
-	const captureTypes: { type: CaptureType; icon: string; label: string; color: string }[] = [
-		{ type: 'photo', icon: 'ph:camera-fill', label: 'Photo', color: 'bg-type-photo/10 text-type-photo' },
-		{ type: 'video', icon: 'ph:video-camera-fill', label: 'Video', color: 'bg-type-video/10 text-type-video' },
-		{ type: 'voice', icon: 'ph:microphone-fill', label: 'Voice', color: 'bg-type-voice/10 text-type-voice' },
-		{ type: 'list', icon: 'ph:list-checks', label: 'List', color: 'bg-type-list/10 text-type-list' },
-		{ type: 'poll', icon: 'ph:chart-bar-fill', label: 'Poll', color: 'bg-type-poll/10 text-type-poll' },
-		{ type: 'location', icon: 'ph:map-pin-fill', label: 'Place', color: 'bg-type-location/10 text-type-location' },
+	const captureTypes: { type: CaptureType; icon: string; label: string }[] = [
+		{ type: 'photo', icon: 'ph:camera', label: 'Photo' },
+		{ type: 'video', icon: 'ph:video-camera', label: 'Video' },
+		{ type: 'voice', icon: 'ph:microphone', label: 'Voice' },
+		{ type: 'list', icon: 'ph:list-checks', label: 'List' },
+		{ type: 'poll', icon: 'ph:chart-bar', label: 'Poll' },
+		{ type: 'location', icon: 'ph:map-pin', label: 'Place' },
 	];
 </script>
 
@@ -154,7 +155,7 @@
 
 <!-- Sheet -->
 <div
-	class="fixed bottom-0 left-0 right-0 z-[101] bg-surface rounded-t-[20px] shadow-xl pb-safe"
+	class="fixed bottom-0 left-0 right-0 z-[101] bg-surface rounded-t-[20px] shadow-xl pb-safe max-h-[90vh] overflow-y-auto"
 	transition:fly={{ y: 300, duration: 250 }}
 >
 	<SheetHeader title="Add content" onClose={onClose} />
@@ -251,32 +252,15 @@
 			</div>
 		{/if}
 
-		<div class="flex items-end gap-2">
-			<div class="flex-1 bg-surface-1 rounded-2xl border border-border focus-within:border-primary/50 transition-colors overflow-hidden">
-				<textarea
-					bind:value={text}
-					oninput={handleInput}
-					onkeydown={handleKeydown}
-					placeholder="Type a note or paste a link..."
-					rows={1}
-					disabled={submitting}
-					class="w-full px-4 py-2.5 text-[15px] leading-[22px] bg-transparent resize-none
-						placeholder-muted text-on-surface focus:outline-none disabled:opacity-50"
-					style="max-height: 120px; field-sizing: content;"
-				></textarea>
-			</div>
-			{#if hasText}
-				<button
-					onclick={() => { handleSubmit(); hapticLight(); }}
-					disabled={submitting}
-					class="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
-						bg-primary text-white press-scale transition-colors disabled:opacity-50"
-					aria-label="Send"
-				>
-					<Icon icon="ph:arrow-up-bold" class="text-lg" />
-				</button>
-			{/if}
-		</div>
+		<ChatInput
+			bind:value={text}
+			placeholder="Type a note or paste a link..."
+			size="lg"
+			disabled={submitting}
+			oninput={handleInput}
+			onkeydown={handleKeydown}
+			onsubmit={() => { handleSubmit(); hapticLight(); }}
+		/>
 	</div>
 
 	<!-- Capture type grid -->
@@ -290,8 +274,8 @@
 						active:bg-surface-2 transition-colors stagger-fade-in"
 					style="--stagger-index: {i}"
 				>
-					<div class="w-11 h-11 rounded-full {item.color} flex items-center justify-center">
-						<Icon icon={item.icon} class="text-xl" />
+					<div class="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
+						<Icon icon={item.icon} class="text-xl text-primary" />
 					</div>
 					<span class="text-[11px] font-medium text-on-surface">{item.label}</span>
 				</button>

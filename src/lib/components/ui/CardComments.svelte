@@ -8,6 +8,7 @@
 	import { scale } from 'svelte/transition';
 	import { backOut } from 'svelte/easing';
 	import Icon from '@iconify/svelte';
+	import ChatInput from './ChatInput.svelte';
 	import { userStore } from '$lib/stores';
 	import { subscribeToComments, addComment, deleteComment } from '$lib/firebase/boardService';
 	import { relativeTime } from '$lib/utils/dateFormatter';
@@ -25,7 +26,6 @@
 	let text = $state('');
 	let busy = $state(false);
 	let error = $state<string | null>(null);
-	let listEl = $state<HTMLDivElement | undefined>();
 
 	const charLimit = 280;
 	const charsLeft = $derived(charLimit - text.length);
@@ -33,9 +33,6 @@
 	onMount(() => {
 		return subscribeToComments(boardId, contentId, (items) => {
 			comments = items;
-			setTimeout(() => {
-				if (listEl) listEl.scrollTo({ top: listEl.scrollHeight, behavior: 'smooth' });
-			}, 50);
 		});
 	});
 
@@ -78,7 +75,7 @@
 
 <div class="flex flex-col gap-2 py-1">
 	{#if comments.length > 0}
-		<div bind:this={listEl} class="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto px-0.5">
+		<div class="flex flex-col gap-1.5 px-0.5">
 			{#each comments as comment (comment.id)}
 				{@const isOwn = comment.authorId === $userStore.user?.uid}
 				<div
@@ -134,30 +131,13 @@
 
 	{#if allowComments}
 		<form onsubmit={handleSubmit} class="mt-1">
-			<div class="flex items-end gap-2">
-				<div class="flex-1 bg-surface-1 rounded-2xl border border-border/30 focus-within:border-accent/40 transition-colors overflow-hidden">
-					<textarea
-						bind:value={text}
-						placeholder="Message..."
-						maxlength={charLimit}
-						disabled={busy}
-						rows={1}
-						class="w-full py-2 pl-3 pr-2 bg-transparent text-[13px] text-on-surface
-							placeholder:text-muted/40 focus:outline-none
-							resize-none min-h-[36px] max-h-[80px]"
-						style="field-sizing: content;"
-					></textarea>
-				</div>
-				<button
-					type="submit"
-					disabled={busy || !text.trim()}
-					class="shrink-0 w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center
-						disabled:opacity-30 active:scale-90 transition-all"
-					aria-label="Send"
-				>
-					<Icon icon="ph:arrow-up-bold" class="text-sm" />
-				</button>
-			</div>
+			<ChatInput
+				bind:value={text}
+				placeholder="Message..."
+				size="sm"
+				maxlength={charLimit}
+				disabled={busy}
+			/>
 			{#if error}
 				<p class="text-[10px] text-error mt-1 px-1">{error}</p>
 			{/if}

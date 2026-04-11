@@ -12,6 +12,7 @@
 	import { stripMarkdown, renderInline } from '$lib/utils/textFormatter';
 	import { updateLivingSummary, requestSummaryRegeneration } from '$lib/firebase';
 	import { showToast } from '$lib/stores';
+	import { Button, List, ListInput } from 'konsta/svelte';
 	import type { BoardDoc } from '$lib/types';
 
 	let {
@@ -238,20 +239,23 @@
 
 			{#if isEditing}
 				<div class="px-4 pt-3 pb-4">
-					<textarea
-						bind:value={editedContent}
-						class="w-full min-h-[100px] max-h-[180px] p-3 text-sm bg-surface border border-border rounded-lg
-							focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all resize-none"
-					></textarea>
+					<List inset strong outline class="!my-0">
+						<ListInput
+							outline
+							type="textarea"
+							placeholder="Edit summary..."
+							value={editedContent}
+							onInput={(e) => { editedContent = e.target.value; }}
+							inputClass="!min-h-[100px] !max-h-[180px] !resize-none"
+						/>
+					</List>
 					<div class="flex justify-end gap-2 mt-3">
-						<button
-							onclick={() => (isEditing = false)}
-							class="px-3 py-1.5 text-xs text-muted font-medium rounded-full hover:bg-surface transition-colors"
-						>Cancel</button>
-						<button
-							onclick={saveEdit}
-							class="px-4 py-1.5 bg-accent text-white rounded-full text-xs font-semibold shadow-sm shadow-accent/20"
-						>Save</button>
+						<Button small rounded clear onClick={() => (isEditing = false)}>
+							Cancel
+						</Button>
+						<Button small rounded onClick={saveEdit}>
+							Save
+						</Button>
 					</div>
 				</div>
 			{:else}

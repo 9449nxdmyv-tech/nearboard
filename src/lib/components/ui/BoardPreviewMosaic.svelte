@@ -41,15 +41,15 @@
 	function getTileStyle(item: ContentDoc): { icon: string; bg: string; fg: string } {
 		switch (item.type) {
 			case 'note':
-				return { icon: 'ph:note', bg: 'bg-type-note/10', fg: 'text-on-surface' };
+				return { icon: 'ph:note', bg: 'bg-primary/10', fg: 'text-on-surface' };
 			case 'list':
-				return { icon: 'ph:list-checks', bg: 'bg-type-list/10', fg: 'text-on-surface' };
+				return { icon: 'ph:list-checks', bg: 'bg-primary/10', fg: 'text-on-surface' };
 			case 'voice':
-				return { icon: 'ph:waveform', bg: 'bg-type-voice/10', fg: 'text-on-surface' };
+				return { icon: 'ph:waveform', bg: 'bg-primary/10', fg: 'text-on-surface' };
 			case 'poll':
-				return { icon: 'ph:chart-bar', bg: 'bg-type-poll/10', fg: 'text-on-surface' };
+				return { icon: 'ph:chart-bar', bg: 'bg-primary/10', fg: 'text-on-surface' };
 			case 'location':
-				return { icon: 'ph:map-pin', bg: 'bg-type-location/10', fg: 'text-on-surface' };
+				return { icon: 'ph:map-pin', bg: 'bg-primary/10', fg: 'text-on-surface' };
 			default:
 				return { icon: 'ph:squares-four', bg: 'bg-surface-1', fg: 'text-on-surface' };
 		}

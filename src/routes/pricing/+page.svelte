@@ -11,7 +11,7 @@
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import { userStore } from '$lib/stores';
-	import { Page } from 'konsta/svelte';
+	import { Page, Button } from 'konsta/svelte';
 	import Header from '$lib/components/ui/Header.svelte';
 	import type { UserDoc } from '$lib/types';
 
@@ -137,12 +137,9 @@
 					</li>
 				</ul>
 
-				<button 
-					disabled 
-					class="w-full py-3 bg-surface text-primary rounded-lg text-sm font-medium border border-border cursor-not-allowed"
-				>
+				<Button large rounded outline disabled class="w-full">
 					{currentTier === 'free' ? 'Current Plan' : 'Downgrade'}
-				</button>
+				</Button>
 			</div>
 
 			<!-- Supporter Tier -->
@@ -184,12 +181,9 @@
 					</li>
 				</ul>
 
-				<button 
-					class="w-full py-3 bg-accent text-white rounded-lg text-sm font-medium
-						hover:bg-accent/90 press-scale transition-all"
-				>
+				<Button large rounded class="w-full">
 					{currentTier === 'supporter' ? 'Current Plan' : 'Become a Supporter'}
-				</button>
+				</Button>
 				
 				<p class="text-xs text-muted text-center mt-3">
 					Where your money goes: Server costs, AI API usage, and development
@@ -203,7 +197,7 @@
 				<div class="flex items-center justify-between mb-4">
 					<div class="flex items-center gap-3">
 						<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-							<Icon icon="ph:crown-fill" class="text-2xl text-on-surface" />
+							<Icon icon="ph:crown" class="text-2xl text-on-surface" />
 						</div>
 						<div>
 							<h2 class="text-lg font-semibold text-primary">Lifetime</h2>
@@ -232,12 +226,9 @@
 						</li>
 					</ul>
 					
-					<button 
-						class="px-6 py-3 bg-primary text-white rounded-lg text-sm font-medium
-							hover:bg-primary/90 press-scale transition-all"
-					>
+					<Button large rounded>
 						{currentTier === 'lifetime' ? 'Current Plan' : 'Go Lifetime'}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>

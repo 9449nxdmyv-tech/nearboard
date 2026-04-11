@@ -15,7 +15,7 @@
 	import { addContent, createBoard } from '$lib/firebase';
 	import { extractMetadata } from '$lib/api';
 	import { detectContentType, refineContentType, isUrl } from '$lib/utils/contentDetector';
-	import { extractDomain, faviconUrl } from '$lib/utils/ogParser';
+	import { extractDomain, faviconUrl } from '$lib/utils/urlUtils';
 	import { inferBoardNameFromContent, SEED_SUMMARY } from '$lib/utils/onboardingUtils';
 	import {
 		routeCapture,

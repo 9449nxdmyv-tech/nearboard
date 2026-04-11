@@ -12,6 +12,7 @@
 	import { parseAndClassify, importApprovedCards } from '$lib/firebase/whatsAppImportService';
 	import { showToast, userStore } from '$lib/stores';
 	import { WHATSAPP_IMPORT_MAX_TXT_BYTES } from '$lib/config/constants';
+	import { Button } from 'konsta/svelte';
 	import type { ClassifiedWhatsAppCard, WhatsAppImportResult } from '$lib/types';
 
 	let {
@@ -216,12 +217,9 @@
 				/>
 			</label>
 
-			<button
-				onclick={handleClose}
-				class="w-full py-2.5 text-sm text-muted hover:text-primary transition-colors"
-			>
+			<Button clear onClick={handleClose} class="w-full">
 				Cancel
-			</button>
+			</Button>
 		</div>
 
 	{:else if step === 2}
@@ -230,13 +228,9 @@
 			{#if error}
 				<Icon icon="ph:warning-circle" class="text-3xl text-error" />
 				<p class="text-sm text-error text-center px-4">{error}</p>
-				<button
-					onclick={() => { step = 1; error = null; }}
-					class="px-4 py-2 text-sm font-medium text-accent border border-accent rounded-lg
-						hover:bg-accent hover:text-white transition-colors"
-				>
+				<Button large rounded outline onClick={() => { step = 1; error = null; }}>
 					Try Again
-				</button>
+				</Button>
 			{:else}
 				<div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
 				<p class="text-sm text-muted">{statusText}</p>
@@ -249,9 +243,9 @@
 			<div class="flex items-center justify-between">
 				<p class="text-xs text-muted">{cards.length} cards found</p>
 				<div class="flex gap-2">
-					<button onclick={selectAll} class="text-[11px] text-accent font-medium">Select All</button>
+					<Button clear small onClick={selectAll}>Select All</Button>
 					<span class="text-muted">·</span>
-					<button onclick={deselectAll} class="text-[11px] text-accent font-medium">Deselect All</button>
+					<Button clear small onClick={deselectAll}>Deselect All</Button>
 				</div>
 			</div>
 
@@ -287,25 +281,16 @@
 			</div>
 
 			<div class="flex gap-2 pt-2">
-				<button
-					onclick={handleClose}
-					class="flex-1 py-2.5 text-sm text-muted border border-border rounded-lg
-						hover:text-primary transition-colors"
-				>
+				<Button large outline rounded onClick={handleClose} class="flex-1">
 					Cancel
-				</button>
-				<button
-					onclick={handleImport}
-					disabled={selectedCount === 0 || importing}
-					class="flex-1 py-2.5 text-sm font-medium text-white bg-accent rounded-lg
-						hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-				>
+				</Button>
+				<Button large rounded onClick={handleImport} disabled={selectedCount === 0 || importing} class="flex-1">
 					{#if importing}
 						Importing...
 					{:else}
 						Import {selectedCount} Card{selectedCount === 1 ? '' : 's'}
 					{/if}
-				</button>
+				</Button>
 			</div>
 		</div>
 
@@ -324,13 +309,9 @@
 				{/if}
 			</div>
 
-			<button
-				onclick={handleClose}
-				class="w-full py-2.5 text-sm font-medium text-white bg-accent rounded-lg
-					hover:bg-accent/90 transition-colors"
-			>
+			<Button large rounded onClick={handleClose} class="w-full">
 				Done
-			</button>
+			</Button>
 		</div>
 	{/if}
 </BottomSheet>

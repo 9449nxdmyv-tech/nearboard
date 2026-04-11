@@ -49,7 +49,7 @@
 	let captureTargetBoardId = $state('');
 	let showCaptureSheet = $state(false);
 
-	const TAB_PATHS = ['/', '/feed', '/templates', '/profile'];
+	const TAB_PATHS = ['/', '/feed', '/people', '/profile'];
 	const showTabbar = $derived(
 		!!$userStore.user &&
 		!$userStore.loading &&
@@ -57,8 +57,8 @@
 	);
 	const currentPath = $derived($page.url.pathname);
 
-	// Bottom padding: tabbar only
-	const bottomPadding = $derived(showTabbar ? 'pb-[72px]' : '');
+	// Bottom padding: tabbar + safe area for home indicator
+	const bottomPadding = $derived(showTabbar ? 'pb-[calc(72px+env(safe-area-inset-bottom))]' : '');
 
 	/** Extract boardId from route params */
 	const routeBoardId = $derived(
@@ -292,13 +292,13 @@
 			<h1 class="text-2xl font-semibold">Nearboard</h1>
 		</div>
 	{:else if $userStore.user || $page.url.pathname.startsWith('/onboarding') || $page.url.pathname.startsWith('/b/') || $page.url.pathname.startsWith('/join/') || $page.url.pathname.startsWith('/refer/') || $page.url.pathname.startsWith('/u/')}
-		<div class={bottomPadding}>
+		<div class="flex-1 {bottomPadding}">
 			{@render children()}
 		</div>
 
 		<!-- Bottom Tabbar with center FAB -->
 		{#if showTabbar}
-			<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light">
+			<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light pb-[env(safe-area-inset-bottom)]">
 				<div class="relative">
 					<!-- Center FAB button -->
 					<button
@@ -366,29 +366,29 @@
 			/>
 		{/if}
 	{/if}
+
+	<!-- Capture sheets (inside App for safe area handling) -->
+	{#if captureSheetType === 'photo' && captureTargetBoardId}
+		<QuickCapturePhotoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
+
+	{#if captureSheetType === 'video' && captureTargetBoardId}
+		<QuickCaptureVideoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
+
+	{#if captureSheetType === 'voice' && captureTargetBoardId}
+		<QuickCaptureVoiceSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
+
+	{#if captureSheetType === 'list' && captureTargetBoardId}
+		<QuickCaptureListSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
+
+	{#if captureSheetType === 'poll' && captureTargetBoardId}
+		<QuickCapturePollSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
+
+	{#if captureSheetType === 'location' && captureTargetBoardId}
+		<QuickCaptureLocationSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
+	{/if}
 </App>
-
-<!-- Capture sheets -->
-{#if captureSheetType === 'photo' && captureTargetBoardId}
-	<QuickCapturePhotoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}
-
-{#if captureSheetType === 'video' && captureTargetBoardId}
-	<QuickCaptureVideoSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}
-
-{#if captureSheetType === 'voice' && captureTargetBoardId}
-	<QuickCaptureVoiceSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}
-
-{#if captureSheetType === 'list' && captureTargetBoardId}
-	<QuickCaptureListSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}
-
-{#if captureSheetType === 'poll' && captureTargetBoardId}
-	<QuickCapturePollSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}
-
-{#if captureSheetType === 'location' && captureTargetBoardId}
-	<QuickCaptureLocationSheet boardId={captureTargetBoardId} onClose={handleCaptureSheetClose} />
-{/if}

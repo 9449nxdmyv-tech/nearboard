@@ -368,9 +368,9 @@
 					<!-- Record -->
 					<button onclick={openCamera}
 						class="flex flex-col items-center gap-3 group active:scale-95 transition-transform">
-						<div class="w-20 h-20 rounded-full bg-type-video/10 flex items-center justify-center
-							group-hover:bg-type-video/15 transition-colors">
-							<Icon icon="ph:video-camera-fill" class="text-3xl text-type-video" />
+						<div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center
+							group-hover:bg-primary/15 transition-colors">
+							<Icon icon="ph:video-camera" class="text-3xl text-primary" />
 						</div>
 						<div class="text-center">
 							<p class="text-[14px] font-semibold text-on-surface">Record</p>
@@ -384,9 +384,9 @@
 					<!-- Upload -->
 					<label class="flex flex-col items-center gap-3 group active:scale-95 transition-transform cursor-pointer
 						{dragOver ? 'scale-105' : ''}">
-						<div class="w-20 h-20 rounded-full bg-type-video/10 flex items-center justify-center
-							group-hover:bg-type-video/15 transition-colors {dragOver ? '!bg-type-video/20' : ''}">
-							<Icon icon={dragOver ? 'ph:arrow-down-bold' : 'ph:upload-simple-fill'} class="text-3xl text-type-video" />
+						<div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center
+							group-hover:bg-primary/15 transition-colors {dragOver ? '!bg-primary/20' : ''}">
+							<Icon icon={dragOver ? 'ph:arrow-down-bold' : 'ph:upload-simple'} class="text-3xl text-primary" />
 						</div>
 						<div class="text-center">
 							<p class="text-[14px] font-semibold text-on-surface">Upload</p>

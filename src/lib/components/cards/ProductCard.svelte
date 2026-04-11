@@ -70,7 +70,7 @@
 	<!-- Price and title -->
 	<div class="space-y-1.5">
 		<div class="flex items-baseline gap-2">
-			<span class="text-xl font-bold text-type-product">{price}</span>
+			<span class="text-xl font-bold text-primary">{price}</span>
 			{#if originalPrice && originalPrice !== price}
 				<span class="text-sm text-muted line-through">{originalPrice}</span>
 			{/if}
@@ -89,7 +89,7 @@
 
 		<!-- View button -->
 		<a href={url} target="_blank" rel="noopener noreferrer">
-			<Button rounded class="w-full mt-2 press-scale">
+			<Button small rounded class="w-full mt-2">
 				<Icon icon="ph:shopping-bag" class="mr-2" />
 				View Product
 			</Button>

@@ -7,6 +7,7 @@
 	import type { Snippet } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { fly } from 'svelte/transition';
+	import { Button } from 'konsta/svelte';
 
 	let {
 		icon,
@@ -83,23 +84,13 @@
 	<!-- Actions -->
 	{#if actionLabel}
 		<div class="flex items-center gap-2.5">
-			<button
-				onclick={onAction}
-				class="px-5 py-2.5 bg-accent text-white rounded-full text-sm font-semibold
-					shadow-sm shadow-accent/25 hover:shadow-md hover:shadow-accent/30
-					active:scale-[0.96] transition-all duration-150 press-scale"
-			>
+			<Button large rounded onClick={onAction}>
 				{actionLabel}
-			</button>
+			</Button>
 			{#if secondaryActionLabel && onSecondaryAction}
-				<button
-					onclick={onSecondaryAction}
-					class="px-5 py-2.5 bg-surface text-primary rounded-full text-sm font-semibold
-						border border-border/60 hover:border-accent/40 hover:bg-accent/5
-						active:scale-[0.96] transition-all duration-150"
-				>
+				<Button large rounded outline onClick={onSecondaryAction}>
 					{secondaryActionLabel}
-				</button>
+				</Button>
 			{/if}
 		</div>
 	{/if}

@@ -1,9 +1,13 @@
 /**
  * @file ogParser.ts
  * @description Open Graph metadata parser. Pure function — works on raw HTML.
- *              Shared between the main app and the browser extension build.
  *              Uses multi-signal scoring to detect products from any domain.
+ *              Includes Readability for article content extraction.
  */
+
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
+import DOMPurify from 'isomorphic-dompurify';
 
 import type { PageMetadata, LinkEnrichment, RecipeEnrichment, MovieEnrichment, BookEnrichment, PlaceEnrichment, ArticleEnrichment, MusicEnrichment, GithubEnrichment } from '$lib/types';
 import {
@@ -11,6 +15,7 @@ import {
 	MUSIC_DOMAINS, ARTICLE_DOMAINS, GITHUB_DOMAINS,
 	matchesDomain, isMapsUrl, isAmazonVideoUrl
 } from '$lib/config/domains';
+import { extractYouTubeId, extractDomain, faviconUrl } from './urlUtils';
 
 /** Currency symbols used for price formatting */
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -582,6 +587,24 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 		get(/<meta[^>]+(?:property|name)="og:site_name"[^>]+content="([^"]*)"/i) ??
 		get(/<meta[^>]+content="([^"]*)"[^>]+(?:property|name)="og:site_name"/i);
 
+	// Extract generic author for videos (YouTube channel, Vimeo user, etc.)
+	const videoAuthor = 
+		get(/<meta[^>]+name="author"[^>]+content="([^"]*)"/i) ??
+		get(/<link[^>]+itemprop="name"[^>]+content="([^"]*)"/i) ??
+		get(/<meta[^>]+(?:property|name)="twitter:creator"[^>]+content="([^"]*)"/i);
+
+	// Video enrichment fallback
+	if (!enrichment && (type === 'video' || urlDomain.includes('youtube.com') || urlDomain.includes('youtu.be') || urlDomain.includes('vimeo.com'))) {
+		enrichment = {
+			kind: 'video',
+			author: videoAuthor,
+			publishedDate: get(/<meta[^>]+(?:property|name)="article:published_time"[^>]+content="([^"]*)"/i)?.slice(0, 10) ?? null,
+			duration: null,
+			views: null,
+			siteName: siteName ?? (urlDomain.includes('youtube') ? 'YouTube' : urlDomain.includes('vimeo') ? 'Vimeo' : null)
+		};
+	}
+
 	let urlDomain = '';
 	try { urlDomain = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { /* */ }
 
@@ -856,6 +879,46 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 		};
 	}
 
+	// ─── Article content extraction via Readability ───
+	if (type === 'article' || (enrichment && enrichment.kind === 'article')) {
+		try {
+			const dom = new JSDOM(html, { url });
+			const reader = new Readability(dom.window.document);
+			const article = reader.parse();
+
+			if (article && article.content) {
+				// Sanitize the extracted HTML
+				const cleanHtml = DOMPurify.sanitize(article.content, {
+					ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'strong', 'em', 'b', 'i'],
+					ALLOWED_ATTR: ['href', 'src', 'alt', 'title']
+				});
+
+				if (enrichment && enrichment.kind === 'article') {
+					const art = enrichment as ArticleEnrichment;
+					art.contentHtml = cleanHtml;
+					if (!art.bodyText && article.textContent) {
+						art.bodyText = article.textContent.trim().slice(0, 10000);
+					}
+					if (article.byline && !art.author) art.author = article.byline;
+					if (article.siteName && !art.siteName) art.siteName = article.siteName;
+				} else if (!enrichment) {
+					enrichment = {
+						kind: 'article',
+						author: article.byline || null,
+						publishedDate: null,
+						readingTime: `${Math.max(1, Math.round(article.textContent.split(/\s+/).length / 200))} min read`,
+						siteName: article.siteName || null,
+						bodyText: article.textContent.trim().slice(0, 10000),
+						contentHtml: cleanHtml
+					};
+					type = 'article';
+				}
+			}
+		} catch (e) {
+			console.error('Failed to parse article with Readability:', e);
+		}
+	}
+
 	return {
 		title: ogTitle ?? url,
 		image: finalImage ?? null,
@@ -866,47 +929,4 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 		youtubeId: youtubeId ?? null,
 		enrichment: enrichment ?? null
 	};
-}
-
-/**
- * Extracts a YouTube video ID from a URL.
- * Supports youtube.com/watch, youtu.be, youtube.com/embed, youtube.com/shorts, youtube.com/live, etc.
- * 
- * Note: This function is duplicated in functions/src/utils/enrichmentService.ts.
- * Keep both implementations in sync. Consider moving to a shared package in the future.
- */
-export function extractYouTubeId(url: string): string | null {
-	const patterns = [
-		/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
-		/youtu\.be\/([a-zA-Z0-9_-]+)/,
-		/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
-		/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
-		/youtube\.com\/live\/([a-zA-Z0-9_-]+)/,
-		/youtube\.com\/v\/([a-zA-Z0-9_-]+)/,
-	];
-
-	for (const pattern of patterns) {
-		const match = url.match(pattern);
-		if (match) return match[1];
-	}
-
-	return null;
-}
-
-/**
- * Extracts the domain from a URL string.
- */
-export function extractDomain(url: string): string {
-	try {
-		return new URL(url).hostname.replace(/^www\./, '');
-	} catch {
-		return url;
-	}
-}
-
-/**
- * Builds a favicon URL from a domain using Google's favicon service.
- */
-export function faviconUrl(domain: string): string {
-	return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
 }

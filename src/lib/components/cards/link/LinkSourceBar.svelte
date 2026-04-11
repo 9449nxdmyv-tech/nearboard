@@ -3,7 +3,7 @@
   @description Consistent source indicator: favicon + domain. Placed above titles in all link cards.
 -->
 <script lang="ts">
-	import { faviconUrl } from '$lib/utils/ogParser';
+	import { faviconUrl } from '$lib/utils/urlUtils';
 
 	let {
 		domain,

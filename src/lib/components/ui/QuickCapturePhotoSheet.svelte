@@ -176,12 +176,12 @@
 						ondragleave={() => { draggingOver = false; }}
 						ondrop={handleDrop}
 					>
-						<div class="w-16 h-16 rounded-2xl bg-type-photo/10 flex items-center justify-center">
-							<Icon icon={draggingOver ? 'ph:arrow-down-bold' : 'ph:camera-fill'} class="text-3xl text-type-photo" />
+						<div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+							<Icon icon={draggingOver ? 'ph:arrow-down-bold' : 'ph:camera'} class="text-3xl text-primary" />
 						</div>
 
 						<div class="text-center">
-							<p class="text-[15px] font-semibold text-type-photo">Add photos</p>
+							<p class="text-[15px] font-semibold text-primary">Add photos</p>
 							<p class="text-[13px] text-muted mt-1">Up to {MAX_PHOTOS} photos at once</p>
 							<p class="hidden sm:block text-[12px] text-muted/50 mt-1">Drag & drop images here</p>
 						</div>
@@ -190,7 +190,7 @@
 						<div class="flex flex-col sm:flex-row items-center gap-3 w-full max-w-xs">
 							<div class="sm:hidden w-full">
 								<Button large rounded onClick={() => cameraInputEl?.click()}>
-									<Icon icon="ph:camera-fill" class="text-lg mr-2" />
+									<Icon icon="ph:camera" class="text-lg mr-2" />
 									Take Photo
 								</Button>
 							</div>

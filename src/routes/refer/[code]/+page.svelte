@@ -10,6 +10,7 @@
 	import { onMount } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
+	import { Button } from 'konsta/svelte';
 	import { CARD_ENTRANCE } from '$lib/config/animations';
 	import { userStore } from '$lib/stores';
 
@@ -39,24 +40,24 @@
 	<div class="absolute inset-0">
 		<div class="flex w-full h-full bg-surface">
 			<div class="flex-1 flex flex-col">
-				<div class="flex-1 bg-type-note/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:note" class="text-on-surface text-5xl opacity-60" />
 				</div>
-				<div class="flex-1 bg-type-link/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:link" class="text-on-surface text-5xl opacity-60" />
 				</div>
-				<div class="flex-1 bg-type-list/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:list-checks" class="text-on-surface text-5xl opacity-60" />
 				</div>
 				</div>
 				<div class="flex-1 flex flex-col">
-				<div class="flex-1 bg-type-photo/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:image" class="text-on-surface text-5xl opacity-60" />
 				</div>
-				<div class="flex-1 bg-type-location/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:map-pin" class="text-on-surface text-5xl opacity-60" />
 				</div>
-				<div class="flex-1 bg-type-voice/10 flex items-center justify-center">
+				<div class="flex-1 bg-primary/10 flex items-center justify-center">
 					<Icon icon="ph:waveform" class="text-on-surface text-5xl opacity-60" />
 				</div>
 			</div>
@@ -74,7 +75,7 @@
 			<div class="bg-card/95 backdrop-blur-sm rounded-card border border-border shadow-card p-8">
 				<div class="flex flex-col items-center">
 					<div class="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center ring-2 ring-accent/20">
-						<Icon icon="ph:users-fill" class="text-2xl text-on-surface" />
+						<Icon icon="ph:users" class="text-2xl text-on-surface" />
 					</div>
 					<p class="text-sm text-muted mt-3">A friend invited you to join</p>
 				</div>
@@ -91,13 +92,9 @@
 				</p>
 
 				<div class="mt-6">
-					<button
-						onclick={goToSignUp}
-						class="w-full py-3.5 bg-accent text-white rounded-lg font-medium
-							active:scale-[0.98] transition-transform shadow-fab"
-					>
+					<Button large rounded onClick={goToSignUp} class="w-full">
 						Get Started Free
-					</button>
+					</Button>
 					<p class="text-xs text-muted text-center mt-2.5">Free to use, no credit card needed</p>
 				</div>
 			</div>

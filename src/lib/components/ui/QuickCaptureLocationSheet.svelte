@@ -207,7 +207,7 @@
 					<Block>
 						{#if locationName}
 							<div class="flex items-center gap-2 mb-1">
-								<Icon icon="ph:map-pin-fill" class="text-type-location text-sm shrink-0" />
+								<Icon icon="ph:map-pin" class="text-primary text-sm shrink-0" />
 								<span class="text-sm font-semibold text-on-surface truncate">{locationName}</span>
 							</div>
 						{/if}
@@ -229,22 +229,23 @@
 				</List>
 			{:else}
 				<div class="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-5">
-					<button onclick={detectLocation} disabled={locationLoading}
-						class="flex flex-col items-center gap-3 active:scale-95 transition-transform disabled:opacity-50">
-						<div class="w-20 h-20 rounded-full bg-type-location/10 flex items-center justify-center">
-							{#if locationLoading}
-								<Icon icon="ph:circle-notch-bold" class="text-3xl text-type-location animate-spin" />
-							{:else}
-								<Icon icon="ph:crosshair-bold" class="text-3xl text-type-location" />
-							{/if}
+					<Button clear onClick={detectLocation} disabled={locationLoading} class="!p-0">
+						<div class="flex flex-col items-center gap-3">
+							<div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+								{#if locationLoading}
+									<Icon icon="ph:circle-notch-bold" class="text-3xl text-primary animate-spin" />
+								{:else}
+									<Icon icon="ph:crosshair-bold" class="text-3xl text-primary" />
+								{/if}
+							</div>
+							<div class="text-center">
+								<p class="text-[14px] font-semibold text-on-surface">
+									{locationLoading ? 'Detecting...' : 'Use Current Location'}
+								</p>
+								<p class="text-[12px] text-muted mt-0.5">Tap to detect automatically</p>
+							</div>
 						</div>
-						<div class="text-center">
-							<p class="text-[14px] font-semibold text-on-surface">
-								{locationLoading ? 'Detecting...' : 'Use Current Location'}
-							</p>
-							<p class="text-[12px] text-muted mt-0.5">Tap to detect automatically</p>
-						</div>
-					</button>
+					</Button>
 
 					<div class="flex items-center gap-3 w-full max-w-xs">
 						<div class="flex-1 h-px bg-border-light"></div>

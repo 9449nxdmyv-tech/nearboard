@@ -12,7 +12,7 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import BoardPreviewMosaic from '$lib/components/ui/BoardPreviewMosaic.svelte';
 	import AvatarStack from '$lib/components/ui/AvatarStack.svelte';
-	import { Page } from 'konsta/svelte';
+	import { Page, Button } from 'konsta/svelte';
 	import Header from '$lib/components/ui/Header.svelte';
 
 	import StreakBadge from '$lib/components/ui/StreakBadge.svelte';
@@ -70,10 +70,11 @@
 					<Icon icon="ph:warning-circle" class="text-3xl text-error" />
 				</div>
 				<p class="text-error font-medium">{$boardStore.error}</p>
-				<button class="px-3 py-1.5 text-sm rounded-lg bg-primary text-white font-medium active:opacity-80 mt-4" onclick={() => window.location.reload()}>
-					<Icon icon="ph:arrow-clockwise" class="mr-1" />
-					Retry
-				</button>
+				<div class="mt-4">
+					<Button large rounded onClick={() => window.location.reload()}>
+						Retry
+					</Button>
+				</div>
 			</div>
 		{:else if $boardStore.boards.length === 0}
 			<EmptyState

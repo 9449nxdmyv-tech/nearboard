@@ -48,15 +48,15 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	const templates: { value: BoardTemplate; label: string; icon: string; color: string }[] = [
-		{ value: 'household', label: 'Household', icon: 'ph:house', color: 'bg-[color:var(--color-template-household)]' },
-		{ value: 'family', label: 'Family', icon: 'ph:users-three', color: 'bg-[color:var(--color-template-family)]' },
-		{ value: 'trip', label: 'Trip', icon: 'ph:suitcase-rolling', color: 'bg-[color:var(--color-template-trip)]' },
-		{ value: 'team', label: 'Team', icon: 'ph:briefcase', color: 'bg-[color:var(--color-template-team)]' },
-		{ value: 'creative', label: 'Creative', icon: 'ph:paint-brush', color: 'bg-[color:var(--color-template-creative)]' },
-		{ value: 'wishlist', label: 'Wishlist', icon: 'ph:gift', color: 'bg-[color:var(--color-template-wishlist)]' },
-		{ value: 'renovation', label: 'Renovation', icon: 'ph:wrench', color: 'bg-[color:var(--color-template-renovation)]' },
-		{ value: 'blank', label: 'Blank', icon: 'ph:sparkle', color: 'bg-[color:var(--color-template-blank)]' }
+	const templates: { value: BoardTemplate; label: string; icon: string }[] = [
+		{ value: 'household', label: 'Household', icon: 'ph:house' },
+		{ value: 'family', label: 'Family', icon: 'ph:users-three' },
+		{ value: 'trip', label: 'Trip', icon: 'ph:suitcase-rolling' },
+		{ value: 'team', label: 'Team', icon: 'ph:briefcase' },
+		{ value: 'creative', label: 'Creative', icon: 'ph:paint-brush' },
+		{ value: 'wishlist', label: 'Wishlist', icon: 'ph:gift' },
+		{ value: 'renovation', label: 'Renovation', icon: 'ph:wrench' },
+		{ value: 'blank', label: 'Blank', icon: 'ph:sparkle' }
 	];
 
 	function goBack() {
@@ -136,8 +136,9 @@
 		{#if step === 'name'}
 			<div in:fly={{ x: 20, duration: 250 }} class="flex-1 flex flex-col">
 				<BlockTitle>Name your board</BlockTitle>
-				<List inset strong>
+				<List inset strong outline>
 					<ListInput
+						outline
 						label="Board name"
 						type="text"
 						placeholder="e.g. Dream Home Project"
@@ -159,8 +160,8 @@
 										? 'bg-primary/10 border-primary'
 										: 'border-border-light active:bg-surface-1'}"
 							>
-								<div class="w-7 h-7 rounded-lg {t.color} flex items-center justify-center text-white">
-									<Icon icon={t.icon} class="text-sm" />
+								<div class="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+									<Icon icon={t.icon} class="text-sm text-primary" />
 								</div>
 								<span class="text-[11px] font-medium text-on-surface">{t.label}</span>
 							</button>

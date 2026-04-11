@@ -6,6 +6,7 @@
 <script lang="ts">
 	import { calculateAge } from '$lib/firebase/userService';
 	import { MIN_AGE } from '$lib/config/constants';
+	import { List, ListInput, Button } from 'konsta/svelte';
 
 	let { onVerified }: { onVerified: (birthDate: Date) => void } = $props();
 
@@ -53,50 +54,45 @@
 	</div>
 
 	<form onsubmit={handleSubmit} class="flex flex-col gap-3">
-		<div class="flex gap-2">
-			<input
-				type="number"
-				bind:value={month}
-				placeholder="MM"
-				min="1"
-				max="12"
-				required
-				class="flex-1 py-3 px-4 border border-border rounded-lg text-sm bg-surface text-center
-					placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
-			/>
-			<input
-				type="number"
-				bind:value={day}
-				placeholder="DD"
-				min="1"
-				max="31"
-				required
-				class="flex-1 py-3 px-4 border border-border rounded-lg text-sm bg-surface text-center
-					placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
-			/>
-			<input
-				type="number"
-				bind:value={year}
-				placeholder="YYYY"
-				min="1900"
-				max={currentYear}
-				required
-				class="flex-[1.5] py-3 px-4 border border-border rounded-lg text-sm bg-surface text-center
-					placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
-			/>
-		</div>
+		<List inset strong outline class="!my-0">
+			<div class="flex gap-2 p-2">
+				<ListInput
+					outline
+					label="Month"
+					type="number"
+					placeholder="MM"
+					value={month}
+					onInput={(e) => { month = e.target.value; }}
+					class="flex-1"
+				/>
+				<ListInput
+					outline
+					label="Day"
+					type="number"
+					placeholder="DD"
+					value={day}
+					onInput={(e) => { day = e.target.value; }}
+					class="flex-1"
+				/>
+				<ListInput
+					outline
+					label="Year"
+					type="number"
+					placeholder="YYYY"
+					value={year}
+					onInput={(e) => { year = e.target.value; }}
+					class="flex-[1.5]"
+				/>
+			</div>
+		</List>
 
 		{#if error}
 			<p class="text-error text-sm text-center">{error}</p>
 		{/if}
 
-		<button
-			type="submit"
-			class="w-full py-3 bg-accent text-white rounded-lg font-medium
-				active:scale-[0.98] transition-transform"
-		>
+		<Button large rounded onClick={handleSubmit}>
 			Continue
-		</button>
+		</Button>
 	</form>
 
 	<p class="text-xs text-muted text-center leading-relaxed">

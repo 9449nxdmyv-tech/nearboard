@@ -73,6 +73,10 @@ export interface ArticleEnrichment extends LinkEnrichment {
 	publishedDate: string | null;
 	readingTime: string | null;
 	siteName: string | null;
+	/** Full article body text extracted from JSON-LD articleBody */
+	bodyText?: string | null;
+	/** Structured article content HTML extracted via Readability */
+	contentHtml?: string | null;
 }
 
 export interface GitHubEnrichment extends LinkEnrichment {
@@ -88,6 +92,15 @@ export interface GitHubEnrichment extends LinkEnrichment {
 /** Alias for frontend compatibility (uses lowercase 'h') */
 export type GithubEnrichment = GitHubEnrichment;
 
+export interface VideoEnrichment extends LinkEnrichment {
+	kind: 'video';
+	author: string | null;
+	publishedDate: string | null;
+	duration: string | null;
+	views: string | null;
+	siteName: string | null;
+}
+
 export type StructuredEnrichment =
 	| RecipeEnrichment
 	| MovieEnrichment
@@ -95,4 +108,5 @@ export type StructuredEnrichment =
 	| MusicEnrichment
 	| PlaceEnrichment
 	| ArticleEnrichment
-	| GitHubEnrichment;
+	| GitHubEnrichment
+	| VideoEnrichment;
