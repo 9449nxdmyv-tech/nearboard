@@ -71,6 +71,14 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "saveCount", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "memories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "ASCENDING" },
+        { "fieldPath": "daysAgo", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
