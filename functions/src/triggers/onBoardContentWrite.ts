@@ -7,6 +7,7 @@
  */
 
 import '../utils/admin.js';
+import { createHash } from 'crypto';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { notifyBoardMembers } from '../utils/fcmService.js';
@@ -250,8 +251,7 @@ const MANUAL_REGEN_COOLDOWN_MS = 60 * 1000;
 
 /** Simple hash function for caching AI responses */
 function hashContent(items: string[]): string {
-	const crypto = require('crypto');
-	return crypto.createHash('sha256').update(items.join('|||')).digest('hex').slice(0, 16);
+	return createHash('sha256').update(items.join('|||')).digest('hex').slice(0, 16);
 }
 
 /**
