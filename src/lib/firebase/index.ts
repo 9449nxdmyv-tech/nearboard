@@ -32,6 +32,7 @@ export {
 	updateLivingSummary,
 	updateBoard,
 	requestSummaryRegeneration,
+	enableBoardSummaries,
 	deleteBoard,
 	addContent,
 	subscribeToBoardContent,

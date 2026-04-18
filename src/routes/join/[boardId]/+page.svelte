@@ -28,7 +28,6 @@
 	let alreadyMember = $state(false);
 	let activeInviteId = $state<string | null>(null);
 	let error = $state<string | null>(null);
-	let boardLoaded = $state(false);
 
 	const user = $derived($userStore.user);
 	const authLoading = $derived($userStore.loading);
@@ -39,9 +38,11 @@
 	);
 	const memberCount = $derived(board?.memberIds.length ?? 0);
 
+	let loadedBoardId = $state<string | null>(null);
+
 	$effect(() => {
 		if (authLoading || !boardId) return;
-		if (boardLoaded) return;
+		if (loadedBoardId === boardId) return;
 		loadBoard();
 	});
 
@@ -53,7 +54,7 @@
 		try {
 			const b = await getBoard(boardId);
 			board = b;
-			boardLoaded = true;
+			loadedBoardId = boardId;
 
 			if (b && user) {
 				alreadyMember = b.memberIds.includes(user.uid);

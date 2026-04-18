@@ -14,6 +14,7 @@
 		commentCount = 0,
 		showComments = $bindable(false),
 		onShare,
+		onCommentClick,
 		isDetail = false
 	}: {
 		boardId: string;
@@ -22,6 +23,8 @@
 		commentCount?: number;
 		showComments?: boolean;
 		onShare?: () => void;
+		/** Fires when the comment button is tapped. If provided, overrides the default toggle behavior. */
+		onCommentClick?: () => void;
 		isDetail?: boolean;
 	} = $props();
 </script>
@@ -35,7 +38,7 @@
 	<!-- Comments toggle -->
 	<div class={isDetail ? '' : 'flex-1 flex justify-center'}>
 		<button
-			onclick={() => { hapticLight(); showComments = !showComments; }}
+			onclick={(e) => { e.stopPropagation(); hapticLight(); if (onCommentClick) { onCommentClick(); } else { showComments = !showComments; } }}
 			class="flex items-center justify-center gap-1.5 transition-all duration-200 press-scale
 				{isDetail ? 'px-3 py-2 text-accent' : 'py-2 px-3 text-muted'}
 				{!isDetail && showComments ? 'text-accent' : ''}"
@@ -51,7 +54,7 @@
 	<!-- Share -->
 	<div class={isDetail ? '' : 'flex-1 flex justify-center'}>
 		<button
-			onclick={() => { hapticLight(); onShare?.(); }}
+			onclick={(e) => { e.stopPropagation(); hapticLight(); onShare?.(); }}
 			class="flex items-center justify-center transition-all duration-200 press-scale
 				{isDetail ? 'px-3 py-2 text-primary' : 'py-2 px-3 text-muted'}"
 			aria-label="Share"

@@ -236,7 +236,7 @@ export async function updateLivingSummary(
  */
 export async function updateBoard(
 	boardId: string,
-	data: Partial<Pick<BoardDoc, 'name' | 'isPublic' | 'template' | 'timeCapsuleLocked' | 'timeCapsuleUnlockAt' | 'enableLivingSummary' | 'summaryStyle' | 'summaryFocus' | 'lastRegenerationRequestedAt' | 'allowComments' | 'coverImageUrl' | 'pendingInviteCount'>>
+	data: Partial<Pick<BoardDoc, 'name' | 'isPublic' | 'template' | 'timeCapsuleLocked' | 'timeCapsuleUnlockAt' | 'enableLivingSummary' | 'summaryStyle' | 'summaryFocus' | 'lastRegenerationRequestedAt' | 'allowComments' | 'coverImageUrl' | 'pendingInviteCount' | 'experienceOverrides'>>
 ): Promise<void> {
 	await updateDoc(doc(db(), 'boards', boardId), data);
 }
@@ -246,6 +246,19 @@ export async function updateBoard(
  */
 export async function requestSummaryRegeneration(boardId: string): Promise<void> {
 	await updateDoc(doc(db(), 'boards', boardId), { lastRegenerationRequestedAt: serverTimestamp() });
+}
+
+/**
+ * One-time migration for boards predating the Living Summary feature.
+ * Sets enableLivingSummary=true (so processDirtyBoards picks them up) and
+ * summaryDirty=true (so they're queued for the next cycle). Idempotent —
+ * only called when `enableLivingSummary` is undefined on the board doc.
+ */
+export async function enableBoardSummaries(boardId: string): Promise<void> {
+	await updateDoc(doc(db(), 'boards', boardId), {
+		enableLivingSummary: true,
+		summaryDirty: true
+	});
 }
 
 /**
@@ -546,15 +559,10 @@ export async function deleteComment(
  * and increments followerCount on the board.
  */
 export async function followBoard(boardId: string, userId: string): Promise<void> {
-	const userRef = doc(db(), 'users', userId);
-	const boardRef = doc(db(), 'boards', boardId);
-
-	await updateDoc(userRef, {
-		followingBoardIds: arrayUnion(boardId)
-	});
-	await updateDoc(boardRef, {
-		followerCount: increment(1)
-	});
+	const batch = writeBatch(db());
+	batch.update(doc(db(), 'users', userId), { followingBoardIds: arrayUnion(boardId) });
+	batch.update(doc(db(), 'boards', boardId), { followerCount: increment(1) });
+	await batch.commit();
 }
 
 /**
@@ -562,15 +570,10 @@ export async function followBoard(boardId: string, userId: string): Promise<void
  * and decrements followerCount on the board.
  */
 export async function unfollowBoard(boardId: string, userId: string): Promise<void> {
-	const userRef = doc(db(), 'users', userId);
-	const boardRef = doc(db(), 'boards', boardId);
-
-	await updateDoc(userRef, {
-		followingBoardIds: arrayRemove(boardId)
-	});
-	await updateDoc(boardRef, {
-		followerCount: increment(-1)
-	});
+	const batch = writeBatch(db());
+	batch.update(doc(db(), 'users', userId), { followingBoardIds: arrayRemove(boardId) });
+	batch.update(doc(db(), 'boards', boardId), { followerCount: increment(-1) });
+	await batch.commit();
 }
 
 // ─── Acknowledgment operations ────────────────────────────────────────────────

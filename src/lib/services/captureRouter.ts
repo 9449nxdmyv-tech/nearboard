@@ -12,8 +12,11 @@
  *   T5: Fallback to last-used or correction-weighted board → low
  */
 
-import { detectContentType, type ContentDetectionResult, type ContentType } from '$lib/utils/contentDetection';
+import { detectContentType, type ContentDetectionResult } from '$lib/utils/contentDetection';
+import type { ContentType } from '$lib/utils/contentDetection';
 import { classifyLink, getLinkRoutingBoosts } from '$lib/utils/linkClassifier';
+import { typeMatchScore, keywordOverlapScore } from '$lib/utils/boardProfiler';
+import type { ContentType as RouterContentType } from '$lib/utils/boardProfiler';
 import { scrubPII } from '$lib/utils/piiScrubber';
 import type { DetectionSignal } from '$lib/utils/contentDetection';
 
@@ -35,6 +38,8 @@ export interface BoardSummary {
 	id: string;
 	name: string;
 	summary: string | null;
+	/** Board content profile (dominant types, keywords, domain hints) */
+	profile?: import('$lib/utils/boardProfiler').BoardProfile;
 }
 
 export interface RouteCaptureInput {
@@ -246,7 +251,11 @@ function getTypeKeywords(contentType: ContentType): string[] {
 		case 'github':
 			return ['github', 'code', 'repo', 'repository', 'git', 'programming', 'developer', 'dev'];
 		case 'product':
-			return ['product', 'shop', 'buy', 'amazon', 'store', 'price', 'deal'];
+			return [
+				'product', 'shop', 'shopping', 'buy', 'store', 'price', 'deal', 'deals',
+				'wishlist', 'gift', 'gifts', 'wants', 'purchase', 'wardrobe', 'closet',
+				'amazon', 'etsy', 'ebay'
+			];
 		case 'video':
 			return ['video', 'youtube', 'watch', 'vimeo', 'tiktok', 'clip'];
 		case 'image':
@@ -275,7 +284,7 @@ function matchByKeywords(
 
 	// Type-specific keywords to boost matching
 	const typeKeywords = getTypeKeywords(contentType);
-	
+
 	// Link classification routing boosts
 	const linkBoosts = linkClassification ? getLinkRoutingBoosts(linkClassification) : null;
 
@@ -283,13 +292,37 @@ function matchByKeywords(
 		const target = `${board.name} ${board.summary ?? ''}`.toLowerCase();
 		let score = 0;
 
+		// ── Board content profile signal ────────────────────────────────
+		if (board.profile) {
+			// Type match: does this board typically receive this content type?
+			const typeBoost = typeMatchScore(board.profile, contentType as RouterContentType);
+			score += typeBoost; // 0-3 points
+
+			// Keyword overlap: do the content words appear in the board's profile?
+			const keywordOverlap = keywordOverlapScore(board.profile, content);
+			score += Math.min(keywordOverlap * 0.5, 4); // Up to 4 points
+
+			// Domain match: does the board have links from this domain?
+			if (detectionSignals) {
+				for (const signal of detectionSignals) {
+					if (signal.type === 'domain_match' && signal.metadata?.domain) {
+						const domain = String(signal.metadata.domain);
+						const domainBase = domain.split('.')[0];
+						if (board.profile.domainHints.some(d => d.includes(domainBase) || domain.includes(d))) {
+							score += 3; // Strong signal: board has received content from this domain
+						}
+					}
+				}
+			}
+		}
+
 		// Boost if board summary/name mentions the content type
 		for (const typeKeyword of typeKeywords) {
 			if (target.includes(typeKeyword.toLowerCase())) {
 				score += 3; // Strong boost for type matching
 			}
 		}
-		
+
 		// Boost from link classification (tutorial → learning boards, etc.)
 		if (linkBoosts) {
 			for (const hint of linkBoosts.boardTypeHints) {
@@ -364,13 +397,16 @@ function extractKeywords(text: string): string[] {
 	const urlRe = /https?:\/\/([^\s]+)/g;
 	let urlMatch: RegExpExecArray | null;
 	while ((urlMatch = urlRe.exec(text)) !== null) {
-		const urlPart = urlMatch[1]
+		const raw = urlMatch[1];
+		const urlPart = raw
 			.replace(/^www\./, '')
 			.replace(/\.[a-z]{2,6}(\/|$)/, ' ') // strip TLD
 			.replace(/[/?&#=_\-+.]+/g, ' ');
 		for (const seg of urlPart.split(/\s+/)) {
-			if (seg.length >= 3 && !STOP_WORDS.has(seg.toLowerCase())) {
-				urlKeywords.push(seg.toLowerCase());
+			const cleaned = seg.toLowerCase();
+			// Skip common URL noise and very short segments
+			if (seg.length >= 3 && !STOP_WORDS.has(cleaned) && !isUrlNoise(cleaned)) {
+				urlKeywords.push(cleaned);
 			}
 		}
 	}
@@ -380,9 +416,22 @@ function extractKeywords(text: string): string[] {
 	const textKeywords = cleaned
 		.toLowerCase()
 		.split(/[^a-z0-9áéíóúüñ]+/)
-		.filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+		.filter((w) => w.length >= 3 && !STOP_WORDS.has(w) && !isUrlNoise(w));
 
 	return [...textKeywords, ...urlKeywords];
+}
+
+/** Filter out common URL noise that isn't useful for matching */
+function isUrlNoise(word: string): boolean {
+	const noise = new Set([
+		'http', 'https', 'www', 'com', 'org', 'net', 'io', 'co', 'uk', 'de',
+		'fr', 'es', 'it', 'ca', 'jp', 'au', 'br', 'mx', 'nl', 'se', 'pl',
+		'html', 'htm', 'php', 'aspx', 'jsp', 'cgi', 'index', 'home',
+		'dp', 'gp', 'ref', 'utm', 'source', 'medium', 'campaign', 'fbclid',
+		'share', 'shared', 'share-target', 'product', 'products', 'item',
+		'watch', 'video', 'photo', 'image', 'link', 'url'
+	]);
+	return noise.has(word) || /^\d{3,}$/.test(word); // Skip pure numbers 3+ digits
 }
 
 function escapeRegex(str: string): string {

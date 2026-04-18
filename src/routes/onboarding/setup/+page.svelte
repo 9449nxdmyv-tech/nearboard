@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { onboardingStore, advanceStep, dismissWhatsApp, resetOnboarding } from '$lib/stores';
+	import { onboardingStore, advanceStep, dismissWhatsApp, resetOnboarding, userStore } from '$lib/stores';
 	import OnboardingWhatsAppOffer from '$lib/components/onboarding/OnboardingWhatsAppOffer.svelte';
 	import OnboardingInvitePrompt from '$lib/components/onboarding/OnboardingInvitePrompt.svelte';
 
@@ -14,6 +14,15 @@
 	let showWhatsApp = $state(true);
 	let showInvite = $state(false);
 	let whatsAppAuthors = $state<string[]>([]);
+
+	// Guard: require age verification before setup
+	$effect(() => {
+		const { user, loading } = $userStore;
+		if (loading) return;
+		if (!user || user.birthDate === null) {
+			goto('/onboarding?step=age', { replaceState: true });
+		}
+	});
 
 	onMount(() => {
 		const unsub = onboardingStore.subscribe((state) => {

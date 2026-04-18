@@ -14,7 +14,7 @@
 	import { userStore, boardStore, showToast } from '$lib/stores';
 	import { addContent, createBoard } from '$lib/firebase';
 	import { extractMetadata } from '$lib/api';
-	import { detectContentType, refineContentType, isUrl } from '$lib/utils/contentDetector';
+	import { detectContentType, refineDetection as refineContentType, isValidUrl as isUrl } from '$lib/utils/contentDetection';
 	import { extractDomain, faviconUrl } from '$lib/utils/urlUtils';
 	import { inferBoardNameFromContent, SEED_SUMMARY } from '$lib/utils/onboardingUtils';
 	import {
@@ -38,6 +38,9 @@
 	let saved = $state(false);
 	let autoCreatedBoardName = $state<string | null>(null);
 	let routeResult = $state<RouteResult | null>(null);
+
+	/** Detection result for display */
+	let detectionResult = $state<{ type: string; confidence: number } | null>(null);
 
 	const boards = $derived($boardStore.boards);
 	const user = $derived($userStore.user);
@@ -101,6 +104,11 @@
 
 	async function runSmartRoute() {
 		const contentText = displayText.trim();
+
+		// Run content type detection
+		const detection = detectContentType(contentText);
+		detectionResult = { type: detection.type, confidence: Math.round(detection.confidence * 100) };
+
 		const boardSummaries: BoardSummary[] = boards.map((b) => ({
 			id: b.id,
 			name: b.name,
@@ -173,90 +181,61 @@
 					// Fall back to raw URL
 				}
 
-				if (metadata) {
-					const resolvedUrl = metadata.url || detectedUrl;
-					const domain = extractDomain(resolvedUrl);
-					const detectedType = metadata.type;
+				// Run content detection with refinement
+				const urlDetection = detectContentType(detectedUrl);
+				const refined = metadata ? refineContentType(urlDetection, {
+					price: metadata?.price,
+					type: metadata?.type,
+					youtubeId: metadata?.youtubeId,
+					enrichment: metadata?.enrichment ? { kind: metadata.enrichment.kind } : null
+				}) : urlDetection;
 
-					if (detectedType === 'product') {
-						const detectedPrice = metadata.price || null;
-						const contentId = await addContent(selectedBoardId, {
-							type: 'product',
-							url: resolvedUrl,
-							title: metadata.title || sharedTitle || detectedUrl,
-							image: metadata.image,
-							price: detectedPrice ?? '',
-							domain,
-							originalPrice: detectedPrice,
-							lastCheckedPrice: null,
-							lastCheckedAt: null,
-							priceDrop: false,
-							boardId: selectedBoardId,
-							authorId: user.uid,
-							authorName: user.displayName || '',
-							authorPhotoURL: user.photoURL,
-							userIntent: 'Shared via Web Share Target'  // Lever 7: Required intent
-						} as Omit<ProductContentDoc, 'id' | 'createdAt'>);
+				const resolvedUrl = metadata?.url || detectedUrl;
+				const domain = extractDomain(resolvedUrl);
+
+				if (refined.type === 'product') {
+					const detectedPrice = metadata?.price || '';
+					const productData = {
+						type: 'product' as const,
+						url: resolvedUrl,
+						title: metadata?.title || sharedTitle || detectedUrl,
+						description: metadata?.description || null,
+						image: metadata?.image || null,
+						price: detectedPrice,
+						domain,
+						favicon: faviconUrl(domain),
+						enrichment: metadata?.enrichment ?? null,
+						originalPrice: detectedPrice || null,
+						lastCheckedPrice: detectedPrice || null,
+						lastCheckedAt: null,
+						priceDrop: false,
+						boardId: selectedBoardId,
+						authorId: user.uid,
+						authorName: user.displayName || '',
+						authorPhotoURL: user.photoURL,
+						userIntent: 'Shared via Web Share Target'
+					} as unknown as Omit<ProductContentDoc, 'id' | 'createdAt'>;
+					const contentId = await addContent(selectedBoardId, productData);
+					if (detectedPrice) {
 						const { registerProductForTracking } = await import('$lib/firebase/pricingService');
-						await registerProductForTracking(detectedUrl, selectedBoardId, contentId, detectedPrice ?? '');
-					} else {
-						await addContent(selectedBoardId, {
-							type: 'link',
-							url: metadata.url || detectedUrl,
-							title: metadata.title || sharedTitle || detectedUrl,
-							description: metadata.description,
-							image: metadata.image,
-							domain,
-							favicon: faviconUrl(domain),
-							enrichment: metadata.enrichment ?? null,
-							boardId: selectedBoardId,
-							authorId: user.uid,
-							authorName: user.displayName || '',
-							authorPhotoURL: user.photoURL,
-							userIntent: 'Shared via Web Share Target'  // Lever 7: Required intent
-						} as Omit<LinkContentDoc, 'id' | 'createdAt'>);
+						await registerProductForTracking(detectedUrl, selectedBoardId, contentId, detectedPrice);
 					}
 				} else {
-					// No metadata — check domain for product detection
-					const domain = extractDomain(detectedUrl);
-					const domainType = detectContentType(detectedUrl);
-
-					if (domainType.type === 'product') {
-						const contentId = await addContent(selectedBoardId, {
-							type: 'product',
-							url: detectedUrl,
-							title: sharedTitle || detectedUrl,
-							image: null,
-							price: '',
-							domain,
-							originalPrice: null,
-							lastCheckedPrice: null,
-							lastCheckedAt: null,
-							priceDrop: false,
-							boardId: selectedBoardId,
-							authorId: user.uid,
-							authorName: user.displayName || '',
-							authorPhotoURL: user.photoURL,
-							userIntent: 'Shared via Web Share Target'  // Lever 7: Required intent
-						} as Omit<ProductContentDoc, 'id' | 'createdAt'>);
-						const { registerProductForTracking } = await import('$lib/firebase/pricingService');
-						await registerProductForTracking(detectedUrl, selectedBoardId, contentId, '');
-					} else {
-						await addContent(selectedBoardId, {
-							type: 'link',
-							url: detectedUrl,
-							title: sharedTitle || detectedUrl,
-							description: sharedText || null,
-							image: null,
-							domain,
-							favicon: faviconUrl(domain),
-							boardId: selectedBoardId,
-							authorId: user.uid,
-							authorName: user.displayName || '',
-							authorPhotoURL: user.photoURL,
-							userIntent: 'Shared via Web Share Target'  // Lever 7: Required intent
-						} as Omit<LinkContentDoc, 'id' | 'createdAt'>);
-					}
+					await addContent(selectedBoardId, {
+						type: 'link',
+						url: resolvedUrl,
+						title: metadata?.title || sharedTitle || detectedUrl,
+						description: metadata?.description || null,
+						image: metadata?.image || null,
+						domain,
+						favicon: faviconUrl(domain),
+						enrichment: metadata?.enrichment ?? null,
+						boardId: selectedBoardId,
+						authorId: user.uid,
+						authorName: user.displayName || '',
+						authorPhotoURL: user.photoURL,
+						userIntent: 'Shared via Web Share Target'
+					} as Omit<LinkContentDoc, 'id' | 'createdAt'>);
 				}
 			} else {
 				// Save as note card
@@ -321,7 +300,16 @@
 
 				<div class="mt-3 pt-2 border-t border-border/50">
 					<p class="text-[10px] text-muted">
-						Will save as {detectedUrl ? 'link' : 'note'} card
+						{#if detectionResult}
+							Will save as <span class="font-semibold text-primary">{detectionResult.type}</span> card
+							{#if detectionResult.confidence >= 80}
+								<span class="text-success">· {detectionResult.confidence}% confidence</span>
+							{:else}
+								<span class="text-warning">· {detectionResult.confidence}% confidence</span>
+							{/if}
+						{:else}
+							{detectedUrl ? 'link' : 'note'} card
+						{/if}
 					</p>
 				</div>
 			</div>

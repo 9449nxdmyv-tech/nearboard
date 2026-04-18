@@ -23,6 +23,7 @@
 		onEdit,
 		onDelete,
 		onShare,
+		onCommentClick,
 		children,
 		headerContent
 	}: {
@@ -40,6 +41,7 @@
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 		children: Snippet;
 		headerContent?: Snippet;
 	} = $props();
@@ -76,5 +78,6 @@
 		{onEdit}
 		{onDelete}
 		{onShare}
+		{onCommentClick}
 	/>
 </article>

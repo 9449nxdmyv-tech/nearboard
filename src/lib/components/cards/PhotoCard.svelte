@@ -12,7 +12,7 @@
 		id, boardId, imageUrl, images = [], caption, width, height,
 		authorId, authorName, authorPhotoURL, createdAt,
 		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments,
-		onEdit, onDelete, onShare
+		onEdit, onDelete, onShare, onCommentClick
 	}: PhotoCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -20,6 +20,7 @@
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 	} = $props();
 
 	let imageError = $state(false);
@@ -150,6 +151,7 @@
 	{onEdit}
 	{onDelete}
 	{onShare}
+	{onCommentClick}
 	headerContent={!imageError ? photoHeader : undefined}
 >
 	{#if caption}

@@ -135,7 +135,7 @@
 </script>
 
 <Page>
-	<Header title="Templates" />
+	<Header title="Templates" onBack={() => history.length > 1 ? history.back() : goto('/profile')} />
 
 	<!-- Category filters -->
 	<Block class="!py-2 !flex !flex-wrap !gap-2">
@@ -157,8 +157,10 @@
 				More
 			</Chip>
 			{#if showMoreMenu}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="absolute top-full right-0 mt-1 bg-card rounded-xl shadow-xl border border-border/50 py-1 z-20 min-w-[140px]"
+				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+				<div
+					aria-label="More categories"
+					class="absolute top-full right-0 mt-1 bg-card rounded-xl shadow-xl border border-border/50 py-1 z-20 min-w-[140px]"
 					onclick={() => { showMoreMenu = false; }}>
 					{#each HIDDEN_CATEGORIES as cat}
 						<button

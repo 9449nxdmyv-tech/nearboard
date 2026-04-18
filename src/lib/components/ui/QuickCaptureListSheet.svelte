@@ -4,13 +4,13 @@
                Uses Konsta UI List/ListInput for native iOS form styling.
 -->
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
-	import { quintOut } from 'svelte/easing';
 	import Icon from '@iconify/svelte';
 	import { Navbar, NavbarBackLink, Link, List, ListInput, ListItem, Button, BlockTitle } from 'konsta/svelte';
 	import { addContent } from '$lib/firebase';
 	import { userStore, showToast } from '$lib/stores';
 	import { hapticSuccess, hapticLight } from '$lib/utils/haptics';
+	import QuickCaptureShell from './QuickCaptureShell.svelte';
+	import SubmitButton from './SubmitButton.svelte';
 	import type { ListContentDoc } from '$lib/types';
 
 	let {
@@ -20,26 +20,6 @@
 		boardId: string;
 		onClose: () => void;
 	} = $props();
-
-	// ─── Body scroll lock ────────────────────────────────────────────────
-	$effect(() => {
-		const scrollY = window.scrollY;
-		document.body.style.overflow = 'hidden';
-		document.body.style.position = 'fixed';
-		document.body.style.top = `-${scrollY}px`;
-		document.body.style.width = '100%';
-		return () => {
-			document.body.style.overflow = '';
-			document.body.style.position = '';
-			document.body.style.top = '';
-			document.body.style.width = '';
-			window.scrollTo(0, scrollY);
-		};
-	});
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onClose();
-	}
 
 	let busy = $state(false);
 	let listTitle = $state('');
@@ -92,22 +72,8 @@
 	{/if}
 {/snippet}
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div
-	class="fixed inset-0 z-[60] flex items-stretch sm:items-center sm:justify-center"
-	transition:fade={{ duration: 200 }}
->
-	<div class="fixed inset-0 bg-black/40 sm:bg-black/60 sm:backdrop-blur-md" aria-hidden="true" onclick={onClose}></div>
-
-	<div
-		class="relative z-10 w-full h-full sm:h-auto sm:max-w-xl sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl
-			bg-surface flex flex-col overflow-hidden"
-		in:fly={{ y: 40, duration: 300, easing: quintOut }}
-		onclick={(e) => e.stopPropagation()}
-	>
-		<Navbar title="New List" left={navLeft} right={navRight} />
+<QuickCaptureShell {onClose}>
+	<Navbar title="New List" left={navLeft} right={navRight} />
 
 		<div class="flex-1 overflow-y-auto">
 			<!-- Title input -->
@@ -165,22 +131,10 @@
 			</form>
 		</div>
 
-		<!-- Save footer -->
-		<div class="p-4 pb-safe border-t border-border-light">
-			<Button large rounded onClick={submitList} disabled={!canSubmit}>
-				{#if busy}
-					<Icon icon="ph:circle-notch-bold" class="mr-2 animate-spin" />
-					Saving...
-				{:else}
-					Save List
-				{/if}
-			</Button>
-		</div>
+	<!-- Save footer -->
+	<div class="p-4 pb-safe border-t border-border-light">
+		<SubmitButton {busy} disabled={!canSubmit} onClick={submitList}>
+			Save List
+		</SubmitButton>
 	</div>
-</div>
-
-<style>
-	.pb-safe {
-		padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
-	}
-</style>
+</QuickCaptureShell>

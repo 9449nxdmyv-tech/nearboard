@@ -506,9 +506,15 @@ export function getLinkRoutingBoosts(classification: LinkClassification): {
 			boardTypeHints.push('research', 'academic', 'learning');
 			break;
 		case 'tool':
-		case 'product':
 			keywords.push('tools', 'resources', 'useful', 'bookmarks');
 			boardTypeHints.push('tools', 'resources', 'bookmarks');
+			break;
+		case 'product':
+			// Shopping-oriented vocabulary — was previously bucketed with 'tool'
+			// and boosted generic keyword boards like "bookmarks" instead of
+			// commerce-oriented boards like "wishlist" or "gifts".
+			keywords.push('shopping', 'wishlist', 'wants', 'gifts', 'buy', 'store', 'deals', 'wardrobe');
+			boardTypeHints.push('shopping', 'wishlist', 'gifts', 'shop', 'store');
 			break;
 		case 'entertainment':
 			keywords.push('fun', 'entertainment', 'interesting', 'cool');

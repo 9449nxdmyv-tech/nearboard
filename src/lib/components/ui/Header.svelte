@@ -14,6 +14,7 @@
 		title,
 		subtitle,
 		backHref,
+		onBack,
 		actions = [],
 		leftActions = [],
 		children,
@@ -27,6 +28,7 @@
 		title?: string;
 		subtitle?: string;
 		backHref?: string;
+		onBack?: () => void;
 		actions?: Array<{
 			icon: string;
 			onClick: () => void;
@@ -49,12 +51,13 @@
 	const stickyClass = $derived(sticky ? `sticky top-0 z-40 ${className}`.trim() : className);
 
 	function handleBack() {
-		if (backHref) goto(backHref);
+		if (onBack) onBack();
+		else if (backHref) goto(backHref);
 	}
 </script>
 
 {#snippet leftContent()}
-	{#if backHref}
+	{#if backHref || onBack}
 		<NavbarBackLink onClick={handleBack} />
 	{/if}
 	{#each leftActions as action (action.icon)}

@@ -66,7 +66,7 @@ export async function fetchOEmbed(url: string): Promise<OEmbedResult | null> {
 		return {
 			title: data.title || null,
 			image: data.thumbnail_url || data.thumbnailUrl || null,
-			description: data.author_name ? `By ${data.author_name}` : null,
+			description: null, 
 			type: data.type === 'video' ? 'video' : data.type === 'photo' ? 'photo' : 'link',
 			videoDuration: data.duration ? formatDuration(data.duration) : null,
 			authorName: data.author_name || null,

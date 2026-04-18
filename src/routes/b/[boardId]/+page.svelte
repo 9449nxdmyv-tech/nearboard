@@ -16,7 +16,7 @@
 		followBoard,
 		unfollowBoard
 	} from '$lib/firebase';
-	import { userStore, showToast } from '$lib/stores';
+	import { userStore, showToast, globalExperience } from '$lib/stores';
 	import type { BoardDoc, ContentDoc } from '$lib/types';
 	import ContentRenderer from '$lib/components/ui/ContentRenderer.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -188,7 +188,7 @@
 					description="This board is empty"
 				/>
 			{:else}
-				<MasonryGrid columns={2}>
+				<MasonryGrid columns={2} layout={$globalExperience.layoutStyle}>
 					{#each content as item (item.id)}
 						<ContentRenderer
 							{item}

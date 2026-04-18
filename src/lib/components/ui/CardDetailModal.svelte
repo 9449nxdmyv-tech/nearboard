@@ -6,8 +6,9 @@
                Exhaustive support for all link variants (Movie, Book, Place, Music, Github, etc.)
 -->
 <script lang="ts">
-	import { Popup, Page, Button, Checkbox, Progressbar, Actions, ActionsButton, ActionsLabel } from 'konsta/svelte';
+	import { Popup, Page, Button, Checkbox, Progressbar, Actions, ActionsGroup, ActionsButton } from 'konsta/svelte';
 	import Icon from '@iconify/svelte';
+	import MetadataPill from '$lib/components/cards/link/MetadataPill.svelte';
 	import type {
 		ContentDoc, ListContentDoc, NoteContentDoc, LinkContentDoc,
 		ProductContentDoc, VoiceContentDoc, PhotoContentDoc, VideoContentDoc,
@@ -18,10 +19,11 @@
 	import {
 		isRecipeEnrichment, isMovieEnrichment, isBookEnrichment,
 		isPlaceEnrichment, isMusicEnrichment, isArticleEnrichment, isGithubEnrichment,
-		isVideoEnrichment
+		isVideoEnrichment, isProductEnrichment
 	} from '$lib/utils/enrichmentGuards';
 	import CardAcknowledgmentButton from './CardAcknowledgmentButton.svelte';
 	import CardComments from './CardComments.svelte';
+	import MapView from './MapView.svelte';
 	import { userStore } from '$lib/stores';
 	import { voteOnPoll, subscribeToVotes, subscribeToComments } from '$lib/firebase/boardService';
 	import { hapticLight } from '$lib/utils/haptics';
@@ -87,22 +89,38 @@
 		boardId,
 		isBoardOwner,
 		allowComments,
+		expandComments = false,
 		onClose,
 		onDelete,
 		onShare,
-		onToggleListItem
+		onToggleListItem,
+		resolveAuthorPhoto
 	}: {
 		item: ContentDoc;
 		boardId: string;
 		isBoardOwner?: boolean;
 		allowComments?: boolean;
+		expandComments?: boolean;
 		onClose: () => void;
 		onDelete?: (item: ContentDoc) => void;
 		onShare?: (item: ContentDoc) => void;
 		onToggleListItem?: (contentItem: ListContentDoc, itemId: string) => void;
+		/** Resolve author photo from current member data. Falls back to item.authorPhotoURL. */
+		resolveAuthorPhoto?: (authorId: string, snapshotUrl: string | null) => string | null;
 	} = $props();
 
+	/** Resolve the current author photo using the provided resolver, or fall back to the snapshot */
+	const resolvedAuthorPhoto = $derived(
+		resolveAuthorPhoto
+			? resolveAuthorPhoto(item.authorId, item.authorPhotoURL)
+			: item.authorPhotoURL
+	);
+
 	const createdAt = $derived(item.createdAt?.toDate?.() ?? new Date());
+	let authorImageError = $state(false);
+	let commentImageError = $state(false);
+
+	$effect(() => { authorImageError = false; commentImageError = false; });
 
 	// ── Photo state ──
 	let currentPhotoIdx = $state(0);
@@ -147,7 +165,7 @@
 
 	// ── Comments state ──
 	let comments = $state<CommentDoc[]>([]);
-	let showCommentsThread = $state(false);
+	let showCommentsThread = $state(expandComments);
 	const latestComment = $derived(comments.length > 0 ? comments[0] : null);
 
 	// ── Recipe collapsible state ──
@@ -157,7 +175,7 @@
 	$effect(() => {
 		if (item.id) {
 			return subscribeToComments(boardId, item.id, (v) => {
-				comments = v.sort((a, b) => {
+				comments = [...v].sort((a, b) => {
 					const ta = a.createdAt?.toMillis?.() ?? 0;
 					const tb = b.createdAt?.toMillis?.() ?? 0;
 					return tb - ta;
@@ -286,10 +304,12 @@
 {#snippet linkMetaSnippet(link: LinkContentDoc)}
 	{#if link.enrichment}
 		{@const e = link.enrichment}
-		<div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+		<div class="flex flex-wrap items-center gap-2 py-0.5 min-w-0">
 			{#if isRecipeEnrichment(e)}
 				{#if e.totalTime}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 whitespace-nowrap">{e.totalTime}</span>{/if}
 				{#if e.servings}<span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-[10px] font-bold text-emerald-700 whitespace-nowrap">{e.servings} Ser.</span>{/if}
+				{#if e.calories}<span class="px-2 py-0.5 rounded-lg bg-red-500/10 text-[10px] font-bold text-red-700 whitespace-nowrap">{e.calories}</span>{/if}
+				{#if e.cuisine}<span class="px-2 py-0.5 rounded-lg bg-violet-500/10 text-[10px] font-bold text-violet-700 whitespace-nowrap">{e.cuisine}</span>{/if}
 			{:else if isMovieEnrichment(e)}
 				{#if e.rating}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-[8px]" />{e.rating}</span>{/if}
 				{#if e.year}<span class="text-[11px] text-muted font-medium whitespace-nowrap">{e.year}</span>{/if}
@@ -326,7 +346,7 @@
 
 <Popup opened={!!item} onBackdropClick={onClose}>
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div 
+	<div
 		class="flex flex-col h-full bg-surface"
 		ontouchstart={onModalTouchStart}
 		ontouchmove={onModalTouchMove}
@@ -336,29 +356,32 @@
 		aria-label="Card detail modal"
 		tabindex="-1"
 	>
-		<!-- ─── Media Area (Sticky) ─── -->
-		<div class="shrink-0 z-20 bg-black relative">
-			<!-- Floating close button -->
-			<button
-				onclick={(e) => { e.stopPropagation(); e.preventDefault(); onClose(); }}
-				class="absolute left-3 z-[100] w-9 h-9 rounded-full bg-black/40 backdrop-blur-md
-					flex items-center justify-center text-white shadow-lg press-scale"
-				style="top: 0.75rem"
-				aria-label="Close"
-			>
-				<Icon icon="ph:caret-left-bold" class="text-base" />
-			</button>
+		<!-- Floating close button -->
+		<button
+			onclick={(e) => { e.stopPropagation(); e.preventDefault(); onClose(); }}
+			class="absolute left-3 z-[100] w-9 h-9 rounded-full bg-black/40 backdrop-blur-md
+				flex items-center justify-center text-white shadow-lg press-scale"
+			style="top: calc(env(safe-area-inset-top, 0px) + 0.75rem);"
+			aria-label="Close"
+		>
+			<Icon icon="ph:caret-left-bold" class="text-base" />
+		</button>
 
-			{#if onDelete}
-				<button
-					onclick={() => { showActions = true; hapticLight(); }}
-					class="absolute right-3 z-[100] w-9 h-9 rounded-full bg-black/40 backdrop-blur-md
-						flex items-center justify-center text-white shadow-lg press-scale"
-					style="top: 0.75rem"
-				>
-					<Icon icon="ph:dots-three-bold" class="text-lg" />
-				</button>
-			{/if}
+		{#if onDelete}
+			<button
+				onclick={() => { showActions = true; hapticLight(); }}
+				class="absolute right-3 z-[100] w-9 h-9 rounded-full bg-black/40 backdrop-blur-md
+					flex items-center justify-center text-white shadow-lg press-scale"
+				style="top: calc(env(safe-area-inset-top, 0px) + 0.75rem);"
+				aria-label="More actions"
+			>
+				<Icon icon="ph:dots-three-bold" class="text-lg" />
+			</button>
+		{/if}
+
+		<!-- ─── Media Area (Sticky) ─── -->
+		{#if item.type !== 'poll' && item.type !== 'list'}
+		<div class="shrink-0 z-20 bg-black relative">
 
 			{#if item.type === 'photo'}
 				{@const photo = item as PhotoContentDoc}
@@ -400,14 +423,16 @@
 						{#if currentPhotoIdx > 0}
 							<button onclick={(e) => { e.stopPropagation(); goToPhoto(currentPhotoIdx - 1); }}
 								class="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 backdrop-blur-md text-white
-									flex items-center justify-center press-scale z-10 transition-opacity">
+									flex items-center justify-center press-scale z-10 transition-opacity"
+								aria-label="Previous photo">
 								<Icon icon="ph:caret-left-bold" class="text-base" />
 							</button>
 						{/if}
 						{#if currentPhotoIdx < allImages.length - 1}
 							<button onclick={(e) => { e.stopPropagation(); goToPhoto(currentPhotoIdx + 1); }}
 								class="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 backdrop-blur-md text-white
-									flex items-center justify-center press-scale z-10 transition-opacity">
+									flex items-center justify-center press-scale z-10 transition-opacity"
+								aria-label="Next photo">
 								<Icon icon="ph:caret-right-bold" class="text-base" />
 							</button>
 						{/if}
@@ -453,7 +478,7 @@
 						></iframe>
 					</div>
 				{:else if link.image}
-					<div class="aspect-video relative overflow-hidden bg-surface-1">
+					<div class="{isMovieEnrichment(link.enrichment) ? 'h-[60vh]' : 'aspect-video'} relative overflow-hidden bg-surface-1">
 						<img src={link.image} alt="" class="w-full h-full {isBookEnrichment(link.enrichment) ? 'object-contain p-4' : 'object-cover'}" />
 						<div class="absolute bottom-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-md">
 							<div class="w-5 h-5 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -464,7 +489,7 @@
 					</div>
 				{:else}
 					<!-- Placeholder for link without image -->
-					<div class="aspect-video flex items-center justify-center bg-surface-1 text-muted">
+					<div class="{isMovieEnrichment(link.enrichment) ? 'h-[60vh]' : 'aspect-video'} flex items-center justify-center bg-surface-1 text-muted">
 						<Icon icon={getLinkIcon(link.url, link.enrichment)} class="text-5xl opacity-20" />
 					</div>
 				{/if}
@@ -473,7 +498,13 @@
 				{@const product = item as ProductContentDoc}
 				{#if product.image}
 					<div class="aspect-video relative overflow-hidden bg-surface-1">
-						<img src={product.image} alt="" class="w-full h-full object-contain p-4" />
+						<img src={product.image} alt="" class="w-full h-full object-cover" />
+						{#if product.domain}
+							<div class="absolute bottom-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-md">
+								<Icon icon="ph:storefront" class="text-[10px] text-white" />
+								<span class="text-[10px] text-white font-semibold">{product.domain}</span>
+							</div>
+						{/if}
 					</div>
 				{:else}
 					<div class="aspect-video flex items-center justify-center bg-surface-1 text-muted">
@@ -489,18 +520,34 @@
 				</div>
 
 			{:else if item.type === 'location'}
-				<div class="aspect-video bg-primary/5 flex items-center justify-center">
-					<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-						<Icon icon="ph:map-pin" class="text-3xl text-primary" />
-					</div>
+				{@const loc = item as LocationContentDoc}
+				<div class="relative">
+					<MapView
+						latitude={loc.latitude}
+						longitude={loc.longitude}
+						zoom={14}
+						interactive={false}
+						height="220px"
+						class="!rounded-none"
+					/>
+					{#if loc.name}
+						<div class="absolute bottom-3 left-3 right-3 flex items-center gap-1.5">
+							<div class="w-6 h-6 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-sm">
+								<Icon icon="ph:map-pin-fill" class="text-sm text-primary" />
+							</div>
+							<span class="text-[13px] text-white font-semibold truncate drop-shadow-md">{loc.name}</span>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
+		{/if}
 
 		<!-- ─── Content Area (Scrollable) ─── -->
 		<div class="flex-1 overflow-y-auto">
-			<div class="px-5 pt-4 pb-20">
+			<div class="px-5 {item.type === 'poll' || item.type === 'list' ? 'pt-16' : 'pt-4'} pb-20">
 				<!-- Title -->
+				{#if item.type !== 'note'}
 				<h1 class="text-[19px] font-bold text-on-surface leading-tight">
 					{#if item.type === 'link'}
 						{(item as LinkContentDoc).title}
@@ -518,12 +565,91 @@
 						{(item as VideoContentDoc).caption || 'Video'}
 					{:else if item.type === 'voice'}
 						Voice Memo
-					{:else if item.type === 'note'}
-						Note
-					{:else}
-						Detail
 					{/if}
 				</h1>
+				{/if}
+
+				<!-- Poll / List / Voice content (between title and comments) -->
+				{#if item.type === 'poll'}
+					{@const poll = item as PollContentDoc}
+					<div class="flex flex-col gap-2 mt-3 mb-4">
+						{#each poll.options as opt}
+							{@const percent = totalVotes > 0 ? ((voteCounts.get(opt.id) ?? 0) / totalVotes) * 100 : 0}
+							{@const isSelected = userVote?.optionId === opt.id}
+							<button
+								onclick={() => { if ($userStore.user) { hapticLight(); voteOnPoll(boardId, item.id, $userStore.user.uid, opt.id); } }}
+								class="relative w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all overflow-hidden
+									{isSelected ? 'border-accent bg-accent/5' : 'border-border bg-surface-1 hover:border-accent/20'}"
+							>
+								<div class="absolute inset-0 bg-accent/8 origin-left transition-transform duration-500 ease-out"
+									style="transform: scaleX({percent / 100})"></div>
+								<div class="relative flex items-center justify-between gap-2">
+									<span class="text-[14px] font-medium {isSelected ? 'text-accent' : 'text-on-surface'}">{opt.text}</span>
+									<span class="text-[12px] text-muted font-bold tabular-nums">{Math.round(percent)}%</span>
+								</div>
+							</button>
+						{/each}
+						<p class="text-[11px] text-muted text-center mt-1">{totalVotes} votes</p>
+					</div>
+				{:else if item.type === 'list'}
+					{@const list = item as ListContentDoc}
+					{@const completedCount = list.items.filter(i => i.completed).length}
+					{@const totalCount = list.items.length}
+					{@const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0}
+
+					<div class="mt-3 mb-4">
+						<div class="flex items-center justify-between mb-2">
+							<span class="text-[13px] font-bold text-muted uppercase tracking-wider">Progress</span>
+							<span class="text-[13px] font-bold text-primary">{completedCount}/{totalCount}</span>
+						</div>
+						<Progressbar progress={progress} />
+					</div>
+
+					<div class="space-y-1 mt-3">
+						{#each list.items as listItem (listItem.id)}
+							<div class="flex items-center gap-3 p-2 rounded-xl {listItem.completed ? 'opacity-50' : ''}">
+								<Checkbox
+									checked={listItem.completed}
+									onchange={() => onToggleListItem?.(item as ListContentDoc, listItem.id)}
+								/>
+								<span class="text-[15px] {listItem.completed ? 'line-through' : ''}">{listItem.text}</span>
+							</div>
+						{/each}
+					</div>
+				{:else if item.type === 'voice'}
+					{@const voice = item as VoiceContentDoc}
+					<div class="mt-3 mb-4">
+						<div class="bg-surface-1 rounded-2xl p-4 flex flex-col gap-3">
+							<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+							<div class="relative h-12 flex items-center px-2 cursor-pointer" onclick={seekVoice} bind:clientWidth={voiceWaveformWidth}>
+								<div class="absolute inset-0 bg-primary/5 rounded-lg"></div>
+								<div class="flex items-end gap-[2px] flex-1 h-full py-2">
+									{#each voiceBarHeights as h, i}
+										<div class="flex-1 rounded-full transition-colors {i / voiceBarHeights.length < voiceProgress / 100 ? 'bg-primary' : 'bg-primary/20'}" style="height: {h}px;"></div>
+									{/each}
+								</div>
+							</div>
+							<div class="flex items-center justify-between px-1">
+								<span class="text-[11px] font-bold text-muted tabular-nums">{formatTime(currentTime)}</span>
+								<button onclick={toggleVoice} aria-label={voicePlaying ? 'Pause voice note' : 'Play voice note'} class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center press-scale shadow-lg shadow-primary/20">
+									<Icon icon={voicePlaying ? 'ph:pause-fill' : 'ph:play-fill'} class="text-xl" />
+								</button>
+								<span class="text-[11px] font-bold text-muted tabular-nums">{formatTime(duration)}</span>
+							</div>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Location address row -->
+				{#if item.type === 'location'}
+					{@const loc = item as LocationContentDoc}
+					{#if loc.address}
+						<div class="mt-2 flex items-start gap-2">
+							<Icon icon="ph:map-pin" class="text-base text-primary shrink-0 mt-0.5" />
+							<p class="text-[13px] text-muted leading-snug line-clamp-2">{loc.address}</p>
+						</div>
+					{/if}
+				{/if}
 
 				<!-- Link Meta Row -->
 				{#if item.type === 'link' || item.type === 'video'}
@@ -629,26 +755,36 @@
 						{#if link.description}
 							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
 						{/if}
-						<a href={link.url} target="_blank" rel="noopener noreferrer" class="mt-4 block">
-							<Button large rounded class="w-full bg-surface-1 text-on-surface !shadow-none border border-border/30">
-								<Icon icon="ph:arrow-square-out" class="mr-2" />
-								Open Link
-							</Button>
-						</a>
 					{/if}
 				{:else if item.type === 'note'}
 					{@const note = item as NoteContentDoc}
-					<p class="text-[16px] leading-relaxed text-on-surface/90 whitespace-pre-wrap font-[350] mt-3">
-						{note.text.trim()}
-					</p>
+					{@const noteText = note.text.trim()}
+					{@const isNoteShort = noteText.length <= 80 && !noteText.includes('\n')}
+					{#if isNoteShort}
+						<div class="text-center py-6 px-4 relative mt-3">
+							<span class="absolute left-2 top-2 text-5xl text-primary/20 font-serif leading-none select-none">"</span>
+							<p class="text-3xl font-medium text-on-surface leading-snug px-6">{noteText}</p>
+							<span class="absolute right-2 bottom-2 text-5xl text-primary/20 font-serif leading-none select-none">"</span>
+						</div>
+					{:else}
+						{@const noteTextSize = (() => {
+							const len = noteText.length;
+							if (len <= 40) return 'text-2xl';
+							if (len <= 80) return 'text-xl';
+							if (len <= 150) return 'text-lg';
+							if (len <= 300) return 'text-[15px]';
+							return 'text-[14px]';
+						})()}
+						<p class="{noteTextSize} leading-relaxed text-on-surface/90 whitespace-pre-wrap font-[350] mt-3">{noteText}</p>
+					{/if}
 				{/if}
 
 				<!-- Interaction Row -->
 				<div class="flex items-center justify-between mt-4 gap-3">
 					<!-- Left: Author -->
 					<div class="flex items-center gap-2.5 shrink-0">
-						{#if item.authorPhotoURL}
-							<img src={item.authorPhotoURL} alt="" class="w-9 h-9 rounded-full object-cover" />
+						{#if resolvedAuthorPhoto && !authorImageError}
+							<img src={resolvedAuthorPhoto} alt="" class="w-9 h-9 rounded-full object-cover" onerror={() => { authorImageError = true; }} />
 						{:else}
 							<div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-xs text-primary font-bold">
 								{avatarInitial(item.authorName)}
@@ -671,10 +807,20 @@
 						<button
 							onclick={(e) => { e.stopPropagation(); hapticLight(); onShare?.(item); }}
 							class="bg-surface-1 rounded-full px-3 py-1.5 flex items-center gap-1.5 ring-1 ring-border/20 active:bg-surface-2 transition-colors"
+							aria-label="Share"
 						>
 							<Icon icon="ph:share-fat" class="text-base text-on-surface/70" />
-							<span class="text-[12px] font-bold text-on-surface/80">Share</span>
 						</button>
+
+						<!-- Open Link (only for link type) -->
+						{#if item.type === 'link'}
+							<a href={(item as LinkContentDoc).url} target="_blank" rel="noopener noreferrer"
+								class="bg-surface-1 rounded-full px-3 py-1.5 flex items-center gap-1.5 ring-1 ring-border/20 active:bg-surface-2 transition-colors"
+								aria-label="Open link in new tab"
+							>
+								<Icon icon="ph:arrow-square-out" class="text-base text-on-surface/70" />
+							</a>
+						{/if}
 					</div>
 				</div>
 
@@ -695,8 +841,8 @@
 
 						{#if latestComment}
 							<div class="flex gap-2.5 items-start">
-								{#if latestComment.authorPhotoURL}
-									<img src={latestComment.authorPhotoURL} alt="" class="w-6 h-6 rounded-full object-cover shrink-0" />
+								{#if latestComment.authorPhotoURL && !commentImageError}
+									<img src={latestComment.authorPhotoURL} alt="" class="w-6 h-6 rounded-full object-cover shrink-0" onerror={() => { commentImageError = true; }} />
 								{:else}
 									<div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] text-primary font-bold shrink-0">
 										{avatarInitial(latestComment.authorName)}
@@ -724,6 +870,28 @@
 						{@const link = item as LinkContentDoc}
 						{#if link.enrichment && isRecipeEnrichment(link.enrichment)}
 							{@const recipe = link.enrichment}
+
+							<!-- Recipe metadata pills -->
+							<div class="flex flex-wrap items-center gap-1.5 mb-4">
+								{#if recipe.totalTime}
+									<MetadataPill icon="ph:timer" text={recipe.totalTime} variant="surface" />
+								{/if}
+								{#if recipe.servings}
+									<MetadataPill icon="ph:users" text={recipe.servings} variant="surface" />
+								{/if}
+								{#if recipe.calories}
+									<MetadataPill icon="ph:fire" text={recipe.calories} variant="surface" />
+								{/if}
+								{#if recipe.cuisine}
+									<MetadataPill text={recipe.cuisine} variant="surface" />
+								{/if}
+								{#if recipe.ingredients.length > 0}
+									<span class="px-2 py-0.5 rounded-lg bg-surface-1 text-[10px] font-bold text-muted flex items-center gap-1 whitespace-nowrap">
+										<Icon icon="ph:list-bullets" class="text-[10px]" />{recipe.ingredients.length} ingredients
+									</span>
+								{/if}
+							</div>
+
 							{#if recipe.ingredients.length > 0}
 								<button onclick={() => ingredientsOpen = !ingredientsOpen} class="flex items-center justify-between w-full mb-2">
 									<h3 class="text-[15px] font-bold">Ingredients</h3>
@@ -771,98 +939,67 @@
 
 					{:else if item.type === 'product'}
 						{@const product = item as ProductContentDoc}
-						<div class="bg-surface-1 rounded-2xl p-4 mb-4 border border-border/20">
-							<div class="flex items-baseline gap-2 mb-1">
-								<span class="text-2xl font-bold text-emerald-600">{product.price}</span>
-								{#if product.originalPrice && product.originalPrice !== product.price}
-									<span class="text-sm text-muted line-through">{product.originalPrice}</span>
-								{/if}
+						{#if product.price && product.price.trim()}
+							<div class="bg-surface-1 rounded-2xl p-4 mb-4 border border-border/20">
+								<div class="flex items-baseline gap-2 mb-1">
+									<span class="text-2xl font-bold text-emerald-600">{product.price}</span>
+									{#if product.originalPrice && product.originalPrice !== product.price}
+										<span class="text-sm text-muted line-through">{product.originalPrice}</span>
+									{/if}
+								</div>
+								<p class="text-[13px] text-muted">{product.domain}</p>
 							</div>
-							<p class="text-[13px] text-muted">{product.domain}</p>
-						</div>
+						{/if}
+						{#if product.enrichment}
+							{@const e = product.enrichment}
+							{#if isProductEnrichment(e)}
+								<div class="flex flex-wrap items-center gap-1.5 mb-4">
+									{#if e.brand}<MetadataPill icon="ph:storefront" text={e.brand} variant="surface" />{/if}
+									{#if e.rating}
+										<MetadataPill
+											icon="ph:star-fill"
+											text={e.ratingCount ? `${e.rating} (${e.ratingCount})` : String(e.rating)}
+											variant="rating"
+										/>
+									{/if}
+									{#if e.availability === 'OutOfStock'}
+										<MetadataPill icon="ph:x-circle" text="Out of stock" variant="surface" />
+									{:else if e.availability === 'PreOrder'}
+										<MetadataPill icon="ph:clock" text="Pre-order" variant="surface" />
+									{:else if e.availability === 'BackOrder'}
+										<MetadataPill icon="ph:clock-countdown" text="Backorder" variant="surface" />
+									{:else if e.availability === 'LimitedAvailability'}
+										<MetadataPill icon="ph:warning" text="Limited" variant="surface" />
+									{:else if e.availability === 'Discontinued'}
+										<MetadataPill icon="ph:prohibit" text="Discontinued" variant="surface" />
+									{/if}
+									{#if e.category}<MetadataPill text={e.category} variant="surface" />{/if}
+								</div>
+							{:else if isRecipeEnrichment(e)}
+								<div class="flex flex-wrap items-center gap-1.5 mb-4">
+									{#if e.totalTime}<MetadataPill icon="ph:timer" text={e.totalTime} variant="surface" />{/if}
+									{#if e.servings}<MetadataPill icon="ph:users" text={e.servings} variant="surface" />{/if}
+									{#if e.calories}<MetadataPill icon="ph:fire" text={e.calories} variant="surface" />{/if}
+									{#if e.cuisine}<MetadataPill text={e.cuisine} variant="surface" />{/if}
+								</div>
+							{:else if isMovieEnrichment(e)}
+								<div class="flex flex-wrap items-center gap-1.5 mb-4">
+									{#if e.rating}<MetadataPill icon="ph:star-fill" text={String(e.rating)} variant="rating" />{/if}
+									{#if e.year}<MetadataPill text={String(e.year)} variant="surface" />{/if}
+									{#if e.runtime}<MetadataPill text={e.runtime} variant="surface" />{/if}
+								</div>
+							{/if}
+						{/if}
 						<a href={product.url} target="_blank" rel="noopener noreferrer">
 							<Button large rounded class="w-full">
 								<Icon icon="ph:shopping-bag" class="mr-2" />
-								Buy Product
+								View Product
 							</Button>
 						</a>
 
-					{:else if item.type === 'list'}
-						{@const list = item as ListContentDoc}
-						{@const completedCount = list.items.filter(i => i.completed).length}
-						{@const totalCount = list.items.length}
-						{@const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0}
-
-						<div class="mb-4">
-							<div class="flex items-center justify-between mb-2">
-								<span class="text-[13px] font-bold text-muted uppercase tracking-wider">Progress</span>
-								<span class="text-[13px] font-bold text-primary">{completedCount}/{totalCount}</span>
-							</div>
-							<Progressbar progress={progress} />
-						</div>
-
-						<div class="space-y-1">
-							{#each list.items as listItem (listItem.id)}
-								<div class="flex items-center gap-3 p-2 rounded-xl {listItem.completed ? 'opacity-50' : ''}">
-									<Checkbox 
-										checked={listItem.completed}
-										onchange={() => onToggleListItem?.(item as ListContentDoc, listItem.id)}
-									/>
-									<span class="text-[15px] {listItem.completed ? 'line-through' : ''}">{listItem.text}</span>
-								</div>
-							{/each}
-						</div>
-
-					{:else if item.type === 'poll'}
-						{@const poll = item as PollContentDoc}
-						<div class="flex flex-col gap-2 mt-2">
-							{#each poll.options as opt}
-								{@const percent = totalVotes > 0 ? ((voteCounts.get(opt.id) ?? 0) / totalVotes) * 100 : 0}
-								{@const isSelected = userVote?.optionId === opt.id}
-								<button
-									onclick={() => { if ($userStore.user) { hapticLight(); voteOnPoll(boardId, item.id, $userStore.user.uid, opt.id); } }}
-									class="relative w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all overflow-hidden
-										{isSelected ? 'border-accent bg-accent/5' : 'border-border bg-surface-1 hover:border-accent/20'}"
-								>
-									<div class="absolute inset-0 bg-accent/8 origin-left transition-transform duration-500 ease-out"
-										style="transform: scaleX({percent / 100})"></div>
-									<div class="relative flex items-center justify-between gap-2">
-										<span class="text-[14px] font-medium {isSelected ? 'text-accent' : 'text-on-surface'}">{opt.text}</span>
-										<span class="text-[12px] text-muted font-bold tabular-nums">{Math.round(percent)}%</span>
-									</div>
-								</button>
-							{/each}
-							<p class="text-[11px] text-muted text-center mt-2">{totalVotes} votes</p>
-						</div>
-
-					{:else if item.type === 'voice'}
-						{@const voice = item as VoiceContentDoc}
-						<div class="bg-surface-1 rounded-2xl p-4 flex flex-col gap-3">
-							<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-							<div class="relative h-12 flex items-center px-2 cursor-pointer" onclick={seekVoice} bind:clientWidth={voiceWaveformWidth}>
-								<div class="absolute inset-0 bg-primary/5 rounded-lg"></div>
-								<div class="flex items-end gap-[2px] flex-1 h-full py-2">
-									{#each voiceBarHeights as h, i}
-										<div class="flex-1 rounded-full transition-colors {i / voiceBarHeights.length < voiceProgress / 100 ? 'bg-primary' : 'bg-primary/20'}" style="height: {h}px;"></div>
-									{/each}
-								</div>
-							</div>
-							<div class="flex items-center justify-between px-1">
-								<span class="text-[11px] font-bold text-muted tabular-nums">{formatTime(currentTime)}</span>
-								<button onclick={toggleVoice} class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center press-scale shadow-lg shadow-primary/20">
-									<Icon icon={voicePlaying ? 'ph:pause-fill' : 'ph:play-fill'} class="text-xl" />
-								</button>
-								<span class="text-[11px] font-bold text-muted tabular-nums">{formatTime(duration)}</span>
-							</div>
-						</div>
-
 					{:else if item.type === 'location'}
 						{@const loc = item as LocationContentDoc}
-						<div class="bg-surface-1 rounded-2xl p-4 mb-4 border border-border/20">
-							<h3 class="text-[15px] font-bold mb-1">{loc.name}</h3>
-							<p class="text-[13px] text-muted leading-relaxed">{loc.address}</p>
-						</div>
-						<a href="https://www.google.com/maps?q={loc.latitude},{loc.longitude}" target="_blank" rel="noopener noreferrer">
+						<a href="https://www.google.com/maps?q={loc.latitude},{loc.longitude}" target="_blank" rel="noopener noreferrer" class="block mt-3">
 							<Button large rounded class="w-full">
 								<Icon icon="ph:navigation-arrow" class="mr-2" />
 								Navigate to Place
@@ -878,36 +1015,44 @@
 	<Popup opened={showCommentsThread} onBackdropClick={() => (showCommentsThread = false)}>
 		<Page class="bg-surface">
 			<div class="flex flex-col h-full">
-				<div class="px-5 py-4 border-b border-surface-1 flex items-center justify-between sticky top-0 bg-surface z-10">
+				<div class="px-5 py-4 pt-safe border-b border-surface-1 flex items-center justify-between sticky top-0 bg-surface z-10">
 					<div class="flex items-center gap-2">
 						<span class="text-[16px] font-bold">Comments</span>
 						<span class="text-[14px] text-muted font-medium tabular-nums">{comments.length}</span>
 					</div>
-					<button 
+					<button
 						onclick={() => (showCommentsThread = false)}
+						aria-label="Close comments"
 						class="w-8 h-8 rounded-full bg-surface-1 flex items-center justify-center text-muted"
 					>
 						<Icon icon="ph:x-bold" class="text-sm" />
 					</button>
 				</div>
-				<div class="flex-1 overflow-y-auto px-5 pt-4 pb-12">
+				<div class="flex-1 overflow-y-auto px-5 pt-4 pb-12 pb-safe">
 					<CardComments {boardId} contentId={item.id} {isBoardOwner} {allowComments} />
 				</div>
 			</div>
 		</Page>
 	</Popup>
 
-	<!-- Action Sheet for Delete/Edit -->
+	<!-- Action Sheet for Delete Card -->
+	<div class="relative z-50">
 	<Actions opened={showActions} onBackdropClick={() => (showActions = false)}>
-		<ActionsLabel>Options</ActionsLabel>
-		<ActionsButton 
-			class="!text-error" 
-			onclick={() => { showActions = false; onDelete?.(item); }}
-		>
-			Delete Card
-		</ActionsButton>
-		<ActionsButton onclick={() => (showActions = false)}>Cancel</ActionsButton>
+		<ActionsGroup>
+			<ActionsButton
+				class="!text-error"
+				onClick={() => { showActions = false; onDelete?.(item); }}
+			>
+				Delete Card
+			</ActionsButton>
+		</ActionsGroup>
+		<ActionsGroup>
+			<ActionsButton onClick={() => (showActions = false)} bold>
+				Cancel
+			</ActionsButton>
+		</ActionsGroup>
 	</Actions>
+	</div>
 </Popup>
 
 <style>

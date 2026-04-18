@@ -15,6 +15,7 @@ import { generateAudio } from '../utils/ttsService.js';
 import { notifyBoardMembers } from '../utils/fcmService.js';
 import { getStorage } from 'firebase-admin/storage';
 import { getEligibleBoards, processInBatches } from '../utils/boardEligibility.js';
+import { serializeContent } from '../triggers/onBoardContentWrite.js';
 
 const CONCURRENCY_LIMIT = 5;
 
@@ -40,10 +41,16 @@ async function processBoardDigest(
 		};
 	};
 
-	// Use Living Summary briefingText as source of truth
-	let briefingText = board.livingSummary?.briefingText || '';
+	// ─── Briefing text fallback chain ────────────────────────────────────
+	// 1. Living Summary briefingText (already computed, best quality)
+	// 2. Living Summary content (re-cast the existing summary as a briefing)
+	// 3. Fresh AI call over the last 24h of content
+	let briefingText = board.livingSummary?.briefingText?.trim() || '';
 
-	// Fallback: generate a fresh briefing if livingSummary has no briefingText
+	if (!briefingText && board.livingSummary?.content) {
+		briefingText = await briefingFromSummary(board.name, board.livingSummary.content);
+	}
+
 	if (!briefingText) {
 		briefingText = await generateFallbackBriefing(db, boardDoc.id, board.name);
 	}
@@ -81,9 +88,28 @@ async function processBoardDigest(
 }
 
 /**
- * Fallback briefing generation for boards without a Living Summary briefingText.
- * Uses a detailed content serialization (matching Living Summary format) for
- * higher-quality AI output.
+ * Condenses an existing Living Summary into a 2-sentence briefing notification.
+ * Used when the board has a summary but never generated its own briefingText
+ * (e.g., older boards from before briefingText was wired in).
+ */
+async function briefingFromSummary(boardName: string, summary: string): Promise<string> {
+	const { generateText } = await import('../utils/aiService.js');
+	const prompt = `Convert this board summary into a warm, conversational 2-sentence morning briefing (max 40 words).
+Use first names if present. No markdown. Single line response.
+
+Board: ${boardName}
+Summary:
+${summary}
+
+Briefing:`;
+	const raw = await generateText(prompt, 80);
+	return (raw || '').trim().replace(/^Briefing:\s*/i, '').split('\n')[0].trim();
+}
+
+/**
+ * Fallback briefing generation for boards without a Living Summary at all.
+ * Uses the shared serializeContent() so the AI sees the exact same format
+ * as the Living Summary pipeline — one canonical serializer.
  */
 async function generateFallbackBriefing(
 	db: FirebaseFirestore.Firestore,
@@ -102,52 +128,7 @@ async function generateFallbackBriefing(
 
 	if (contentSnap.empty) return '';
 
-	// Use detailed content serialization (same format as Living Summary)
-	const changes = contentSnap.docs.map((d) => {
-		const data = d.data();
-		const author = (data.authorName as string) || 'Someone';
-		const type = data.type as string;
-		const text = (data.text as string || '').slice(0, 150);
-		const title = (data.title as string) || '';
-
-		switch (type) {
-			case 'note':
-				return `[Note] (by ${author}) ${text}`;
-			case 'list': {
-				const items = (data.items as Array<{ text: string; completed: boolean }>) || [];
-				const done = items.filter((i) => i.completed).length;
-				const names = items.slice(0, 4).map((i) => i.text).join(', ');
-				return `[List] ${title} (${done}/${items.length} done): ${names}`;
-			}
-			case 'link': {
-				const domain = (data.domain as string) || '';
-				const desc = (data.description as string || '').slice(0, 80);
-				return `[Link] ${title || data.url} (${domain}) — ${desc}`;
-			}
-			case 'product': {
-				const price = data.lastCheckedPrice || data.price;
-				const drop = data.priceDrop ? ' [PRICE DROPPED]' : '';
-				return `[Product] ${title} ${price}${drop}`;
-			}
-			case 'poll': {
-				const question = data.question as string || title;
-				return `[Poll] (by ${author}) ${question}`;
-			}
-			case 'photo': {
-				const count = (data.images as unknown[])?.length || 1;
-				const caption = (data.caption as string) || '';
-				return `[Photo x${count}] (by ${author}) ${caption}`;
-			}
-			case 'video':
-				return `[Video] (by ${author}) ${(data.caption as string) || ''}`;
-			case 'voice':
-				return `[Voice note] (by ${author})`;
-			case 'location':
-				return `[Location] (by ${author}) ${data.name || data.address || ''}`;
-			default:
-				return `[${type}] (by ${author}) ${title || text}`;
-		}
-	});
+	const changes = contentSnap.docs.map((d) => serializeContent(d.data()));
 
 	const memberNames = [...new Set(
 		contentSnap.docs.map((d) => (d.data().authorName as string) || 'Someone')

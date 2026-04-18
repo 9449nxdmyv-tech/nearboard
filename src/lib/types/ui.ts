@@ -71,9 +71,12 @@ export interface LinkCardProps extends BaseCardProps {
 export interface ProductCardProps extends BaseCardProps {
 	url: string;
 	title: string;
+	description: string | null;
 	image: string | null;
-	price: string;
 	domain: string;
+	favicon: string | null;
+	enrichment?: import('./api').LinkEnrichment | null;
+	price: string;
 	originalPrice: string | null;
 	lastCheckedPrice: string | null;
 	lastCheckedAt: Date | Timestamp | null;

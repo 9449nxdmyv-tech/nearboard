@@ -12,6 +12,8 @@
 	import { Navbar, NavbarBackLink, Link, Button, List, ListInput } from 'konsta/svelte';
 	import { userStore, showToast, queuePhotoUpload } from '$lib/stores';
 	import { hapticLight } from '$lib/utils/haptics';
+	import QuickCaptureShell from './QuickCaptureShell.svelte';
+	import SubmitButton from './SubmitButton.svelte';
 	// PhotoContentDoc type used by uploadStore internally
 	import { onDestroy } from 'svelte';
 
@@ -38,27 +40,6 @@
 	let destroyed = false;
 	let fileInputEl = $state<HTMLInputElement | undefined>();
 	let cameraInputEl = $state<HTMLInputElement | undefined>();
-
-	// ─── Body scroll lock ────────────────────────────────────────────────
-	$effect(() => {
-		const scrollY = window.scrollY;
-		document.body.style.overflow = 'hidden';
-		document.body.style.position = 'fixed';
-		document.body.style.top = `-${scrollY}px`;
-		document.body.style.width = '100%';
-		return () => {
-			document.body.style.overflow = '';
-			document.body.style.position = '';
-			document.body.style.top = '';
-			document.body.style.width = '';
-			window.scrollTo(0, scrollY);
-		};
-	});
-
-	// ─── Keyboard ────────────────────────────────────────────────────────
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') handleClose();
-	}
 
 	onDestroy(() => {
 		destroyed = true;
@@ -122,44 +103,30 @@
 	function handleClose() {
 		onClose();
 	}
-
-	function handleBackdropClick(e: MouseEvent) {
-		if (e.target === e.currentTarget) handleClose();
-	}
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 <!-- Hidden file inputs -->
 <input bind:this={fileInputEl} type="file" accept="image/*" multiple onchange={handleFileSelect} class="hidden" />
 <input bind:this={cameraInputEl} type="file" accept="image/*" capture="environment" onchange={handleFileSelect} class="hidden" />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div
-	class="fixed inset-0 z-[60] flex items-stretch sm:items-center sm:justify-center"
-	onclick={handleBackdropClick}
-	transition:fade={{ duration: 200 }}
->
-	<div class="fixed inset-0 bg-black sm:bg-black/60 sm:backdrop-blur-md" aria-hidden="true"></div>
+{#snippet navLeft()}
+	<NavbarBackLink onClick={handleClose} text="Close" />
+{/snippet}
+{#snippet navRight()}
+	{#if phase === 'review' && photoFiles.length > 0 && photoFiles.length < MAX_PHOTOS}
+		<Link onClick={() => fileInputEl?.click()}>
+			<Icon icon="ph:plus" class="w-5 h-5 mr-1" />
+			Add
+		</Link>
+	{/if}
+{/snippet}
 
-	<div
-		class="relative z-10 w-full h-full sm:h-auto sm:max-w-xl sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl sm:ring-1 sm:ring-white/10
-			bg-surface flex flex-col overflow-hidden"
-		in:fly={{ y: 40, duration: 300, easing: quintOut }}
-	>
-		<!-- Header -->
-		{#snippet navLeft()}
-			<NavbarBackLink onClick={handleClose} text="Close" />
-		{/snippet}
-		{#snippet navRight()}
-			{#if phase === 'review' && photoFiles.length > 0 && photoFiles.length < MAX_PHOTOS}
-				<Link onClick={() => fileInputEl?.click()}>
-					<Icon icon="ph:plus" class="w-5 h-5 mr-1" />
-					Add
-				</Link>
-			{/if}
-		{/snippet}
+<QuickCaptureShell
+	onClose={handleClose}
+	closeOnBackdrop={false}
+	backdropClass="bg-black sm:bg-black/60 sm:backdrop-blur-md"
+	containerClass="sm:max-w-xl sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl sm:ring-1 sm:ring-white/10"
+>
 		<Navbar title="Photos" left={navLeft} right={navRight} />
 
 		<!-- Content -->
@@ -168,8 +135,9 @@
 				<!-- ═══ Select phase ═══ -->
 				<div class="flex-1 flex flex-col items-center justify-center px-6 sm:px-8 py-8 sm:py-10 gap-5" in:fade={{ duration: 200 }}>
 					<!-- Drag & drop zone (covers the whole content area on desktop) -->
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
+						role="region"
+						aria-label="Photo drop zone"
 						class="w-full max-w-sm flex flex-col items-center gap-6 py-10 sm:py-14 px-6 rounded-2xl border-2 border-dashed transition-all duration-200
 							{draggingOver ? 'border-accent bg-accent/5 scale-[1.02]' : 'border-border/40 sm:hover:border-accent/30'}"
 						ondragover={(e) => { e.preventDefault(); draggingOver = true; }}
@@ -249,6 +217,7 @@
 						{#if photoFiles.length > 0 && photoFiles.length < MAX_PHOTOS}
 							<button
 								onclick={() => fileInputEl?.click()}
+								aria-label="Add more photos"
 								class="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border/40
 									hover:border-accent/40 hover:bg-accent/5 transition-all active:scale-95
 									{photoFiles.length <= 2 ? 'h-44 sm:h-56' : 'h-28 sm:h-36'}"
@@ -279,24 +248,12 @@
 			{/if}
 		</div>
 
-		<!-- Save footer (review phase only) -->
-		{#if phase === 'review' && photoFiles.length > 0}
-			<div class="p-4 pb-safe border-t border-border-light">
-				<Button large rounded onClick={submitPhotos} disabled={busy}>
-					{#if busy}
-						<Icon icon="ph:circle-notch-bold" class="text-lg animate-spin mr-2" />
-						Uploading...
-					{:else}
-						{photoFiles.length > 1 ? `Save ${photoFiles.length} Photos` : 'Save Photo'}
-					{/if}
-				</Button>
-			</div>
-		{/if}
-	</div>
-</div>
-
-<style>
-	.pb-safe {
-		padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
-	}
-</style>
+	<!-- Save footer (review phase only) -->
+	{#if phase === 'review' && photoFiles.length > 0}
+		<div class="p-4 pb-safe border-t border-border-light">
+			<SubmitButton {busy} onClick={submitPhotos} busyLabel="Uploading...">
+				{photoFiles.length > 1 ? `Save ${photoFiles.length} Photos` : 'Save Photo'}
+			</SubmitButton>
+		</div>
+	{/if}
+</QuickCaptureShell>

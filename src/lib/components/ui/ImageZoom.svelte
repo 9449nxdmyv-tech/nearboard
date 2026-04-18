@@ -9,6 +9,7 @@
 	import { quintOut } from 'svelte/easing';
 	import Icon from '@iconify/svelte';
 	import { hapticLight, hapticMedium } from '$lib/utils/haptics';
+	import { useConditionalScrollLock } from '$lib/utils/scrollLock.svelte';
 
 	let {
 		src,
@@ -52,22 +53,7 @@
 	const CLOSE_THRESHOLD = 100;
 
 	// Body scroll lock
-	$effect(() => {
-		if (open) {
-			const scrollY = window.scrollY;
-			document.body.style.overflow = 'hidden';
-			document.body.style.position = 'fixed';
-			document.body.style.top = `-${scrollY}px`;
-			document.body.style.width = '100%';
-			return () => {
-				document.body.style.overflow = '';
-				document.body.style.position = '';
-				document.body.style.top = '';
-				document.body.style.width = '';
-				window.scrollTo(0, scrollY);
-			};
-		}
-	});
+	useConditionalScrollLock(() => open);
 
 	// Keyboard escape handling
 	$effect(() => {
@@ -320,13 +306,5 @@
 
 	.zoom-image.loading {
 		opacity: 0;
-	}
-
-	:global(.pt-safe) {
-		padding-top: max(env(safe-area-inset-top, 0px), 1rem);
-	}
-
-	:global(.pb-safe) {
-		padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
 	}
 </style>

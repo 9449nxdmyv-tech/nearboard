@@ -9,6 +9,8 @@
 	import { browser } from '$app/environment';
 	import Icon from '@iconify/svelte';
 	import LinkSourceBar from './LinkSourceBar.svelte';
+	import type { VideoPlayback } from '$lib/types/firestore';
+	import { globalExperience } from '$lib/stores';
 
 	let {
 		url,
@@ -29,10 +31,22 @@
 	} = $props();
 
 	const isExpanded = getContext<boolean>('card-detail-expanded') ?? false;
+	const getVideoPlayback = getContext<(() => VideoPlayback) | undefined>('videoPlayback');
+	const videoPlayback = $derived(getVideoPlayback?.() ?? $globalExperience.videoPlayback);
 
-	// Never auto-load iframe — always show thumbnail first.
-	// User taps play → iframe loads with autoplay=1&mute=1 (satisfies mobile policy).
-	let loaded = $state(false);
+	function shouldAutoplay(): boolean {
+		if (videoPlayback === 'tap-to-play') return false;
+		if (videoPlayback === 'muted-autoplay' || videoPlayback === 'full-autoplay') return true;
+		if (videoPlayback === 'wifi-autoplay' && browser) {
+			const conn = (navigator as any).connection;
+			return conn?.type === 'wifi' || conn?.effectiveType === '4g';
+		}
+		return false;
+	}
+
+	const autoplay = $derived(shouldAutoplay());
+
+	let loaded = $state(autoplay);
 	let imageError = $state(false);
 	const thumbnail = $derived(image ?? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`);
 
@@ -55,6 +69,7 @@
 {:else}
 	<button
 		onclick={play}
+		aria-label="Play YouTube video: {title}"
 		class="relative block w-full group cursor-pointer overflow-hidden"
 	>
 		{#if !imageError}

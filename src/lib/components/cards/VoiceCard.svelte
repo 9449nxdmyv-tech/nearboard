@@ -9,13 +9,14 @@
 
 	let {
 		id, boardId, audioUrl, durationMs, authorId, authorName, authorPhotoURL, createdAt,
-		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare
+		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick
 	}: VoiceCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
 		acknowledgments?: Record<string, { type: 'heart'; createdAt: any }>;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 	} = $props();
 
 	let audio = $state<HTMLAudioElement | undefined>();
@@ -86,6 +87,7 @@
 	{acknowledgments}
 	{onShare}
 	{onDelete}
+	{onCommentClick}
 >
 	<!-- Full-width waveform with overlaid play button -->
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -112,6 +114,7 @@
 		<!-- Centered play/pause overlay -->
 		<button
 			onclick={(e) => { e.stopPropagation(); togglePlayback(); }}
+			aria-label={playing ? 'Pause voice note' : 'Play voice note'}
 			class="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-primary/15
 				flex items-center justify-center press-scale backdrop-blur-sm"
 		>

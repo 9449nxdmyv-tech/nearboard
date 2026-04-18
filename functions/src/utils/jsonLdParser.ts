@@ -11,8 +11,60 @@ import type {
 	PlaceEnrichment,
 	ArticleEnrichment,
 	GitHubEnrichment,
+	VideoEnrichment,
+	ProductEnrichment,
 	StructuredEnrichment,
 } from '../types/jsonLdTypes.js';
+
+/** Normalize schema.org availability URLs/labels to the enumerated values. */
+const AVAILABILITY_CODES: Array<ProductEnrichment['availability']> = [
+	'InStock',
+	'OutOfStock',
+	'PreOrder',
+	'BackOrder',
+	'Discontinued',
+	'LimitedAvailability',
+];
+
+function normalizeAvailability(v: unknown): ProductEnrichment['availability'] {
+	if (typeof v !== 'string') return null;
+	// Strip schema.org prefix: "https://schema.org/InStock" → "InStock"
+	const tail = v.split('/').pop()?.trim() ?? '';
+	const match = AVAILABILITY_CODES.find((code) => code && code.toLowerCase() === tail.toLowerCase());
+	return match ?? null;
+}
+
+/** Extract brand name from `{ brand: "Foo" }` or `{ brand: { name: "Foo" } }`. */
+function extractBrand(v: unknown): string | null {
+	if (!v) return null;
+	if (typeof v === 'string') return v.trim() || null;
+	if (Array.isArray(v)) {
+		for (const item of v) {
+			const name = extractBrand(item);
+			if (name) return name;
+		}
+		return null;
+	}
+	if (typeof v === 'object') return str((v as Record<string, unknown>).name);
+	return null;
+}
+
+/** Walk the nested offers structure to find availability/currency. */
+function scanOffers<T>(offers: unknown, pick: (o: Record<string, unknown>) => T | null): T | null {
+	if (!offers || typeof offers !== 'object') return null;
+	const list = Array.isArray(offers) ? offers : [offers];
+	for (const offer of list) {
+		if (!offer || typeof offer !== 'object') continue;
+		const o = offer as Record<string, unknown>;
+		const picked = pick(o);
+		if (picked) return picked;
+		if (o.offers) {
+			const nested = scanOffers(o.offers, pick);
+			if (nested) return nested;
+		}
+	}
+	return null;
+}
 
 /**
  * Extract string value, handling numbers and null/empty cases.
@@ -95,6 +147,23 @@ export function hasType(types: unknown[], targetType: string): boolean {
 	return types.some((v) =>
 		typeof v === 'string' && (v === targetType || v.endsWith('/' + targetType))
 	);
+}
+
+/**
+ * Parse video JSON-LD into structured enrichment.
+ */
+export function parseVideo(data: Record<string, unknown>): VideoEnrichment | null {
+	const publisher = data.publisher as Record<string, unknown> | undefined;
+	const views = data.interactionCount || (data.interactionStatistic as Record<string, unknown> | undefined)?.userInteractionCount;
+
+	return {
+		kind: 'video',
+		author: personName(data.author),
+		publishedDate: str(data.uploadDate)?.slice(0, 10) ?? null,
+		duration: formatIsoDuration(data.duration),
+		views: views ? String(views) : null,
+		siteName: publisher ? str(publisher.name) : null,
+	};
 }
 
 /**
@@ -303,6 +372,46 @@ export function parseGitHub(data: Record<string, unknown>): GitHubEnrichment | n
 }
 
 /**
+ * Parse Product JSON-LD into structured enrichment.
+ * Captures brand, rating, availability, and currency — fields that are useful
+ * to surface on the card but sit outside price/title/image.
+ */
+export function parseProduct(data: Record<string, unknown>): ProductEnrichment | null {
+	const rating = data.aggregateRating as Record<string, unknown> | undefined;
+	const category = Array.isArray(data.category)
+		? (data.category as unknown[]).map((c) => str(c)).filter(Boolean).join(' › ') || null
+		: str(data.category);
+
+	const availability =
+		scanOffers(data.offers, (o) => normalizeAvailability(o.availability)) ?? null;
+	const currency =
+		scanOffers(data.offers, (o) => str(o.priceCurrency)) ?? str(data.priceCurrency);
+
+	const product: ProductEnrichment = {
+		kind: 'product',
+		brand: extractBrand(data.brand) ?? extractBrand(data.manufacturer),
+		rating: rating ? str(rating.ratingValue) : null,
+		ratingCount: rating?.reviewCount
+			? parseInt(String(rating.reviewCount), 10) || null
+			: rating?.ratingCount
+				? parseInt(String(rating.ratingCount), 10) || null
+				: null,
+		availability,
+		currency: currency ? currency.toUpperCase() : null,
+		category,
+	};
+
+	// Skip the enrichment entirely if we have no useful fields beyond the kind.
+	const hasData =
+		product.brand ||
+		product.rating ||
+		product.availability ||
+		product.currency ||
+		product.category;
+	return hasData ? product : null;
+}
+
+/**
  * Walk JSON-LD graph and extract structured enrichment.
  */
 export function extractEnrichmentFromJsonLd(data: unknown): StructuredEnrichment | null {
@@ -330,6 +439,7 @@ export function extractEnrichmentFromJsonLd(data: unknown): StructuredEnrichment
 	const types = Array.isArray(obj['@type']) ? obj['@type'] : [obj['@type']];
 
 	// Try each parser based on type
+	if (hasType(types, 'VideoObject')) return parseVideo(obj);
 	if (hasType(types, 'Recipe')) return parseRecipe(obj);
 	if (hasType(types, 'Movie') || hasType(types, 'TVSeries') || hasType(types, 'TVEpisode')) {
 		return parseMovie(obj);
@@ -357,6 +467,16 @@ export function extractEnrichmentFromJsonLd(data: unknown): StructuredEnrichment
 	}
 	if (hasType(types, 'SoftwareSourceCode') || hasType(types, 'SoftwareApplication')) {
 		return parseGitHub(obj);
+	}
+	// Product variants — kept last so a more specific type (Recipe on a product
+	// page, Book on a bookseller page) wins if present.
+	if (
+		hasType(types, 'Product') ||
+		hasType(types, 'IndividualProduct') ||
+		hasType(types, 'ProductGroup') ||
+		hasType(types, 'ProductModel')
+	) {
+		return parseProduct(obj);
 	}
 
 	// Check mainEntity references

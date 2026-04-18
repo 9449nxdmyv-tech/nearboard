@@ -4,7 +4,7 @@
                based on its type. Used across board view, feed, and public board pages.
 -->
 <script lang="ts">
-	import type { ContentDoc, ListContentDoc } from '$lib/types';
+	import type { ContentDoc, ListContentDoc, ProductContentDoc } from '$lib/types';
 	import NoteCard from '$lib/components/cards/NoteCard.svelte';
 	import ListCard from '$lib/components/cards/ListCard.svelte';
 	import LinkCard from '$lib/components/cards/LinkCard.svelte';
@@ -24,7 +24,9 @@
 		onEdit,
 		onDelete,
 		onToggleListItem,
-		onShare
+		onShare,
+		onCommentClick,
+		resolveAuthorPhoto
 	}: {
 		item: ContentDoc;
 		boardId: string;
@@ -35,6 +37,10 @@
 		onDelete?: (item: ContentDoc) => void;
 		onToggleListItem?: (contentItem: ListContentDoc, itemId: string) => void;
 		onShare?: (item: ContentDoc) => void;
+		/** Fires when the comment button is tapped. Opens the card detail modal with comments expanded. */
+		onCommentClick?: () => void;
+		/** Resolve author photo from current member data. Falls back to item.authorPhotoURL. */
+		resolveAuthorPhoto?: (authorId: string, snapshotUrl: string | null) => string | null;
 	} = $props();
 
 	// Common props shared by all card types
@@ -43,7 +49,9 @@
 		boardId,
 		authorId: item.authorId,
 		authorName: item.authorName,
-		authorPhotoURL: item.authorPhotoURL,
+		authorPhotoURL: resolveAuthorPhoto
+			? resolveAuthorPhoto(item.authorId, item.authorPhotoURL)
+			: item.authorPhotoURL,
 		createdAt: item.createdAt?.toDate() ?? new Date(),
 		isBoardOwner,
 		allowComments,
@@ -51,7 +59,8 @@
 		commentCount: item.commentCount,
 		acknowledgments: item.acknowledgments,
 		onDelete: onDelete ? () => onDelete(item) : undefined,
-		onShare: onShare ? () => onShare(item) : undefined
+		onShare: onShare ? () => onShare(item) : undefined,
+		onCommentClick
 	});
 </script>
 
@@ -85,9 +94,12 @@
 		{...common}
 		url={item.url}
 		title={item.title}
+		description={item.description}
 		image={item.image}
-		price={item.price}
 		domain={item.domain}
+		favicon={item.favicon}
+		enrichment={item.enrichment}
+		price={item.price}
 		originalPrice={item.originalPrice}
 		lastCheckedPrice={item.lastCheckedPrice}
 		lastCheckedAt={item.lastCheckedAt}

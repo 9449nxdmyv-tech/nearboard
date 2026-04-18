@@ -9,6 +9,7 @@
 	import { Page, List, ListItem, ListInput, Button, Block, BlockTitle, Segmented, SegmentedButton, Preloader } from 'konsta/svelte';
 	import Header from '$lib/components/ui/Header.svelte';
 	import { userStore, showToast } from '$lib/stores';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import {
 		getBoard,
 		updateBoard,
@@ -32,6 +33,9 @@
 	import { avatarInitial } from '$lib/utils/textFormatter';
 	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, ConversationMode, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
 	import { globalExperience, getEffectiveExperience } from '$lib/stores';
+	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
+	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
+	import type { UserExperiencePreferences } from '$lib/types/firestore';
 
 	const boardId = $derived($page.params.boardId ?? '');
 
@@ -41,6 +45,7 @@
 	let quarantined = $state<ContentDoc[]>([]);
 	let joinRequests = $state<JoinRequestDoc[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let inviteLink = $state('');
 	let copied = $state(false);
 	let confirmDeleteBoard = $state(false);
@@ -55,42 +60,102 @@
 	const myDigestMuted = $derived(myMember?.digestMuted ?? false);
 	let savingDigestMute = $state(false);
 
+	// ── Board Experience overrides ──
+	const overrides = $derived(board?.experienceOverrides);
+	const overridesEnabled = $derived(overrides?.enabled ?? false);
+	const effectiveExperience = $derived(
+		getEffectiveExperience($userStore.user?.experiencePreferences, overrides)
+	);
+	let savingExperience = $state(false);
+
+	async function toggleBoardOverrides() {
+		if (!board) return;
+		hapticLight();
+		const newEnabled = !overridesEnabled;
+		const updated: BoardExperienceOverrides = newEnabled
+			? { enabled: true }
+			: { enabled: false };
+		await updateBoard(boardId, { experienceOverrides: updated });
+		board = { ...board, experienceOverrides: updated };
+	}
+
+	async function saveBoardExperience(updates: Partial<BoardExperienceOverrides>) {
+		if (!board) return;
+		savingExperience = true;
+		const current = board.experienceOverrides ?? { enabled: true };
+		const merged: BoardExperienceOverrides = { ...current, ...updates, enabled: true };
+		await updateBoard(boardId, { experienceOverrides: merged });
+		board = { ...board, experienceOverrides: merged };
+		savingExperience = false;
+	}
+
+	async function selectBoardPreset(preset: 'calm' | 'balanced' | 'lively') {
+		if (!board) return;
+		hapticLight();
+		const prefs = applyPreset(preset);
+		savingExperience = true;
+		const merged: BoardExperienceOverrides = {
+			enabled: true,
+			scrollBehavior: prefs.scrollBehavior,
+			videoPlayback: prefs.videoPlayback,
+			feedOrder: prefs.feedOrder,
+			conversationMode: prefs.conversationMode,
+			layoutStyle: prefs.layoutStyle
+		};
+		await updateBoard(boardId, { experienceOverrides: merged });
+		board = { ...board, experienceOverrides: merged };
+		showToast(`${preset.charAt(0).toUpperCase() + preset.slice(1)} experience applied to board`, 'success');
+		savingExperience = false;
+	}
+
+	async function resetBoardExperience() {
+		if (!board) return;
+		hapticLight();
+		await updateBoard(boardId, { experienceOverrides: { enabled: false } });
+		board = { ...board, experienceOverrides: { enabled: false } };
+		showToast('Board reset to your global defaults', 'success');
+	}
+
+	async function load() {
+		const user = $userStore.user;
+		if (!user || !boardId) return;
+		loading = true;
+		loadError = null;
+		try {
+			board = await getBoard(boardId);
+			members = await getBoardMembers(boardId);
+			invites = await getPendingInvites(boardId);
+
+			if (board) {
+				inviteLink = generateShareLink(boardId);
+				if (board.ownerId === user.uid) {
+					quarantined = await getQuarantinedContent(boardId);
+					try {
+						joinRequests = await getPendingJoinRequests(boardId);
+					} catch (err) {
+						console.warn('Join requests query failed (index may not be deployed):', err);
+					}
+				}
+			}
+		} catch (err) {
+			console.error('Failed to load board settings:', err);
+			loadError = err instanceof Error ? err.message : 'Could not load settings';
+			showToast('Failed to load board settings');
+		} finally {
+			loading = false;
+		}
+	}
+
 	$effect(() => {
 		const user = $userStore.user;
 		if (!user || !boardId || !loading) return;
-
-		async function load() {
-			try {
-				board = await getBoard(boardId);
-				members = await getBoardMembers(boardId);
-				invites = await getPendingInvites(boardId);
-
-				if (board) {
-					inviteLink = generateShareLink(boardId);
-					if (board.ownerId === user!.uid) {
-						quarantined = await getQuarantinedContent(boardId);
-						try {
-							joinRequests = await getPendingJoinRequests(boardId);
-						} catch {
-							// Join requests index may not be deployed yet
-						}
-					}
-				}
-			} catch {
-				showToast('Failed to load board settings');
-			} finally {
-				loading = false;
-			}
-		}
 
 		load();
 	});
 
 	async function copyInvite() {
-		await navigator.clipboard.writeText(inviteLink);
-		copied = true;
-		setTimeout(() => { copied = false; }, 2000);
-		showToast('Invite link copied!');
+		const ok = await copyToClipboard(inviteLink, 'Invite link copied!');
+		if (ok) { copied = true; setTimeout(() => { copied = false; }, 2000); }
 	}
 
 	async function handleModeration(contentId: string, action: 'approved' | 'quarantined') {
@@ -168,6 +233,17 @@
 			<Preloader />
 			<p class="text-muted text-sm mt-3">Loading...</p>
 		</Block>
+	{:else if loadError}
+		<Block class="!text-center !mt-12">
+			<div class="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-3">
+				<Icon icon="ph:warning-circle" class="text-3xl text-error" />
+			</div>
+			<p class="text-[15px] font-medium text-on-surface">Couldn't load settings</p>
+			<p class="text-[13px] text-muted mt-1">{loadError}</p>
+			<div class="mt-4">
+				<Button small rounded outline onClick={load}>Try again</Button>
+			</div>
+		</Block>
 	{:else if !board}
 		<Block class="!text-center !mt-12">
 			<p class="text-error text-sm">Board not found</p>
@@ -208,17 +284,19 @@
 			{#snippet summaryAfter()}
 				{#if isOwner}
 					<Toggle
-						checked={board?.enableLivingSummary ?? false}
+						checked={board?.enableLivingSummary !== false}
 						onChange={async () => {
 							if (!board) return;
 							hapticLight();
-							const newState = !board.enableLivingSummary;
+							// Current effective value (undefined → true per backend default)
+							const current = board.enableLivingSummary !== false;
+							const newState = !current;
 							await updateBoard(boardId, { enableLivingSummary: newState });
 							board = { ...board, enableLivingSummary: newState };
 						}}
 					/>
 				{:else}
-					<span class="text-xs text-muted">{board?.enableLivingSummary ? 'On' : 'Off'}</span>
+					<span class="text-xs text-muted">{board?.enableLivingSummary !== false ? 'On' : 'Off'}</span>
 				{/if}
 			{/snippet}
 			{#snippet commentsAfter()}
@@ -251,7 +329,7 @@
 			</List>
 
 			<!-- Summary options (when enabled + owner) -->
-			{#if board?.enableLivingSummary && isOwner}
+			{#if board?.enableLivingSummary !== false && isOwner}
 				<BlockTitle>Summary Style</BlockTitle>
 				<Block>
 					<Segmented strong rounded>
@@ -292,6 +370,118 @@
 				<Block class="!-mt-2">
 					<p class="text-[11px] text-muted">e.g., "track the budget" or "focus on what everyone is bringing"</p>
 				</Block>
+			{/if}
+
+			<!-- Board Experience -->
+			{#if isOwner}
+				<BlockTitle>Board Experience</BlockTitle>
+				{#snippet overrideToggleAfter()}
+					<Toggle
+						checked={overridesEnabled}
+						onChange={toggleBoardOverrides}
+					/>
+				{/snippet}
+				<List inset strong>
+					<ListItem
+						title="Override global defaults"
+						subtitle="Customize experience for this board"
+						after={overrideToggleAfter}
+					/>
+				</List>
+
+				{#if overridesEnabled}
+					<Block>
+						<Segmented strong rounded>
+							{#each ['calm', 'balanced', 'lively'] as preset}
+								<SegmentedButton
+									active={effectiveExperience.preset === preset}
+									onClick={() => selectBoardPreset(preset as 'calm' | 'balanced' | 'lively')}
+								>
+									{preset.charAt(0).toUpperCase() + preset.slice(1)}
+								</SegmentedButton>
+							{/each}
+						</Segmented>
+						{#if effectiveExperience.preset === 'custom'}
+							<p class="text-[11px] text-muted text-center mt-2">Custom — individual settings changed below</p>
+						{/if}
+					</Block>
+
+					<List inset strong outline>
+						<ListInput
+							outline
+							label="Scroll behavior"
+							type="select"
+							value={effectiveExperience.scrollBehavior}
+							onInput={(e) => saveBoardExperience({ scrollBehavior: e.target.value as ScrollBehavior })}
+							disabled={savingExperience}
+						>
+							<option value="load-more">Load more</option>
+							<option value="paged">Paged sections</option>
+							<option value="infinite">Infinite scroll</option>
+						</ListInput>
+
+						<ListInput
+							outline
+							label="Video playback"
+							type="select"
+							value={effectiveExperience.videoPlayback}
+							onInput={(e) => saveBoardExperience({ videoPlayback: e.target.value as VideoPlayback })}
+							disabled={savingExperience}
+						>
+							<option value="tap-to-play">Tap to play</option>
+							<option value="wifi-autoplay">Autoplay on Wi-Fi</option>
+							<option value="muted-autoplay">Autoplay muted</option>
+							<option value="full-autoplay">Full autoplay</option>
+						</ListInput>
+
+						<ListInput
+							outline
+							label="Feed order"
+							type="select"
+							value={effectiveExperience.feedOrder}
+							onInput={(e) => saveBoardExperience({ feedOrder: e.target.value as FeedOrder })}
+							disabled={savingExperience}
+						>
+							<option value="newest">Newest first</option>
+							<option value="oldest">Oldest first</option>
+							<option value="most-active">Most active</option>
+							<option value="curated">Board curated</option>
+						</ListInput>
+
+						<ListInput
+							outline
+							label="Board vs Chat"
+							type="select"
+							value={effectiveExperience.conversationMode}
+							onInput={(e) => saveBoardExperience({ conversationMode: e.target.value as ConversationMode })}
+							disabled={savingExperience}
+						>
+							<option value="board">Board mode</option>
+							<option value="hybrid">Hybrid mode</option>
+							<option value="chat">Chat mode</option>
+						</ListInput>
+
+						<ListInput
+							outline
+							label="Layout style"
+							type="select"
+							value={effectiveExperience.layoutStyle}
+							onInput={(e) => saveBoardExperience({ layoutStyle: e.target.value as LayoutStyle })}
+							disabled={savingExperience}
+						>
+							<option value="single-column">Single column</option>
+							<option value="masonry">Masonry</option>
+							<option value="compact-grid">Compact grid</option>
+						</ListInput>
+					</List>
+
+					<Block class="!-mt-1">
+						<Button small rounded clear onClick={resetBoardExperience}>
+							<Icon icon="ph:arrow-counter-clockwise" class="text-sm mr-1" />
+							<span class="text-xs">Reset to global defaults</span>
+						</Button>
+					</Block>
+				{/if}
 			{/if}
 
 			<!-- Notification preferences -->

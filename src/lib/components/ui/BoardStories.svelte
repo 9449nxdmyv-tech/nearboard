@@ -285,9 +285,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	.pt-safe {
-		padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
-	}
-</style>

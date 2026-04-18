@@ -14,6 +14,8 @@
 	import { MAX_VIDEO_DURATION_MS } from '$lib/config/constants';
 	import { userStore, showToast, queueVideoUpload } from '$lib/stores';
 	import { hapticLight, hapticMedium, hapticHeavy } from '$lib/utils/haptics';
+	import { useScrollLock } from '$lib/utils/scrollLock.svelte';
+	import SubmitButton from './SubmitButton.svelte';
 	import { onDestroy } from 'svelte';
 
 	let {
@@ -56,20 +58,7 @@
 	const timeRemaining = $derived(formatTime(MAX_SECONDS - elapsed));
 
 	// ─── Body scroll lock ────────────────────────────────────────────────
-	$effect(() => {
-		const scrollY = window.scrollY;
-		document.body.style.overflow = 'hidden';
-		document.body.style.position = 'fixed';
-		document.body.style.top = `-${scrollY}px`;
-		document.body.style.width = '100%';
-		return () => {
-			document.body.style.overflow = '';
-			document.body.style.position = '';
-			document.body.style.top = '';
-			document.body.style.width = '';
-			window.scrollTo(0, scrollY);
-		};
-	});
+	useScrollLock();
 
 	// ─── Keyboard shortcut ───────────────────────────────────────────────
 	function handleKeydown(e: KeyboardEvent) {
@@ -426,6 +415,7 @@
 			<!-- Top controls -->
 			<div class="relative z-20 flex items-center justify-between px-5 pt-safe sm:pt-4 pb-2">
 				<button onclick={handleClose}
+					aria-label="Close camera"
 					class="w-10 h-10 rounded-full bg-black/30 backdrop-blur-xl flex items-center justify-center text-white hover:bg-black/50 transition-all">
 					<Icon icon="ph:x-bold" class="text-lg" />
 				</button>
@@ -445,6 +435,7 @@
 				</div>
 
 				<button onclick={flipCamera} disabled={recording}
+					aria-label="Flip camera"
 					class="w-10 h-10 rounded-full bg-black/30 backdrop-blur-xl flex items-center justify-center text-white
 						hover:bg-black/50 disabled:opacity-30 transition-all">
 					<Icon icon="ph:camera-rotate-bold" class="text-lg" />
@@ -568,26 +559,16 @@
 
 					<!-- Save footer -->
 					<div class="p-4 pb-safe border-t border-border-light">
-						<Button large rounded onClick={submitVideo} disabled={busy}>
-							{#if busy}
-								<Icon icon="ph:circle-notch-bold" class="text-lg animate-spin mr-2" />
-								Uploading{uploadProgress > 0 ? ` ${Math.round(uploadProgress)}%` : '...'}
-							{:else}
-								Save Video
-							{/if}
-						</Button>
+						<SubmitButton
+							{busy}
+							onClick={submitVideo}
+							busyLabel={`Uploading${uploadProgress > 0 ? ` ${Math.round(uploadProgress)}%` : '...'}`}
+						>
+							Save Video
+						</SubmitButton>
 					</div>
 				</div>
 			</div>
 		</div>
 	{/if}
 </div>
-
-<style>
-	.pt-safe {
-		padding-top: max(env(safe-area-inset-top, 0px), 1rem);
-	}
-	.pb-safe {
-		padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
-	}
-</style>

@@ -10,6 +10,7 @@
 	import { Searchbar, Button } from 'konsta/svelte';
 	import { PAGE_TRANSITION } from '$lib/config/animations';
 	import { userStore, showToast } from '$lib/stores';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { inviteContacts, generateInviteLink } from '$lib/firebase';
 	import { updateDoc, doc } from 'firebase/firestore';
 	import { db } from '$lib/firebase/app';
@@ -92,14 +93,8 @@
 	}
 
 	async function copyLink() {
-		try {
-			await navigator.clipboard.writeText(inviteLink);
-			linkCopied = true;
-			showToast('Link copied!');
-			setTimeout(() => { linkCopied = false; }, 2000);
-		} catch {
-			showToast('Failed to copy link', 'error');
-		}
+		const ok = await copyToClipboard(inviteLink, 'Link copied!');
+		if (ok) { linkCopied = true; setTimeout(() => { linkCopied = false; }, 2000); }
 	}
 </script>
 

@@ -23,6 +23,7 @@
 	} = $props();
 
 	let comments = $state<CommentDoc[]>([]);
+	let failedAvatars = $state(new Set<string>());
 	let text = $state('');
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -84,11 +85,11 @@
 				>
 					<!-- Avatar (other users only) -->
 					{#if !isOwn}
-						{#if comment.authorPhotoURL}
+						{#if comment.authorPhotoURL && !failedAvatars.has(comment.id)}
 							<img src={comment.authorPhotoURL} alt=""
 								width="24" height="24" loading="lazy"
 								class="w-6 h-6 rounded-full shrink-0 object-cover mt-0.5"
-								onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+								onerror={() => { failedAvatars.add(comment.id); failedAvatars = new Set(failedAvatars); }} />
 						{:else}
 							<div class="w-6 h-6 rounded-full bg-surface-1 flex items-center justify-center text-[9px] text-muted font-semibold shrink-0 mt-0.5">
 								{avatarInitial(comment.authorName)}
@@ -111,7 +112,7 @@
 							{#if isBoardOwner || isOwn}
 								<button
 									onclick={() => handleDelete(comment.id)}
-									class="text-[10px] text-muted/40 hover:text-error active:text-error transition-colors"
+									class="text-[10px] text-muted/60 hover:text-error active:text-error transition-colors p-0.5"
 									aria-label="Delete comment"
 								>
 									<Icon icon="ph:trash" class="text-xs" />

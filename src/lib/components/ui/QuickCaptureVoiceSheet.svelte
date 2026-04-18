@@ -7,7 +7,7 @@
                Mobile: fullscreen. Desktop: centered panel.
 -->
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import Icon from '@iconify/svelte';
 	import { Navbar, NavbarBackLink, Link, Button } from 'konsta/svelte';
@@ -15,6 +15,8 @@
 	import { addContent } from '$lib/firebase';
 	import { userStore, showToast } from '$lib/stores';
 	import { hapticSuccess, hapticLight, hapticMedium, hapticHeavy } from '$lib/utils/haptics';
+	import QuickCaptureShell from './QuickCaptureShell.svelte';
+	import SubmitButton from './SubmitButton.svelte';
 	import type { VoiceContentDoc } from '$lib/types';
 	import { onDestroy } from 'svelte';
 
@@ -59,25 +61,9 @@
 	const progressPct = $derived(Math.min(100, (elapsed / MAX_SECONDS) * 100));
 	const timeDisplay = $derived(formatTime(elapsed));
 
-	// ─── Body scroll lock ────────────────────────────────────────────────
-	$effect(() => {
-		const scrollY = window.scrollY;
-		document.body.style.overflow = 'hidden';
-		document.body.style.position = 'fixed';
-		document.body.style.top = `-${scrollY}px`;
-		document.body.style.width = '100%';
-		return () => {
-			document.body.style.overflow = '';
-			document.body.style.position = '';
-			document.body.style.top = '';
-			document.body.style.width = '';
-			window.scrollTo(0, scrollY);
-		};
-	});
-
 	// ─── Keyboard ────────────────────────────────────────────────────────
+	// Escape is handled by QuickCaptureShell; we only extend with Space for record/stop.
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') handleClose();
 		if (e.key === ' ' && phase !== 'review') {
 			e.preventDefault();
 			if (phase === 'ready') startRecording();
@@ -259,40 +245,28 @@
 		cleanup();
 		onClose();
 	}
-
-	function handleBackdropClick(e: MouseEvent) {
-		if (e.target === e.currentTarget) handleClose();
-	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div
-	class="fixed inset-0 z-[60] flex items-stretch sm:items-center sm:justify-center"
-	onclick={handleBackdropClick}
-	transition:fade={{ duration: 200 }}
->
-	<div class="fixed inset-0 bg-black sm:bg-black/60 sm:backdrop-blur-md" aria-hidden="true"></div>
+{#snippet navLeft()}
+	{#if phase === 'review'}
+		<Link onClick={discard}>
+			<Icon icon="ph:arrow-counter-clockwise-bold" class="w-4 h-4 mr-1" />
+			Retake
+		</Link>
+	{:else}
+		<NavbarBackLink onClick={handleClose} text="Close" />
+	{/if}
+{/snippet}
 
-	<div
-		class="relative z-10 w-full h-full sm:h-auto sm:max-w-xl sm:rounded-2xl sm:shadow-2xl sm:ring-1 sm:ring-white/10
-			bg-surface flex flex-col overflow-hidden"
-		in:fly={{ y: 40, duration: 300, easing: quintOut }}
-	>
-		<!-- Header -->
-		{#snippet navLeft()}
-			{#if phase === 'review'}
-				<Link onClick={discard}>
-					<Icon icon="ph:arrow-counter-clockwise-bold" class="w-4 h-4 mr-1" />
-					Retake
-				</Link>
-			{:else}
-				<NavbarBackLink onClick={handleClose} text="Close" />
-			{/if}
-		{/snippet}
-		<Navbar title="Voice Note" left={navLeft} />
+<QuickCaptureShell
+	onClose={handleClose}
+	closeOnBackdrop={false}
+	backdropClass="bg-black sm:bg-black/60 sm:backdrop-blur-md"
+	containerClass="sm:max-w-xl sm:rounded-2xl sm:shadow-2xl sm:ring-1 sm:ring-white/10"
+>
+	<Navbar title="Voice Note" left={navLeft} />
 
 		<!-- Content -->
 		<div class="flex-1 flex flex-col items-center justify-center px-6 sm:px-8 py-8 sm:py-10 gap-6">
@@ -426,25 +400,13 @@
 			{/if}
 		</div>
 
-		<!-- Save footer (review phase only) -->
-		{#if phase === 'review'}
-			<div class="p-4 pb-safe border-t border-border-light">
-				<Button large rounded onClick={submitVoice} disabled={busy}>
-					{#if busy}
-						<Icon icon="ph:circle-notch-bold" class="text-lg animate-spin mr-2" />
-						Saving...
-					{:else}
-						Save Voice Note
-					{/if}
-				</Button>
-			</div>
-		{/if}
-	</div>
-</div>
-
-<style>
-	.pb-safe {
-		padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
-	}
-</style>
+	<!-- Save footer (review phase only) -->
+	{#if phase === 'review'}
+		<div class="p-4 pb-safe border-t border-border-light">
+			<SubmitButton {busy} onClick={submitVoice}>
+				Save Voice Note
+			</SubmitButton>
+		</div>
+	{/if}
+</QuickCaptureShell>
 

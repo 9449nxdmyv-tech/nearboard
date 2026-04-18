@@ -21,7 +21,7 @@
 	import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 	import { initializeApp, getApps } from 'firebase/app';
 	import type { PageMetadata } from '$lib/types/api';
-	import { refineContentType } from '$lib/utils/contentDetector';
+	import { refineDetection as refineContentType } from '$lib/utils/contentDetection';
 	import { extractDomain, faviconUrl } from '$lib/utils/urlUtils';
 
 	// Firebase init (reads same VITE_ env vars baked at build time)

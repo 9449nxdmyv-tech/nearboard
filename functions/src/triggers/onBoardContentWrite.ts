@@ -58,6 +58,12 @@ export const onBoardContentWrite = onDocumentWritten(
 				const summaryEnabled = board.enableLivingSummary ?? true;
 				if (summaryEnabled) {
 					updates.summaryDirty = true;
+					// Backfill: processDirtyBoards filters `where enableLivingSummary == true`,
+					// which excludes boards where the field is undefined (pre-Living-Summary boards).
+					// Set it explicitly so the scheduled job can see them.
+					if (board.enableLivingSummary === undefined) {
+						updates.enableLivingSummary = true;
+					}
 				}
 
 				txn.update(boardRef, updates);
@@ -122,6 +128,9 @@ export const onBoardContentWrite = onDocumentWritten(
 			const summaryEnabled = (board.enableLivingSummary ?? true) as boolean;
 			if (summaryEnabled) {
 				updates.summaryDirty = true;
+				if (board.enableLivingSummary === undefined) {
+					updates.enableLivingSummary = true;
+				}
 			}
 			await boardRef.update(updates);
 		}
@@ -154,10 +163,26 @@ interface PollOptionData {
 }
 
 /**
+ * Truncate long free-text at a sentence boundary when possible.
+ * Prefers ending on ., !, or ? within the 200–300 char window so AI context
+ * reads as a complete thought rather than a mid-sentence hard cut.
+ */
+function smartTruncate(text: string, maxLen = 300): string {
+	if (!text) return '';
+	if (text.length <= maxLen) return text;
+	const window = text.slice(0, maxLen);
+	// Last sentence-ending punctuation followed by whitespace (inside window)
+	const match = window.match(/^[\s\S]*[.!?](?=\s)/);
+	if (match && match[0].length >= 200) return match[0].trimEnd() + ' …';
+	// Fall back to hard cut
+	return window.trimEnd() + '…';
+}
+
+/**
  * Serializes a content document into a rich text representation for the AI prompt.
  */
 export function serializeContent(data: Record<string, unknown>): string {
-	const cleanText = (text: string) => text && text.length > 200 ? text.slice(0, 200) + '...' : (text || '');
+	const cleanText = (text: string) => smartTruncate(text || '', 300);
 	const author = (data.authorName as string) || '';
 	const authorTag = author ? ` (by ${author})` : '';
 
@@ -169,8 +194,9 @@ export function serializeContent(data: Record<string, unknown>): string {
 			const checked = items.filter((i) => i.checked).length;
 			const total = items.length;
 			const progress = total > 0 ? ` (${checked}/${total} done)` : '';
-			const itemTexts = items.slice(0, 10).map((i) => `${i.checked ? '[x]' : '[ ]'} ${cleanText(i.text)}`).join(', ');
-			return `[List]${authorTag} ${data.title}${progress}: ${itemTexts}`;
+			const remaining = total > 20 ? ` (+${total - 20} more)` : '';
+			const itemTexts = items.slice(0, 20).map((i) => `${i.checked ? '[x]' : '[ ]'} ${cleanText(i.text)}`).join(', ');
+			return `[List]${authorTag} ${data.title}${progress}: ${itemTexts}${remaining}`;
 		}
 		case 'link': {
 			const desc = data.description ? ` — ${cleanText(data.description as string)}` : '';
@@ -272,40 +298,45 @@ export async function updateBoardSummary(
 	const cooldownMs = bypassCooldown ? MANUAL_REGEN_COOLDOWN_MS : SUMMARY_COOLDOWN_MS;
 
 	// ─── Cooldown: skip if last summary was generated recently ────────────
+	// processDirtyBoards clears summaryDirty before calling us (atomic claim),
+	// so we must re-set it here — otherwise the board stays stuck until the
+	// next content write.
 	if (!bypassCooldown && Date.now() - lastSummaryAt < cooldownMs) {
-		// Leave summaryDirty=true so it gets picked up on the next cycle
+		await boardRef.update({ summaryDirty: true }).catch(() => {});
 		return;
 	}
 
-	// Fetch new content using cursor — ensures no items are missed for very active boards.
+	// ─── Fetch full board context (most recent 50 items) ──────────────────
+	// Regardless of when the last summary ran, always send the AI a snapshot
+	// of the current board so it can merge/reconcile with the previous summary.
+	// The cache key (below) ensures we skip the AI call when nothing changed.
 	const contentCol = db.collection(`boards/${boardId}/content`);
-	const lastSummaryTimestamp = board.livingSummary?.updatedAt ?? null;
+	const contentSnap = await contentCol.orderBy('createdAt', 'desc').limit(50).get();
 
-	const newContentQuery = lastSummaryTimestamp
-		? contentCol.where('createdAt', '>', lastSummaryTimestamp).orderBy('createdAt', 'desc').limit(100)
-		: contentCol.orderBy('createdAt', 'desc').limit(50);
-
-	const contentSnap = await newContentQuery.get();
-
-	const newItems: string[] = [];
+	const items: string[] = [];
 	for (const doc of contentSnap.docs) {
-		newItems.push(serializeContent(doc.data()));
+		items.push(serializeContent(doc.data()));
 	}
 
-	// Skip regeneration if nothing new was added
-	if (newItems.length === 0) {
+	// ─── Skip AI for tiny boards ──────────────────────────────────────────
+	// Onboarding boards are seeded with a few items but don't yet reflect the
+	// user's real intent — wait until they've added more before summarizing.
+	const isOnboarding = board.isOnboarding === true;
+	const minItemsForAI = isOnboarding ? 5 : 3;
+	if (items.length < minItemsForAI) {
 		await boardRef.update({ summaryDirty: false });
 		return;
 	}
 
-	// Check cache for identical content
-	const contentHash = hashContent(newItems);
+	// ─── Cache check ──────────────────────────────────────────────────────
+	// Hash the serialized items; if identical to last run, skip the AI call
+	// and just touch updatedAt so the cooldown resets.
+	const contentHash = hashContent(items);
 	const cached = await getCachedSummary(boardRef, contentHash);
 	if (cached) {
 		console.log(`Using cached summary for board ${boardId}`);
 		await boardRef.update({
 			summaryDirty: false,
-			// Update timestamp but keep existing content
 			livingSummary: {
 				...board.livingSummary,
 				updatedAt: FieldValue.serverTimestamp()
@@ -313,10 +344,6 @@ export async function updateBoardSummary(
 		});
 		return;
 	}
-
-	// Count total existing items for context (cheap aggregation)
-	const totalSnap = await contentCol.count().get();
-	const existingCount = { total: Math.max(0, totalSnap.data().count - newItems.length) };
 
 	// Dynamic import to avoid loading AI SDK in the trigger cold start
 	const { generateText } = await import('../utils/aiService.js');
@@ -327,27 +354,40 @@ export async function updateBoardSummary(
 	const templateFocus = TEMPLATE_FOCUS[template] || TEMPLATE_FOCUS['blank'];
 	const userFocus = (board['summaryFocus'] as string)?.trim() || '';
 
-	const styleInstructions: Record<string, string> = {
-		'paragraph': 'Keep it concise (2-3 short paragraphs), professional, and warm.',
-		'bullets': 'Use a bulleted list (lines starting with "- ") for key points and updates. One item per line, no sub-bullets.',
-		'action-items': 'Format as a checklist. Use "[ ] Task description" for pending items and "[x] Task description" for completed items. One item per line.'
+	// ─── Style-specific SUMMARY formatting ────────────────────────────────
+	// Each style produces visibly distinct output. The structural parser
+	// (HEADLINE / HIGHLIGHTS / SUMMARY / BRIEFING) stays the same — only the
+	// SUMMARY body shape changes.
+	const styleFormats: Record<string, string> = {
+		'paragraph':
+			`Write 2–3 short paragraphs of flowing prose. No bullets, no checkboxes, no headings. ` +
+			`Connect ideas with complete sentences. Example shape:\n` +
+			`  The team locked in the venue for March 14. Catering is still open — two quotes in, waiting on the third.\n\n` +
+			`  Attendee list grew to 42; Sarah added six more names from the partner team.`,
+		'bullets':
+			`Write a flat bulleted list. Every line MUST start with "- " (dash + space). ` +
+			`No paragraphs, no checkboxes, no sub-bullets. Group related facts when possible. ` +
+			`Example shape:\n` +
+			`  - Venue confirmed for March 14\n` +
+			`  - Catering: 2 quotes received, waiting on third\n` +
+			`  - 42 attendees, +6 from partner team`,
+		'action-items':
+			`Write a checklist of tasks. Every line MUST start with "[ ] " for pending or "[x] " for done. ` +
+			`Focus on what still needs to happen, not on narrative. No paragraphs, no plain bullets. ` +
+			`Example shape:\n` +
+			`  [x] Venue confirmed for March 14\n` +
+			`  [ ] Pick caterer from 3 quotes\n` +
+			`  [ ] Finalize attendee list (currently 42)`
 	};
-	const styleInstruction = styleInstructions[style] ?? styleInstructions['paragraph'];
-
-	// Don't re-send existing content — the previous summary already covers it.
-	// Just tell the AI how much context exists so it can judge significance.
-	const existingNote = existingCount.total > 0
-		? `\n(The board also has ${existingCount.total} older items already covered by the current summary.)`
-		: '';
+	const styleFormat = styleFormats[style] ?? styleFormats['paragraph'];
 
 	const prompt = `You are summarizing the board "${boardName}" (a ${template} board).
 
-The current summary is:
+Previous summary (for continuity — merge and refine, don't start from scratch):
 ${prevSummary}
 
-NEW items added since the last summary (focus on these):
-${newItems.join('\n')}
-${existingNote}
+Current board content (${items.length} most recent items):
+${items.join('\n')}
 
 ${templateFocus}${userFocus ? `\n\nThe board owner specifically asked the summary to: ${userFocus}` : ''}
 
@@ -359,14 +399,13 @@ HIGHLIGHTS:
 - (what's new bullet 2)
 - (what's new bullet 3, optional — only if there's a third notable change)
 SUMMARY:
-(the full updated summary below)
+(the full updated summary below, formatted per the style rules)
 BRIEFING: (a warm, conversational 2-sentence notification message, max 40 words, using first names if available — like a helpful friend telling someone what's new)
 
-Rules for the SUMMARY section:
-- Style preference: ${style}. ${styleInstruction}
+Rules for the SUMMARY section (STYLE = ${style}):
+${styleFormat}
 - Do NOT use markdown formatting. No **bold**, no *italic*, no ## headers, no backticks. Write plain text only.
-- Don't re-describe things already covered in the previous summary unless they changed.
-- If the new items are minor, keep the summary mostly the same and weave in the new information naturally.
+- Refine the previous summary using the current content; don't just append.
 
 Rules for HEADLINE:
 - Must be a single line, under 80 characters.
@@ -384,7 +423,14 @@ Rules for BRIEFING:
 - Must be on a single line after "BRIEFING: ".`;
 
 	const raw = await generateText(prompt, 350);
-	if (!raw) return;
+	if (!raw) {
+		// Groq call failed or returned empty — re-queue so the next cycle retries.
+		// Without this, summaryDirty stays false (cleared by processDirtyBoards)
+		// and the summary is permanently stuck on "Generating summary…".
+		console.error(`AI returned empty response for board ${boardId} — re-queuing`);
+		await boardRef.update({ summaryDirty: true }).catch(() => {});
+		return;
+	}
 
 	// Parse structured response
 	const headlineMatch = raw.match(/^HEADLINE:\s*(.+)$/m);

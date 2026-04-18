@@ -16,7 +16,9 @@
 		showUserLocation = false,
 		markerColor = '#6c63ff',
 		height = '200px',
-		onMapClick
+		class: className = '',
+		onMapClick,
+		onMapError
 	}: {
 		latitude: number;
 		longitude: number;
@@ -25,7 +27,9 @@
 		showUserLocation?: boolean;
 		markerColor?: string;
 		height?: string;
+		class?: string;
 		onMapClick?: (lat: number, lng: number) => void;
+		onMapError?: () => void;
 	} = $props();
 
 	let containerEl = $state<HTMLDivElement | undefined>();
@@ -42,14 +46,23 @@
 			const maplibregl = (await import('maplibre-gl')).default;
 			if (destroyed) return;
 
-			map = new maplibregl.Map({
-				container: containerEl!,
-				style: 'https://tiles.openfreemap.org/styles/liberty',
-				center: [longitude, latitude],
-				zoom,
-				interactive,
-				attributionControl: false
-			});
+			try {
+				map = new maplibregl.Map({
+					container: containerEl!,
+					style: 'https://tiles.openfreemap.org/styles/liberty',
+					center: [longitude, latitude],
+					zoom,
+					interactive,
+					attributionControl: false
+				});
+
+				map.on('error', () => {
+					if (!destroyed) onMapError?.();
+				});
+			} catch {
+				if (!destroyed) onMapError?.();
+				return;
+			}
 
 			// Main location marker
 			marker = new maplibregl.Marker({ color: markerColor })
@@ -106,7 +119,7 @@
 
 <div
 	bind:this={containerEl}
-	class="w-full rounded-card overflow-hidden"
+	class="w-full rounded-card overflow-hidden {className}"
 	style="height: {height};"
 	role={interactive ? 'application' : 'img'}
 	aria-label="Map showing {latitude.toFixed(4)}, {longitude.toFixed(4)}"

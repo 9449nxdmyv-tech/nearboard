@@ -103,6 +103,23 @@ export interface VideoEnrichment {
 	siteName: string | null;
 }
 
+/** Structured product data extracted from JSON-LD / page markup. */
+export interface ProductEnrichment {
+	kind: 'product';
+	/** Brand or manufacturer name (from schema.org `brand`). */
+	brand: string | null;
+	/** Aggregate rating value (e.g., "4.5"). */
+	rating: string | null;
+	/** Number of reviews aggregated into the rating. */
+	ratingCount: number | null;
+	/** Raw availability code from schema.org (e.g., "InStock", "OutOfStock"). */
+	availability: 'InStock' | 'OutOfStock' | 'PreOrder' | 'BackOrder' | 'Discontinued' | 'LimitedAvailability' | null;
+	/** ISO 4217 currency code (e.g., "USD") when available. */
+	currency: string | null;
+	/** Category label if present. */
+	category: string | null;
+}
+
 /** Union of all enrichment types */
 export type LinkEnrichment =
 	| RecipeEnrichment
@@ -112,7 +129,8 @@ export type LinkEnrichment =
 	| MusicEnrichment
 	| ArticleEnrichment
 	| GithubEnrichment
-	| VideoEnrichment;
+	| VideoEnrichment
+	| ProductEnrichment;
 
 /** AI-powered content classification */
 export interface ContentClassification {

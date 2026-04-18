@@ -18,12 +18,19 @@
 	let {
 		board,
 		isAdmin = false,
-		briefingAudioUrl = null
+		briefingAudioUrl = null,
+		contentCount = undefined
 	}: {
 		board: BoardDoc;
 		isAdmin: boolean;
 		briefingAudioUrl?: string | null;
+		/** Visible item count (drives the empty-state messaging). */
+		contentCount?: number;
 	} = $props();
+
+	/** AI skips boards under this threshold — see Fix 5 in onBoardContentWrite.ts. */
+	const MIN_ITEMS_FOR_AI = 3;
+	const MIN_ITEMS_FOR_AI_ONBOARDING = 5;
 
 	let expanded = $state(false);
 	let isEditing = $state(false);
@@ -33,6 +40,13 @@
 	let audioEl: HTMLAudioElement | undefined = $state();
 	let contentEl: HTMLDivElement | undefined = $state();
 	let canScroll = $state(false);
+	/** Auto-recovery guard: only kick a regen once per mount to avoid loops. */
+	let hasCheckedStuckState = $state(false);
+	// Local-only toggle state for action-item checkboxes. Keyed by item text so
+	// the same items stay ticked across re-renders; resets when the AI regenerates
+	// the summary (content string changes).
+	let completedItems = $state(new Set<string>());
+	let lastSyncedContent = $state('');
 
 	const content = $derived(board.livingSummary?.content || '');
 	const headline = $derived(board.livingSummary?.headline || '');
@@ -109,6 +123,26 @@
 		});
 	});
 
+	// ─── Sync completedItems Set with AI-parsed checked state ──────────────
+	// When the AI regenerates the summary, wipe any stale toggles and seed the
+	// Set with whatever the AI marked as done. User toggles then layer on top.
+	$effect(() => {
+		if (content === lastSyncedContent) return;
+		const next = new Set<string>();
+		for (const line of parsedLines()) {
+			if (line.type === 'action' && line.checked) next.add(line.text);
+		}
+		completedItems = next;
+		lastSyncedContent = content;
+	});
+
+	function toggleActionItem(text: string) {
+		const next = new Set(completedItems);
+		if (next.has(text)) next.delete(text);
+		else next.add(text);
+		completedItems = next;
+	}
+
 	/** Split paragraph content into rendered HTML paragraphs */
 	const paragraphs = $derived((): string[] => {
 		if (!content.trim()) return [];
@@ -118,11 +152,47 @@
 			.map(p => renderInline(p));
 	});
 
-	/** Preview line for collapsed state — prefer headline, fall back to first line of content */
+	/** True when the board has fewer items than the AI threshold — summary is paused, not pending. */
+	const tooSmallForSummary = $derived.by(() => {
+		if (contentCount === undefined) return false;
+		const threshold = board.isOnboarding ? MIN_ITEMS_FOR_AI_ONBOARDING : MIN_ITEMS_FOR_AI;
+		return contentCount < threshold;
+	});
+
+	// ─── Auto-recovery for stuck Living Summaries ─────────────────────────
+	// If the board has enough items, no summary content, AND nothing pending,
+	// the board is stuck (usually from a previous deploy where the summary
+	// generation failed silently). Kick a regen once per mount to self-heal.
+	// Owner-only to prevent thundering-herd when multiple members view a stuck board.
+	$effect(() => {
+		if (hasCheckedStuckState) return;
+		if (!isAdmin || contentCount === undefined) return;
+		const isStuck =
+			!content.trim() &&
+			!tooSmallForSummary &&
+			board.summaryDirty !== true &&
+			board.enableLivingSummary !== false;
+		if (isStuck) {
+			hasCheckedStuckState = true;
+			requestSummaryRegeneration(board.id).catch(() => {});
+		} else if (content.trim() || tooSmallForSummary) {
+			// Mark checked so we don't keep probing once state is healthy.
+			hasCheckedStuckState = true;
+		}
+	});
+
+	/** Preview line for collapsed state — prefer headline, fall back to first line of content. */
 	const previewLine = $derived(() => {
 		if (headline) return headline.length > 80 ? headline.slice(0, 80) + '…' : headline;
 		const raw = content.trim();
-		if (!raw) return 'Generating summary…';
+		if (!raw) {
+			if (tooSmallForSummary) {
+				const threshold = board.isOnboarding ? MIN_ITEMS_FOR_AI_ONBOARDING : MIN_ITEMS_FOR_AI;
+				const remaining = Math.max(1, threshold - (contentCount ?? 0));
+				return `Add ${remaining} more item${remaining === 1 ? '' : 's'} to unlock a summary`;
+			}
+			return 'Generating summary…';
+		}
 		const first = raw.split('\n').find(l => l.trim().length > 0) ?? raw;
 		const cleaned = stripMarkdown(first).replace(/^[-•\[\]x✓✗☐☑☒\s]+/i, '').trim();
 		return cleaned.length > 60 ? cleaned.slice(0, 60) + '…' : cleaned;
@@ -276,9 +346,16 @@
 									>{@html para}</p>
 								{/each}
 								{#if paragraphs().length === 0}
-									<div class="flex items-center gap-2 py-4">
-										<Icon icon="ph:circle-notch" class="text-accent text-sm animate-spin" />
-										<p class="text-[13px] text-muted italic">Generating a summary of this board…</p>
+									<div class="flex items-start gap-2 py-4">
+										{#if tooSmallForSummary}
+											<Icon icon="ph:sparkle" class="text-accent/50 text-sm mt-0.5" />
+											<p class="text-[13px] text-muted leading-relaxed">
+												Summaries unlock once you add a few more items. Keep capturing — notes, links, photos — and this card will fill in automatically.
+											</p>
+										{:else}
+											<Icon icon="ph:circle-notch" class="text-accent text-sm animate-spin mt-0.5" />
+											<p class="text-[13px] text-muted italic">Generating a summary of this board…</p>
+										{/if}
 									</div>
 								{/if}
 							</div>
@@ -320,20 +397,25 @@
 											<h4 class="text-xs font-bold text-primary tracking-wide">{line.text}</h4>
 										</div>
 									{:else if line.type === 'action'}
-										<div
-											class="flex items-start gap-2.5 py-1.5 px-2 -mx-2 rounded-lg transition-colors
-												{line.checked ? 'bg-success/5' : 'hover:bg-accent/3'}"
+										{@const isChecked = completedItems.has(line.text)}
+										<button
+											type="button"
+											class="w-full text-left flex items-start gap-2.5 py-1.5 px-2 -mx-2 rounded-lg transition-colors cursor-pointer
+												{isChecked ? 'bg-success/5 hover:bg-success/10' : 'hover:bg-accent/5'}"
 											in:fly={{ y: 6, duration: 250, delay: i * 40 }}
+											onclick={(e: MouseEvent) => { e.stopPropagation(); toggleActionItem(line.text); }}
+											aria-pressed={isChecked}
+											aria-label={isChecked ? `Mark "${line.text}" as not done` : `Mark "${line.text}" as done`}
 										>
-											{#if line.checked}
+											{#if isChecked}
 												<Icon icon="ph:check-circle-fill" class="text-success text-base shrink-0 mt-0.5" />
 											{:else}
-												<Icon icon="ph:circle" class="text-accent/30 text-base shrink-0 mt-0.5" />
+												<Icon icon="ph:circle" class="text-accent/40 text-base shrink-0 mt-0.5" />
 											{/if}
 											<span
-												class="summary-prose text-[13px] leading-relaxed {line.checked ? 'text-muted line-through' : 'text-primary'}"
+												class="summary-prose text-[13px] leading-relaxed {isChecked ? 'text-muted line-through' : 'text-primary'}"
 											>{@html line.html}</span>
-										</div>
+										</button>
 									{:else}
 										<div
 											class="py-1 pl-1"

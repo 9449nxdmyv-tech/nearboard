@@ -9,6 +9,7 @@
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { Toggle } from 'konsta/svelte';
 	import { hapticLight } from '$lib/utils/haptics';
+	import { copyToClipboard } from '$lib/utils/clipboard';
 	import { userStore, notificationStore, showToast, requestNotificationPermission, globalExperience } from '$lib/stores';
 	import { signOut, uploadAvatar, updateDisplayName, updatePhotoURL, updateUserFields, deleteAccount } from '$lib/firebase';
 	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
@@ -77,9 +78,8 @@
 	const canNativeShare = $derived(typeof navigator !== 'undefined' && !!navigator.share);
 
 	async function copyReferralLink() {
-		await navigator.clipboard.writeText(referralLink);
-		referralCopied = true;
-		setTimeout(() => { referralCopied = false; }, 2000);
+		const ok = await copyToClipboard(referralLink, 'Referral link copied!');
+		if (ok) { referralCopied = true; setTimeout(() => { referralCopied = false; }, 2000); }
 	}
 
 	async function handleSave() {

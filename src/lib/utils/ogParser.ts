@@ -9,7 +9,7 @@ import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import DOMPurify from 'isomorphic-dompurify';
 
-import type { PageMetadata, LinkEnrichment, RecipeEnrichment, MovieEnrichment, BookEnrichment, PlaceEnrichment, ArticleEnrichment, MusicEnrichment, GithubEnrichment } from '$lib/types';
+import type { PageMetadata, LinkEnrichment, RecipeEnrichment, MovieEnrichment, BookEnrichment, PlaceEnrichment, ArticleEnrichment, MusicEnrichment, GithubEnrichment, ProductEnrichment } from '$lib/types';
 import {
 	RECIPE_DOMAINS, MOVIE_DOMAINS, BOOK_DOMAINS, PLACE_DOMAINS,
 	MUSIC_DOMAINS, ARTICLE_DOMAINS, GITHUB_DOMAINS,
@@ -363,10 +363,86 @@ function extractEnrichmentFromJsonLd(data: unknown): LinkEnrichment | null {
 		} satisfies GithubEnrichment;
 	}
 
+	// ── Product / IndividualProduct ──
+	// Kept last so more specific types (Recipe on a product page, Book on a
+	// bookseller page) win if present.
+	if (hasType('Product') || hasType('IndividualProduct') || hasType('ProductGroup') || hasType('ProductModel')) {
+		const rating = obj.aggregateRating as Record<string, unknown> | undefined;
+		const category = Array.isArray(obj.category)
+			? (obj.category as unknown[]).map(c => str(c)).filter(Boolean).join(' › ') || null
+			: str(obj.category);
+
+		const availability = scanProductOffers(obj.offers, (o) => normalizeAvailability(o.availability)) ?? null;
+		const currency = scanProductOffers(obj.offers, (o) => str(o.priceCurrency)) ?? str(obj.priceCurrency);
+
+		const product: ProductEnrichment = {
+			kind: 'product',
+			brand: extractBrand(obj.brand) ?? extractBrand(obj.manufacturer),
+			rating: rating ? str(rating.ratingValue) : null,
+			ratingCount: rating?.reviewCount
+				? parseInt(String(rating.reviewCount), 10) || null
+				: rating?.ratingCount
+					? parseInt(String(rating.ratingCount), 10) || null
+					: null,
+			availability,
+			currency: currency ? currency.toUpperCase() : null,
+			category
+		};
+
+		// Only return enrichment if we have at least one non-kind field — otherwise
+		// the card gets nothing useful and an empty enrichment pill row is noise.
+		const hasData = product.brand || product.rating || product.availability || product.currency || product.category;
+		if (hasData) return product;
+	}
+
 	// Recurse into mainEntity
 	if (obj.mainEntity) return extractEnrichmentFromJsonLd(obj.mainEntity);
 	if (obj.mainEntityOfPage) return extractEnrichmentFromJsonLd(obj.mainEntityOfPage);
 
+	return null;
+}
+
+/** Normalize schema.org availability URLs/labels to enumerated values. */
+const PRODUCT_AVAILABILITY_CODES: Array<ProductEnrichment['availability']> = [
+	'InStock', 'OutOfStock', 'PreOrder', 'BackOrder', 'Discontinued', 'LimitedAvailability'
+];
+
+function normalizeAvailability(v: unknown): ProductEnrichment['availability'] {
+	if (typeof v !== 'string') return null;
+	const tail = v.split('/').pop()?.trim() ?? '';
+	const match = PRODUCT_AVAILABILITY_CODES.find(code => code && code.toLowerCase() === tail.toLowerCase());
+	return match ?? null;
+}
+
+/** Extract brand name from string, `{ name }`, or an array of either. */
+function extractBrand(v: unknown): string | null {
+	if (!v) return null;
+	if (typeof v === 'string') return v.trim() || null;
+	if (Array.isArray(v)) {
+		for (const item of v) {
+			const name = extractBrand(item);
+			if (name) return name;
+		}
+		return null;
+	}
+	if (typeof v === 'object') return str((v as Record<string, unknown>).name);
+	return null;
+}
+
+/** Walk nested offer structures to pick a field. */
+function scanProductOffers<T>(offers: unknown, pick: (o: Record<string, unknown>) => T | null): T | null {
+	if (!offers || typeof offers !== 'object') return null;
+	const list = Array.isArray(offers) ? offers : [offers];
+	for (const offer of list) {
+		if (!offer || typeof offer !== 'object') continue;
+		const o = offer as Record<string, unknown>;
+		const picked = pick(o);
+		if (picked) return picked;
+		if (o.offers) {
+			const nested = scanProductOffers(o.offers, pick);
+			if (nested) return nested;
+		}
+	}
 	return null;
 }
 
@@ -588,10 +664,14 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 		get(/<meta[^>]+content="([^"]*)"[^>]+(?:property|name)="og:site_name"/i);
 
 	// Extract generic author for videos (YouTube channel, Vimeo user, etc.)
-	const videoAuthor = 
+	const videoAuthor =
 		get(/<meta[^>]+name="author"[^>]+content="([^"]*)"/i) ??
 		get(/<link[^>]+itemprop="name"[^>]+content="([^"]*)"/i) ??
 		get(/<meta[^>]+(?:property|name)="twitter:creator"[^>]+content="([^"]*)"/i);
+
+	// Derive the URL domain up front — used by video/article/recipe/music/etc. fallback blocks below.
+	let urlDomain = '';
+	try { urlDomain = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { /* */ }
 
 	// Video enrichment fallback
 	if (!enrichment && (type === 'video' || urlDomain.includes('youtube.com') || urlDomain.includes('youtu.be') || urlDomain.includes('vimeo.com'))) {
@@ -604,9 +684,6 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 			siteName: siteName ?? (urlDomain.includes('youtube') ? 'YouTube' : urlDomain.includes('vimeo') ? 'Vimeo' : null)
 		};
 	}
-
-	let urlDomain = '';
-	try { urlDomain = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { /* */ }
 
 	// Article fallback
 	if (!enrichment && (type === 'article' || ogType === 'article')) {

@@ -17,7 +17,7 @@ import { parseChat } from '$lib/utils/whatsAppParser';
 import { filterMessages } from '$lib/utils/whatsAppFilter';
 import { addContent } from './boardService';
 import { uploadPhoto } from './storageService';
-import { detectContentType } from '$lib/utils/contentDetector';
+import { detectContentType } from '$lib/utils/contentDetection';
 import type {
 	ClassifiedWhatsAppCard,
 	WhatsAppImportResult,

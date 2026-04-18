@@ -16,8 +16,10 @@
 		isPlaceEnrichment,
 		isMusicEnrichment,
 		isArticleEnrichment,
-		isGithubEnrichment
+		isGithubEnrichment,
+		isProductEnrichment
 	} from '$lib/utils/enrichmentGuards';
+	import { getLinkVariant } from '$lib/utils/linkVariant';
 	import type { LinkEnrichment } from '$lib/types/api';
 	import Icon from '@iconify/svelte';
 	import MetadataPill from './link/MetadataPill.svelte';
@@ -27,13 +29,14 @@
 		id, boardId, url, title, description, image, domain, favicon, enrichment, price,
 		authorId, authorName, authorPhotoURL, createdAt,
 		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments,
-		onDelete, onShare
+		onDelete, onShare, onCommentClick
 	}: LinkCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
 		acknowledgments?: Record<string, { type: 'heart'; createdAt: any }>;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 		price?: string;
 	} = $props();
 
@@ -51,6 +54,20 @@
 			if (isMusicEnrichment(enrichment)) return 'music';
 			if (isArticleEnrichment(enrichment)) return 'article';
 			if (isGithubEnrichment(enrichment)) return 'github';
+			// A link with Product JSON-LD but no price landed here (refineDetection
+			// normally upgrades these to product cards — this is the safety net).
+			if (isProductEnrichment(enrichment)) return 'product';
+		}
+		// Domain-based fallback: a bare link from nytimes.com with no scraped
+		// metadata should still render as an article (newspaper icon, landscape
+		// hero, longer excerpt), not a generic link.
+		if (domain) {
+			const variant = getLinkVariant(domain, url).variant;
+			if (variant === 'article' || variant === 'recipe' || variant === 'movie' ||
+				variant === 'book' || variant === 'place' || variant === 'music' ||
+				variant === 'github') {
+				return variant;
+			}
 		}
 		return 'default';
 	});
@@ -91,7 +108,7 @@
 				></iframe>
 			</div>
 		{:else}
-			<button onclick={() => { ytLoaded = true; }} class="relative block w-full group cursor-pointer overflow-hidden">
+			<button onclick={(e) => { e.stopPropagation(); ytLoaded = true; }} aria-label="Play YouTube video: {title}" class="relative block w-full group cursor-pointer overflow-hidden">
 				{#if ytThumbnail && !ytImageError}
 					<img src={ytThumbnail} alt={title}
 						width="480" height="270" loading="lazy"
@@ -145,6 +162,7 @@
 	{acknowledgments}
 	{onShare}
 	{onDelete}
+	{onCommentClick}
 	headerContent={(youtubeId || (image && !imageError)) ? linkHeader : undefined}
 >
 	{#if !image || imageError}
@@ -158,6 +176,10 @@
 	{/if}
 
 	<h3 class="font-semibold text-[15px] text-on-surface leading-snug">{title}</h3>
+
+	{#if description}
+		<p class="text-[13px] text-muted leading-relaxed line-clamp-3 mt-1">{description}</p>
+	{/if}
 
 	{#if price}
 		<div class="text-sm font-bold text-primary mt-2">{price}</div>

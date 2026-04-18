@@ -68,142 +68,44 @@ export interface ContentDetectionResult {
 	alternatives?: Array<{ type: ContentType; confidence: number }>;
 }
 
-// ─── Domain Lists (consolidated from domains.ts) ─────────────────────────────
+// ─── Domain Lists ─ single source of truth lives in config/domains.ts ───────
 
-/** Known product retailer domains */
-export const PRODUCT_DOMAINS = [
-	// Amazon regional
-	'amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.es', 'amazon.fr',
-	'amazon.it', 'amazon.ca', 'amazon.co.jp', 'amazon.com.au',
-	// US big-box
-	'walmart.com', 'target.com', 'bestbuy.com', 'costco.com',
-	'homedepot.com', 'lowes.com', 'macys.com', 'nordstrom.com',
-	// Marketplaces
-	'ebay.com', 'etsy.com', 'aliexpress.com', 'newegg.com',
-	'shopify.com', 'squarespace.com', 'bigcommerce.com',
-	// Home & lifestyle
-	'wayfair.com', 'ikea.com', 'crateandbarrel.com', 'williams-sonoma.com',
-	// Fashion
-	'zappos.com', 'asos.com', 'shein.com', 'zara.com', 'hm.com',
-	'uniqlo.com', 'gap.com', 'oldnavy.com', 'nordstromrack.com',
-	// Electronics
-	'bhphotovideo.com', 'adorama.com', 'microcenter.com',
-	// Specialty
-	'sephora.com', 'ulta.com', 'chewy.com', 'petco.com', 'petsmart.com'
-] as const;
+import {
+	PRODUCT_DOMAINS,
+	VIDEO_DOMAINS,
+	RECIPE_DOMAINS,
+	MOVIE_DOMAINS,
+	BOOK_DOMAINS,
+	PLACE_DOMAINS,
+	MUSIC_DOMAINS,
+	ARTICLE_DOMAINS,
+	GITHUB_DOMAINS,
+	PRODUCT_PATH_PATTERNS,
+	VIDEO_PATH_PATTERNS,
+	IMAGE_DOMAINS,
+	IMAGE_EXTENSIONS,
+	IMAGE_PATH_PATTERNS,
+	matchesDomainList,
+	matchesPathPattern
+} from '$lib/config/domains';
 
-/** Known video platform domains */
-export const VIDEO_DOMAINS = [
-	'youtube.com', 'youtu.be', 'vimeo.com', 'tiktok.com',
-	'dailymotion.com', 'twitch.tv', 'rumble.com', 'bitchute.com',
-	'odysee.com', 'streamable.com', 'loom.com', 'wistia.com'
-] as const;
-
-/** Known recipe domains */
-export const RECIPE_DOMAINS = [
-	'allrecipes.com', 'food.com', 'epicurious.com', 'bonappetit.com',
-	'seriouseats.com', 'tasty.co', 'delish.com', 'foodnetwork.com',
-	'simplyrecipes.com', 'budgetbytes.com', 'cookieandkate.com',
-	'minimalistbaker.com', 'halfbakedharvest.com', 'food52.com',
-	'thekitchn.com', 'smittenkitchen.com', 'kingarthurbaking.com',
-	'cooking.nytimes.com', 'eatingwell.com', 'tasteofhome.com',
-	'bbcgoodfood.com', 'jamieoliver.com', 'pinchofyum.com',
-	'loveandlemons.com', 'damndelicious.net', 'recipetineats.com'
-] as const;
-
-/** Known movie/TV domains */
-export const MOVIE_DOMAINS = [
-	'imdb.com', 'letterboxd.com', 'rottentomatoes.com', 'themoviedb.org',
-	'netflix.com', 'tv.apple.com', 'disneyplus.com', 'hbo.com',
-	'max.com', 'hulu.com', 'primevideo.com', 'crunchyroll.com',
-	'mubi.com', 'criterion.com', 'paramountplus.com', 'peacocktv.com',
-	'tubitv.com', 'pluto.tv', 'justwatch.com', 'trakt.tv',
-	'tvtime.com', 'serializd.com'
-] as const;
-
-/** Known book domains */
-export const BOOK_DOMAINS = [
-	'goodreads.com', 'openlibrary.org', 'bookshop.org',
-	'books.google.com', 'penguin.com', 'harpercollins.com',
-	'simonandschuster.com', 'barnesandnoble.com', 'libro.fm',
-	'audible.com', 'bookdepository.com'
-] as const;
-
-/** Known place/local business domains */
-export const PLACE_DOMAINS = [
-	'yelp.com', 'tripadvisor.com', 'foursquare.com',
-	'opentable.com', 'thefork.com', 'zomato.com',
-	'happycow.net', 'timeout.com', 'resy.com'
-] as const;
-
-/** Known music domains */
-export const MUSIC_DOMAINS = [
-	'open.spotify.com', 'spotify.com', 'soundcloud.com',
-	'music.apple.com', 'tidal.com', 'bandcamp.com',
-	'deezer.com', 'last.fm', 'qobuz.com'
-] as const;
-
-/** Known article/news domains */
-export const ARTICLE_DOMAINS = [
-	'medium.com', 'substack.com', 'nytimes.com', 'theguardian.com',
-	'washingtonpost.com', 'bbc.com', 'bbc.co.uk', 'arstechnica.com',
-	'theverge.com', 'wired.com', 'theatlantic.com', 'newyorker.com',
-	'reuters.com', 'apnews.com', 'economist.com', 'ft.com',
-	'bloomberg.com', 'techcrunch.com', 'thenextweb.com', 'dev.to',
-	'hackernoon.com', 'longform.org', 'nautil.us', 'slate.com'
-] as const;
-
-/** Known GitHub/code repository domains */
-export const GITHUB_DOMAINS = [
-	'github.com', 'gitlab.com', 'bitbucket.org', 'gist.github.com',
-	'sourcegraph.com', 'codeberg.org'
-] as const;
-
-// ─── URL Pattern Matchers ────────────────────────────────────────────────────
-
-/** URL path patterns that strongly suggest product pages */
-export const PRODUCT_PATH_PATTERNS = [
-	/\/products?\//i,
-	/\/shop\//i,
-	/\/item\//i,
-	/\/p\//i,
-	/\/dp\//i, // Amazon
-	/\/buy\//i,
-	/\/listing\//i,
-	/\/catalog\/[^/]+\/[^/]+/i,
-	/\/goods\//i,
-	/\/artikel\//i, // German
-	/\/produit\//i, // French
-	/\/producto\//i, // Spanish
-	/\/prodotto\//i, // Italian
-	/\/-p-\d/i,
-	/\/pd\//i,
-	/\/sku\//i,
-	/\/wishlist\//i,
-	/\/cart\//i,
-	/\/checkout\//i
-] as const;
-
-/** URL patterns for video content */
-export const VIDEO_PATH_PATTERNS = [
-	/\/watch\?/i,
-	/\/video\//i,
-	/\/shorts\//i,
-	/\/live\//i,
-	/\/embed\//i,
-	/\/v\//i,
-	/\/clip\//i
-] as const;
-
-/** URL patterns for article content */
-export const ARTICLE_PATH_PATTERNS = [
-	/\/article\//i,
-	/\/blog\//i,
-	/\/news\//i,
-	/\/story\//i,
-	/\/post\//i,
-	/\/p\//i
-] as const;
+// Re-export for call sites that still import these from here
+export {
+	PRODUCT_DOMAINS,
+	VIDEO_DOMAINS,
+	RECIPE_DOMAINS,
+	MOVIE_DOMAINS,
+	BOOK_DOMAINS,
+	PLACE_DOMAINS,
+	MUSIC_DOMAINS,
+	ARTICLE_DOMAINS,
+	GITHUB_DOMAINS,
+	PRODUCT_PATH_PATTERNS,
+	VIDEO_PATH_PATTERNS,
+	ARTICLE_PATH_PATTERNS,
+	matchesDomainList,
+	matchesPathPattern
+} from '$lib/config/domains';
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -219,17 +121,23 @@ export function extractDomain(url: string): string | null {
 }
 
 /**
- * Check if domain matches any in a list (including subdomains).
+ * Check if a URL points directly to an image file.
  */
-export function matchesDomainList(domain: string, list: readonly string[]): boolean {
-	return list.some(d => domain === d || domain.endsWith('.' + d));
-}
-
-/**
- * Check if URL path matches any pattern.
- */
-export function matchesPathPattern(pathname: string, patterns: readonly RegExp[]): boolean {
-	return patterns.some(p => p.test(pathname));
+export function isImageUrl(url: string): boolean {
+	try {
+		const { pathname } = new URL(url);
+		const lowerPath = pathname.toLowerCase();
+		const lowerUrl = url.toLowerCase();
+		// Check extension
+		for (const ext of IMAGE_EXTENSIONS) {
+			if (lowerPath.endsWith(ext) || lowerUrl.includes(ext + '?') || lowerUrl.includes(ext + '&')) {
+				return true;
+			}
+		}
+		return false;
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -280,8 +188,34 @@ export function detectFromUrl(url: string): ContentDetectionResult {
 	}
 	
 	// ── Tier 1: Domain Matching (0.7-0.9 confidence) ─────────────────────
-	
+
+	// Image detection — direct image URLs (highest priority for image hosts)
+	if (domain && isImageUrl(url)) {
+		signals.push({
+			type: 'image_extension',
+			strength: 0.95,
+			description: 'Direct image file URL',
+			metadata: { domain }
+		});
+		detectedType = 'image';
+		confidence = 0.95;
+	}
+
 	if (domain) {
+		// Image hosting domains
+		if (matchesDomainList(domain, IMAGE_DOMAINS)) {
+			signals.push({
+				type: 'domain_match',
+				strength: 0.85,
+				description: `Known image hosting platform: ${domain}`,
+				metadata: { domain }
+			});
+			if (detectedType === 'link') {
+				detectedType = 'image';
+				confidence = Math.max(confidence, 0.85);
+			}
+		}
+
 		// Product domains
 		if (matchesDomainList(domain, PRODUCT_DOMAINS)) {
 			signals.push({
@@ -431,10 +365,25 @@ export function detectFromUrl(url: string): ContentDetectionResult {
 				description: `Video-like URL path: ${pathname}`,
 				metadata: { pathname }
 			});
-			
+
 			if (detectedType === 'link') {
 				detectedType = 'video';
 				confidence = Math.max(confidence, 0.7);
+			}
+		}
+
+		// Image path patterns
+		if (matchesPathPattern(pathname, IMAGE_PATH_PATTERNS)) {
+			signals.push({
+				type: 'url_pattern',
+				strength: 0.65,
+				description: `Image-like URL path: ${pathname}`,
+				metadata: { pathname }
+			});
+
+			if (detectedType === 'link') {
+				detectedType = 'image';
+				confidence = Math.max(confidence, 0.65);
 			}
 		}
 	}
@@ -631,8 +580,10 @@ export function refineDetection(
 			metadata: { kind: enrichmentType }
 		});
 		
-		// Enrichment usually trumps URL-based detection
-		if (['recipe', 'movie', 'book', 'place', 'music', 'article', 'github'].includes(enrichmentType)) {
+		// Enrichment usually trumps URL-based detection. Includes 'product' so a
+		// Product JSON-LD found on a URL that otherwise looks like a plain link
+		// (no price meta, no product path pattern) still lands as a product card.
+		if (['recipe', 'movie', 'book', 'place', 'music', 'article', 'github', 'product'].includes(enrichmentType)) {
 			detectedType = enrichmentType;
 			confidence = Math.max(confidence, 0.95);
 		}

@@ -425,6 +425,7 @@
 									class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors
 										{isPlaying ? 'bg-accent text-white' : 'bg-accent/10 text-accent hover:bg-accent/20'}"
 									onclick={() => toggleVoicePlay(v.contentId)}
+									aria-label={isPlaying ? 'Pause voice note' : 'Play voice note'}
 								>
 									<Icon icon={isPlaying ? 'ph:pause-fill' : 'ph:play-fill'} class="text-base" />
 								</button>

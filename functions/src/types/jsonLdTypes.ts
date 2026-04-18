@@ -101,6 +101,23 @@ export interface VideoEnrichment extends LinkEnrichment {
 	siteName: string | null;
 }
 
+export interface ProductEnrichment extends LinkEnrichment {
+	kind: 'product';
+	brand: string | null;
+	rating: string | null;
+	ratingCount: number | null;
+	availability:
+		| 'InStock'
+		| 'OutOfStock'
+		| 'PreOrder'
+		| 'BackOrder'
+		| 'Discontinued'
+		| 'LimitedAvailability'
+		| null;
+	currency: string | null;
+	category: string | null;
+}
+
 export type StructuredEnrichment =
 	| RecipeEnrichment
 	| MovieEnrichment
@@ -109,4 +126,5 @@ export type StructuredEnrichment =
 	| PlaceEnrichment
 	| ArticleEnrichment
 	| GitHubEnrichment
-	| VideoEnrichment;
+	| VideoEnrichment
+	| ProductEnrichment;

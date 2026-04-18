@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import type { Timestamp } from 'firebase/firestore';
+	import { getContext } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { Popover } from 'konsta/svelte';
 	import Icon from '@iconify/svelte';
@@ -12,6 +13,9 @@
 	import CardInteractions from './CardInteractions.svelte';
 	import CardFooter from './CardFooter.svelte';
 	import CardComments from './CardComments.svelte';
+	import type { ConversationMode } from '$lib/types/firestore';
+	import { globalExperience } from '$lib/stores';
+	import { subscribeToComments } from '$lib/firebase/boardService';
 
 	let {
 		boardId,
@@ -22,13 +26,14 @@
 		createdAt,
 		isBoardOwner = false,
 		allowComments = true,
-		commentCount,
+		commentCount: initialCommentCount,
 		acknowledgments,
 		expandComments = false,
 		isDetail = false,
 		onEdit,
 		onDelete,
-		onShare
+		onShare,
+		onCommentClick
 	}: {
 		boardId: string;
 		contentId: string;
@@ -45,9 +50,38 @@
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 	} = $props();
 
+	// Real-time comment count subscription
+	let liveCommentCount = $state(initialCommentCount ?? 0);
+
+	$effect(() => {
+		if (contentId && boardId) {
+			return subscribeToComments(boardId, contentId, (comments) => {
+				liveCommentCount = comments.length;
+			});
+		}
+	});
+
+	// Sync with prop changes
+	$effect(() => {
+		if (initialCommentCount !== undefined) {
+			liveCommentCount = initialCommentCount;
+		}
+	});
+
+	const getConversationMode = getContext<(() => ConversationMode) | undefined>('conversationMode');
+	const conversationMode = $derived(getConversationMode?.() ?? $globalExperience.conversationMode);
+
+	// In chat mode, auto-expand comments; in board mode, hidden by default
+	const defaultExpand = $derived(
+		expandComments || conversationMode === 'chat'
+	);
 	let showComments = $state(expandComments);
+	// Sync default expansion when conversationMode changes
+	$effect(() => { showComments = defaultExpand; });
+
 	let menuOpen = $state(false);
 	let menuTarget = $state<HTMLButtonElement | undefined>();
 
@@ -97,11 +131,21 @@
 </div>
 
 <!-- Interaction bar (always visible) -->
-<CardInteractions {boardId} {contentId} {acknowledgments} {commentCount} bind:showComments {onShare} {isDetail} />
+<CardInteractions {boardId} {contentId} {acknowledgments} commentCount={liveCommentCount} bind:showComments {onShare} {onCommentClick} {isDetail} />
 
-<!-- Comments section (toggleable) -->
+<!-- Comments section -->
 {#if showComments && allowComments}
 	<div class="px-3 sm:px-4 py-3" transition:slide={{ duration: 200 }}>
 		<CardComments {boardId} {contentId} {isBoardOwner} {allowComments} />
 	</div>
+{:else if conversationMode === 'hybrid' && allowComments && liveCommentCount && liveCommentCount > 0}
+	<!-- Hybrid mode: show comment count hint -->
+	<button
+		onclick={() => { hapticLight(); showComments = true; }}
+		class="w-full px-3 sm:px-4 py-2 text-left border-t border-surface-1"
+	>
+		<span class="text-[11px] text-muted">
+			{liveCommentCount} comment{liveCommentCount > 1 ? 's' : ''} — tap to view
+		</span>
+	</button>
 {/if}

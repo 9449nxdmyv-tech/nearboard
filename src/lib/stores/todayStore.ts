@@ -45,6 +45,7 @@ export interface BoardItemCounts {
 
 export interface TodayState {
 	loading: boolean;
+	error: string | null;
 	briefings: BoardBriefing[];
 	unplayedVoiceNotes: UnplayedVoice[];
 	streaks: BoardStreak[];
@@ -55,6 +56,7 @@ export interface TodayState {
 
 const initial: TodayState = {
 	loading: false,
+	error: null,
 	briefings: [],
 	unplayedVoiceNotes: [],
 	streaks: [],
@@ -72,7 +74,7 @@ export const todayStore = writable<TodayState>(initial);
  */
 export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<void> {
 	if (!browser) return;
-	todayStore.update((s) => ({ ...s, loading: true }));
+	todayStore.update((s) => ({ ...s, loading: true, error: null }));
 
 	try {
 		const {
@@ -204,6 +206,7 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 
 		todayStore.set({
 			loading: false,
+			error: null,
 			briefings,
 			unplayedVoiceNotes,
 			streaks,
@@ -211,7 +214,12 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 			newItemCounts,
 			memories
 		});
-	} catch {
-		todayStore.update((s) => ({ ...s, loading: false }));
+	} catch (err) {
+		console.error('loadTodayData failed:', err);
+		todayStore.update((s) => ({
+			...s,
+			loading: false,
+			error: err instanceof Error ? err.message : 'Could not load today\'s data'
+		}));
 	}
 }

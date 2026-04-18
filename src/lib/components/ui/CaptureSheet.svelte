@@ -35,6 +35,32 @@
 	let text = $state('');
 	let submitting = $state(false);
 	let showBoardPicker = $state(false);
+	let boardSelectorRef = $state<HTMLDivElement>();
+	let sheetRef = $state<HTMLDivElement>();
+	let boardSelectorBottom = $state(0);
+
+	function recomputeBoardSelectorBottom() {
+		if (!boardSelectorRef) return;
+		const rect = boardSelectorRef.getBoundingClientRect();
+		boardSelectorBottom = window.innerHeight - rect.top;
+	}
+
+	$effect(() => {
+		if (!showBoardPicker || !boardSelectorRef) return;
+
+		recomputeBoardSelectorBottom();
+
+		// Keep the fixed-position dropdown anchored to the trigger button while
+		// the sheet scrolls or the viewport resizes.
+		const scrollTarget = sheetRef;
+		scrollTarget?.addEventListener('scroll', recomputeBoardSelectorBottom, { passive: true });
+		window.addEventListener('resize', recomputeBoardSelectorBottom);
+
+		return () => {
+			scrollTarget?.removeEventListener('scroll', recomputeBoardSelectorBottom);
+			window.removeEventListener('resize', recomputeBoardSelectorBottom);
+		};
+	});
 
 	let detectedUrl = $state<string | null>(null);
 	let linkPreview = $state<PageMetadata | null>(null);
@@ -155,6 +181,7 @@
 
 <!-- Sheet -->
 <div
+	bind:this={sheetRef}
 	class="fixed bottom-0 left-0 right-0 z-[101] bg-surface rounded-t-[20px] shadow-xl pb-safe max-h-[90vh] overflow-y-auto"
 	transition:fly={{ y: 300, duration: 250 }}
 >
@@ -162,26 +189,27 @@
 
 
 	<!-- Board selector -->
-	<div class="px-4 pb-3">
-		<div class="relative">
-			<button
-				onclick={() => { showBoardPicker = !showBoardPicker; hapticLight(); }}
-				class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-1 w-full press-scale"
-			>
-				<Icon icon="ph:kanban" class="text-sm text-on-surface" />
-				<span class="text-[13px] font-medium text-on-surface truncate flex-1 text-left">
-					{selectedBoard?.name || 'Select a board'}
-				</span>
-				<Icon icon="ph:caret-up-down" class="text-xs text-on-surface/50" />
-			</button>
+	<div class="px-4 pb-3" bind:this={boardSelectorRef}>
+		<button
+			onclick={() => { showBoardPicker = !showBoardPicker; hapticLight(); }}
+			class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-1 w-full press-scale"
+		>
+			<Icon icon="ph:kanban" class="text-sm text-on-surface" />
+			<span class="text-[13px] font-medium text-on-surface truncate flex-1 text-left">
+				{selectedBoard?.name || 'Select a board'}
+			</span>
+			<Icon icon="ph:caret-up-down" class="text-xs text-on-surface/50" />
+		</button>
 
-			{#if showBoardPicker}
-				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-				<div class="fixed inset-0 z-[102]" onclick={() => { showBoardPicker = false; }}></div>
-				<div class="absolute left-0 right-0 bottom-full mb-1 max-h-48 overflow-y-auto
-					bg-card rounded-xl border border-border-light shadow-xl z-[103]"
-					transition:fly={{ y: 8, duration: 150 }}
-				>
+		{#if showBoardPicker}
+			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+			<div class="fixed inset-0 z-[102]" onclick={() => { showBoardPicker = false; }}></div>
+			<div
+				class="fixed left-4 right-4 z-[103] max-h-48 overflow-y-auto
+					bg-card rounded-xl border border-border-light shadow-xl"
+				style="bottom: {boardSelectorBottom}px;"
+				transition:fly={{ y: 8, duration: 150 }}
+			>
 					{#each boards as board (board.id)}
 						<button
 							onclick={() => { onSelectBoard(board.id); showBoardPicker = false; hapticLight(); }}
@@ -206,7 +234,6 @@
 					</button>
 				</div>
 			{/if}
-		</div>
 	</div>
 
 	<!-- Note/Link input -->
@@ -244,7 +271,7 @@
 								{/if}
 							</div>
 						</div>
-						<button onclick={() => { dismissPreview(); hapticLight(); }} class="p-1 text-muted press-scale">
+						<button onclick={() => { dismissPreview(); hapticLight(); }} aria-label="Dismiss link preview" class="p-1 text-muted press-scale">
 							<Icon icon="ph:x" class="text-sm" />
 						</button>
 					</div>

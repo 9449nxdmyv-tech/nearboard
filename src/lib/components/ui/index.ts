@@ -1,6 +1,7 @@
 export { default as AgeGate } from './AgeGate.svelte';
 export { default as AvatarStack } from './AvatarStack.svelte';
 export { default as BoardPreviewMosaic } from './BoardPreviewMosaic.svelte';
+export { default as BoardChatView } from './BoardChatView.svelte';
 export { default as BottomSheet } from './BottomSheet.svelte';
 export { default as BriefingCard } from './BriefingCard.svelte';
 export { default as CaptureSheet } from './CaptureSheet.svelte';
@@ -22,6 +23,7 @@ export { default as KeyboardShortcutsHelp } from './KeyboardShortcutsHelp.svelte
 export { default as LivingSummaryCard } from './LivingSummaryCard.svelte';
 export { default as MapView } from './MapView.svelte';
 export { default as MasonryGrid } from './MasonryGrid.svelte';
+export { default as ChatBubble } from './ChatBubble.svelte';
 export { default as ChatInput } from './ChatInput.svelte';
 export { default as NudgeCard } from './NudgeCard.svelte';
 export { default as OfflineBanner } from './OfflineBanner.svelte';
@@ -33,11 +35,13 @@ export { default as QuickCaptureListSheet } from './QuickCaptureListSheet.svelte
 export { default as QuickCaptureLocationSheet } from './QuickCaptureLocationSheet.svelte';
 export { default as QuickCapturePhotoSheet } from './QuickCapturePhotoSheet.svelte';
 export { default as QuickCapturePollSheet } from './QuickCapturePollSheet.svelte';
+export { default as QuickCaptureShell } from './QuickCaptureShell.svelte';
 export { default as QuickCaptureVideoSheet } from './QuickCaptureVideoSheet.svelte';
 export { default as QuickCaptureVoiceSheet } from './QuickCaptureVoiceSheet.svelte';
 export { default as Skeleton } from './Skeleton.svelte';
 export { default as SkeletonCard } from './SkeletonCard.svelte';
 export { default as StreakBadge } from './StreakBadge.svelte';
+export { default as SubmitButton } from './SubmitButton.svelte';
 export { default as SwipeAction } from './SwipeAction.svelte';
 export { default as ToastContainer } from './ToastContainer.svelte';
 export { default as TodayDashboard } from './TodayDashboard.svelte';

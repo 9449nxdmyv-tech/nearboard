@@ -45,6 +45,7 @@
 				<h2 class="font-display text-lg font-semibold text-primary">Keyboard Shortcuts</h2>
 				<button
 					onclick={() => (open = false)}
+					aria-label="Close shortcuts help"
 					class="w-8 h-8 rounded-full flex items-center justify-center text-muted/60 hover:text-primary hover:bg-surface transition-colors"
 				>
 					<Icon icon="ph:x-bold" class="text-base" />

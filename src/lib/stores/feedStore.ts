@@ -7,7 +7,7 @@
 import { writable } from 'svelte/store';
 import type { ContentDoc, BriefingDoc } from '$lib/types';
 
-export type FeedSortMode = 'latest' | 'unread' | 'by-board' | 'most-active';
+export type FeedSortMode = 'latest' | 'oldest' | 'unread' | 'by-board' | 'most-active';
 
 export interface FeedItem {
 	content: ContentDoc;
@@ -103,6 +103,10 @@ export function sortFeedItems(items: FeedItem[], mode: FeedSortMode): FeedItem[]
 	switch (mode) {
 		case 'latest':
 			sorted.sort((a, b) => createdAtMs(b) - createdAtMs(a));
+			break;
+
+		case 'oldest':
+			sorted.sort((a, b) => createdAtMs(a) - createdAtMs(b));
 			break;
 
 		case 'by-board':

@@ -42,6 +42,9 @@
 	const privateCount = $derived(boards.filter((b) => !b.isPublic).length);
 	const ownedCount = $derived(boards.filter((b) => b.ownerId === userId).length);
 
+	// Request counter to discard stale results on rapid navigation
+	let requestId = 0;
+
 	// Wait for auth to settle, then load profile
 	$effect(() => {
 		if (authLoading) return;
@@ -54,38 +57,44 @@
 		notFound = false;
 		profile = null;
 		boards = [];
-		loadProfile(targetUserId);
+		const thisRequest = ++requestId;
+		loadProfile(targetUserId, thisRequest);
 	});
 
-	async function loadProfile(targetUserId: string) {
+	async function loadProfile(targetUserId: string, reqId: number) {
 		try {
-			profile = await getPublicUserProfile(targetUserId);
+			const p = await getPublicUserProfile(targetUserId);
+			if (reqId !== requestId) return; // stale — user navigated away
+			profile = p;
 			if (!profile) {
 				notFound = true;
 				return;
 			}
-			boards = await getAllBoardsForUser(targetUserId);
+			const b = await getAllBoardsForUser(targetUserId);
+			if (reqId !== requestId) return;
+			boards = b;
 
 			if (currentUser) {
 				const statuses: Record<string, JoinRequestDoc | null> = {};
 				await Promise.all(
 					boards.map(async (board) => {
-						if (!board.memberIds.includes(currentUser.uid)) {
-							try {
-								statuses[board.id] = await getUserJoinRequestStatus(board.id, currentUser.uid);
-							} catch {
-								// index may not be deployed yet
-							}
+						if (!currentUser || board.memberIds.includes(currentUser.uid)) return;
+						try {
+							statuses[board.id] = await getUserJoinRequestStatus(board.id, currentUser.uid);
+						} catch {
+							// index may not be deployed yet
 						}
 					})
 				);
+				if (reqId !== requestId) return;
 				requestStatuses = statuses;
 			}
 		} catch (err) {
+			if (reqId !== requestId) return;
 			console.error('Failed to load profile:', err);
 			notFound = true;
 		} finally {
-			loading = false;
+			if (reqId === requestId) loading = false;
 		}
 	}
 

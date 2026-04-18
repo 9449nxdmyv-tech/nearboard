@@ -118,8 +118,10 @@ export async function enrichUrl(targetUrl: string): Promise<EnrichmentResult> {
 				...(oembedResult && {
 					title: oembedResult.title ?? ogsResult?.title,
 					image: oembedResult.image ?? microlinkResult?.image ?? ogsResult?.image,
+					description: oembedResult.description ?? ogsResult?.description,
 					type: oembedResult.type as 'link' | 'video',
 					videoDuration: oembedResult.videoDuration,
+					siteName: oembedResult.providerName ?? ogsResult?.siteName,
 				}),
 				classification,
 				socialMetrics,

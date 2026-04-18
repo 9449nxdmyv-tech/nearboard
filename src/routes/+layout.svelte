@@ -58,7 +58,8 @@
 	const currentPath = $derived($page.url.pathname);
 
 	// Bottom padding: tabbar + safe area for home indicator
-	const bottomPadding = $derived(showTabbar ? 'pb-[calc(72px+env(safe-area-inset-bottom))]' : '');
+	// ~100px+ total: tabbar (~50px) + pb-safe min (16px) + FAB protrusion (8px) + visual buffer
+	const bottomPaddingStyle = $derived(showTabbar ? 'padding-bottom: 120px' : '');
 
 	/** Extract boardId from route params */
 	const routeBoardId = $derived(
@@ -134,24 +135,28 @@
 					userIntent: 'Quick capture'
 				};
 
-				if (refined.type === 'product' && meta?.price) {
+				if (refined.type === 'product' && (meta?.price || urlDetection.type === 'product')) {
 					// Save as product card with price tracking fields
-					await addContent(bid, {
+					const productData: Omit<ProductContentDoc, 'id' | 'createdAt'> = {
 						type: 'product',
 						url,
 						title: meta?.title || url,
+						description: meta?.description || null,
 						image: meta?.image || null,
-						price: meta.price,
+						price: meta?.price || '',
 						domain,
-						originalPrice: meta.price,
-						lastCheckedPrice: meta.price,
+						favicon: null,
+						enrichment: meta?.enrichment || null,
+						originalPrice: meta?.price || null,
+						lastCheckedPrice: meta?.price || null,
 						lastCheckedAt: null,
 						priceDrop: false,
 						...authorBase
-					} as Omit<ProductContentDoc, 'id' | 'createdAt'>);
+					} as unknown as Omit<ProductContentDoc, 'id' | 'createdAt'>;
+					await addContent(bid, productData);
 					showToast('Product saved!', 'success');
 				} else {
-					// Save as link card with enrichment data
+					// Save as link card with enrichment data — enrichment drives the display
 					await addContent(bid, {
 						type: 'link',
 						url,
@@ -292,13 +297,13 @@
 			<h1 class="text-2xl font-semibold">Nearboard</h1>
 		</div>
 	{:else if $userStore.user || $page.url.pathname.startsWith('/onboarding') || $page.url.pathname.startsWith('/b/') || $page.url.pathname.startsWith('/join/') || $page.url.pathname.startsWith('/refer/') || $page.url.pathname.startsWith('/u/')}
-		<div class="flex-1 {bottomPadding}">
+		<div class="flex-1" style={bottomPaddingStyle}>
 			{@render children()}
 		</div>
 
 		<!-- Bottom Tabbar with center FAB -->
 		{#if showTabbar}
-			<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light pb-[env(safe-area-inset-bottom)]">
+			<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light pb-safe">
 				<div class="relative">
 					<!-- Center FAB button -->
 					<button

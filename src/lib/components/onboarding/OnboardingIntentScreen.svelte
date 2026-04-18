@@ -57,9 +57,10 @@
 	</div>
 
 	<button
-		class="mt-8 text-xs text-muted hover:text-primary transition-colors"
+		class="mt-8 text-sm font-medium text-muted hover:text-primary underline underline-offset-4 transition-colors"
 		onclick={handleSkip}
+		aria-label="Skip and pick a neutral board"
 	>
-		Skip
+		Not sure yet — skip
 	</button>
 </div>

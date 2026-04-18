@@ -14,7 +14,7 @@
 	let {
 		id, boardId, question, options,
 		authorId, authorName, authorPhotoURL, createdAt,
-		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare
+		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick
 	}: {
 		id: string;
 		boardId: string;
@@ -31,6 +31,7 @@
 		acknowledgments?: Record<string, { type: 'heart'; createdAt: any }>;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 	} = $props();
 
 	let votes = $state<VoteDoc[]>([]);
@@ -74,7 +75,7 @@
 				{@const isSelected = userVote?.optionId === opt.id}
 
 				<button
-					onclick={() => handleVote(opt.id)}
+					onclick={(e) => { e.stopPropagation(); handleVote(opt.id); }}
 					class="relative w-full text-left px-3 py-2.5 rounded-xl border transition-all overflow-hidden
 						{isSelected ? 'border-accent/40 bg-accent/5' : 'border-border bg-surface/50 hover:border-accent/20'}"
 				>
@@ -105,5 +106,5 @@
 		</p>
 	</div>
 
-	<CardFooterSection {boardId} contentId={id} {authorId} {authorName} {authorPhotoURL} {createdAt} {isBoardOwner} {allowComments} {expandComments} {commentCount} {acknowledgments} {onDelete} {onShare} />
+	<CardFooterSection {boardId} contentId={id} {authorId} {authorName} {authorPhotoURL} {createdAt} {isBoardOwner} {allowComments} {expandComments} {commentCount} {acknowledgments} {onDelete} {onShare} {onCommentClick} />
 </article>

@@ -47,7 +47,7 @@
 </script>
 
 <button
-	onclick={handleToggle}
+	onclick={(e) => { e.stopPropagation(); handleToggle(); }}
 	class="relative flex items-center justify-center gap-1.5 transition-all duration-200 press-scale
 		{isDetail ? 'px-3 py-2 text-error' : 'py-2 px-3 text-muted'}
 		{!isDetail && hasFaved ? 'text-error' : ''}"

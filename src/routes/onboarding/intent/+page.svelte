@@ -23,6 +23,15 @@
 
 	let creating = $state(false);
 
+	// Guard: require age verification before intent selection
+	$effect(() => {
+		const { user, loading } = $userStore;
+		if (loading) return;
+		if (!user || user.birthDate === null) {
+			goto('/onboarding?step=age', { replaceState: true });
+		}
+	});
+
 	async function handleIntentSelected(intent: OnboardingIntent) {
 		const user = $userStore.user;
 		if (!user || creating) return;

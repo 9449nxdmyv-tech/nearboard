@@ -19,6 +19,7 @@ import { createRateLimiter } from '$lib/api/rateLimiter';
 import {
 	MOVIE_DOMAINS, BOOK_DOMAINS, MUSIC_DOMAINS, ARTICLE_DOMAINS,
 	RECIPE_DOMAINS, PLACE_DOMAINS, GITHUB_DOMAINS, SOCIAL_DOMAINS,
+	PRODUCT_DOMAINS, VIDEO_DOMAINS,
 	matchesDomain, isAmazonVideoUrl
 } from '$lib/config/domains';
 
@@ -27,28 +28,8 @@ const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_CACHE_SIZE = 500;
 
-/** Known product retailer domains — if detected, force type to 'product' even without price */
-const PRODUCT_DOMAINS = [
-	'amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.es', 'amazon.fr',
-	'amazon.it', 'amazon.ca', 'amazon.co.jp', 'amazon.com.au',
-	'walmart.com', 'target.com', 'bestbuy.com', 'costco.com',
-	'homedepot.com', 'lowes.com', 'macys.com', 'nordstrom.com',
-	'ebay.com', 'etsy.com', 'aliexpress.com', 'newegg.com',
-	'wayfair.com', 'ikea.com', 'zappos.com', 'asos.com',
-	'shein.com', 'zara.com', 'hm.com'
-];
-
-/** Video platform domains for content type detection */
-const VIDEO_PLATFORM_DOMAINS = [
-	'youtube.com', 'youtu.be', 'vimeo.com', 'tiktok.com',
-	'dailymotion.com', 'twitch.tv', 'rumble.com', 'bitchute.com',
-	'odysee.com', 'peertube.social', 'vidyard.com', 'wistia.com',
-	'loom.com', 'streamable.com'
-];
-
 function isProductDomain(hostname: string): boolean {
-	const clean = hostname.replace(/^www\./, '');
-	return PRODUCT_DOMAINS.some((d) => clean === d || clean.endsWith('.' + d));
+	return matchesDomain(hostname.replace(/^www\./, ''), PRODUCT_DOMAINS);
 }
 
 function isAmazonDomain(hostname: string): boolean {
@@ -543,7 +524,7 @@ async function buildFallbackFromUrl(targetUrl: string): Promise<PageMetadata | n
 	}
 
 	// ── Video platforms — detect as video type ──
-	if (VIDEO_PLATFORM_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) {
+	if (matchesDomain(domain, VIDEO_DOMAINS)) {
 		const slugTitle = titleFromUrlSlug(parsed.pathname);
 		return {
 			title: slugTitle ?? `Video on ${domain}`,

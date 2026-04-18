@@ -13,7 +13,8 @@
 		setFeedItems,
 		setFeedLoading,
 		sortFeedItems,
-		markAllFeedRead
+		markAllFeedRead,
+		setSortMode
 	} from '$lib/stores';
 	import {
 		subscribeToBoardContentPaginated,
@@ -27,11 +28,13 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Header from '$lib/components/ui/Header.svelte';
 	import MasonryGrid from '$lib/components/ui/MasonryGrid.svelte';
+	import { globalExperience } from '$lib/stores';
 
 	import { Page } from 'konsta/svelte';
 	import CardDetailModal from '$lib/components/ui/CardDetailModal.svelte';
 
 	const sortedItems = $derived(sortFeedItems($feedStore.items, $feedStore.sortMode));
+	const feedLayout = $derived($globalExperience.layoutStyle);
 
 	let detailItemId = $state<string | null>(null);
 	let detailBoardId = $state('');
@@ -44,6 +47,16 @@
 	}
 
 	onMount(() => {
+		// Set initial sort mode from experience preferences
+		const feedOrder = $globalExperience.feedOrder;
+		const sortMap: Record<string, import('$lib/stores').FeedSortMode> = {
+			'newest': 'latest',
+			'oldest': 'oldest',
+			'most-active': 'most-active',
+			'curated': 'latest'
+		};
+		setSortMode(sortMap[feedOrder] ?? 'latest');
+
 		const boards = $boardStore.boards;
 		const followingIds = $userStore.user?.followingBoardIds ?? [];
 		const memberBoardIds = new Set(boards.map(b => b.id));
@@ -175,7 +188,7 @@
 			/>
 		{:else}
 			<div class="mt-4">
-				<MasonryGrid columns={2}>
+				<MasonryGrid columns={2} layout={feedLayout}>
 					{#each sortedItems as feedItem, i (feedItem.content.id)}
 						<div class="stagger-fade-in" style="--stagger-index: {i}">
 							<a href="/board/{feedItem.boardId}" class="inline-flex items-center gap-1.5 text-[11px] text-primary font-semibold mb-1 px-0.5">
@@ -189,6 +202,7 @@
 									isBoardOwner={feedItem.isOwner}
 									allowComments={feedItem.allowComments}
 									onShare={(item) => handleShareCard(item, feedItem.boardId)}
+									onCommentClick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; }}
 								/>
 							</div>
 						</div>

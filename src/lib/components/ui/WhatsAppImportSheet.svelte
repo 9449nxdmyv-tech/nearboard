@@ -32,6 +32,7 @@
 	let selected = $state<Set<number>>(new Set());
 	let result = $state<WhatsAppImportResult | null>(null);
 	let error = $state<string | null>(null);
+	let importError = $state<string | null>(null);
 	let statusText = $state('Reading your chat...');
 	let importing = $state(false);
 
@@ -65,6 +66,7 @@
 		selected = new Set();
 		result = null;
 		error = null;
+		importError = null;
 		importing = false;
 		onClose();
 	}
@@ -148,6 +150,7 @@
 		if (!user) return;
 
 		importing = true;
+		importError = null;
 
 		try {
 			result = await importApprovedCards({
@@ -160,8 +163,9 @@
 			});
 			step = 4;
 		} catch (err) {
-			showToast('Import failed. Please try again.');
 			console.error('Import failed:', err);
+			importError = err instanceof Error ? err.message : 'Import failed. Please try again.';
+			showToast('Import failed. Please try again.');
 		} finally {
 			importing = false;
 		}
@@ -240,6 +244,23 @@
 	{:else if step === 3}
 		<!-- Step 3: Preview -->
 		<div class="space-y-3">
+			{#if importError}
+				<div class="flex items-start gap-2 p-3 rounded-card bg-error/5 border border-error/20">
+					<Icon icon="ph:warning-circle" class="text-error text-base mt-0.5 shrink-0" />
+					<div class="flex-1 min-w-0">
+						<p class="text-xs font-medium text-error">Import failed</p>
+						<p class="text-[11px] text-muted mt-0.5">{importError}</p>
+					</div>
+					<button
+						onclick={() => { importError = null; }}
+						class="text-muted hover:text-on-surface p-0.5"
+						aria-label="Dismiss error"
+					>
+						<Icon icon="ph:x" class="text-sm" />
+					</button>
+				</div>
+			{/if}
+
 			<div class="flex items-center justify-between">
 				<p class="text-xs text-muted">{cards.length} cards found</p>
 				<div class="flex gap-2">
@@ -287,6 +308,8 @@
 				<Button large rounded onClick={handleImport} disabled={selectedCount === 0 || importing} class="flex-1">
 					{#if importing}
 						Importing...
+					{:else if importError}
+						Retry Import
 					{:else}
 						Import {selectedCount} Card{selectedCount === 1 ? '' : 's'}
 					{/if}

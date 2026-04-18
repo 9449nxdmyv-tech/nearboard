@@ -13,8 +13,14 @@ import type {
 	MusicEnrichment,
 	ArticleEnrichment,
 	GithubEnrichment,
-	VideoEnrichment
+	VideoEnrichment,
+	ProductEnrichment
 } from '$lib/types/api';
+import {
+	MUSIC_DOMAINS, MOVIE_DOMAINS, BOOK_DOMAINS, RECIPE_DOMAINS,
+	ARTICLE_DOMAINS, GITHUB_DOMAINS, SOCIAL_DOMAINS,
+	matchesDomain
+} from '$lib/config/domains';
 
 /**
  * Type guard to check if enrichment is a RecipeEnrichment.
@@ -60,10 +66,15 @@ export function isMusicEnrichment(e: LinkEnrichment | null | undefined): e is Mu
 
 /**
  * Type guard to check if enrichment is an ArticleEnrichment.
+ * Unlike other kinds, we trust the 'article' kind marker even when metadata
+ * fields are null — the article layout degrades gracefully to just title +
+ * description, which is still meaningfully distinct from a generic link.
+ * Server-side parsers sometimes produce {kind:'article'} with all-null fields
+ * for known article domains that weren't scrapeable (see buildMinimalEnrichment
+ * in functions/src/triggers/ogMetadata.ts).
  */
 export function isArticleEnrichment(e: LinkEnrichment | null | undefined): e is ArticleEnrichment {
-	if (e?.kind !== 'article') return false;
-	return !!(e.author || e.publishedDate || e.readingTime || e.siteName);
+	return e?.kind === 'article';
 }
 
 /**
@@ -83,6 +94,15 @@ export function isVideoEnrichment(e: LinkEnrichment | null | undefined): e is Vi
 }
 
 /**
+ * Type guard to check if enrichment is a ProductEnrichment.
+ * Validates that at least one meaningful field exists beyond the kind.
+ */
+export function isProductEnrichment(e: LinkEnrichment | null | undefined): e is ProductEnrichment {
+	if (e?.kind !== 'product') return false;
+	return !!(e.brand || e.rating || e.availability || e.category);
+}
+
+/**
  * Validates that enrichment has minimum required data for rendering.
  * Returns false if enrichment exists but is too sparse to use.
  */
@@ -98,6 +118,7 @@ export function isValidEnrichment(e: LinkEnrichment | null | undefined): boolean
 		case 'article': return isArticleEnrichment(e);
 		case 'github': return isGithubEnrichment(e);
 		case 'video': return isVideoEnrichment(e);
+		case 'product': return isProductEnrichment(e);
 		default:
 			// Unknown kind - treat as invalid
 			return false;
@@ -118,18 +139,13 @@ export function getEnrichmentKind(url: string, enrichment: LinkEnrichment | null
 	// YouTube
 	if (/youtube\.com|youtu\.be/.test(domain)) return 'video';
 
-	// Import domain lists for detection
-	// Note: These are duplicated from functions/src/config/domains.ts
-	// Consider moving to shared package
-	const MUSIC_DOMAINS = ['open.spotify.com', 'spotify.com', 'soundcloud.com', 'music.apple.com'];
-	const MOVIE_DOMAINS = ['imdb.com', 'letterboxd.com', 'rottentomatoes.com', 'netflix.com'];
-	const BOOK_DOMAINS = ['goodreads.com', 'openlibrary.org', 'bookshop.org'];
-	const RECIPE_DOMAINS = ['allrecipes.com', 'food.com', 'epicurious.com', 'bonappetit.com'];
-
-	if (MUSIC_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return 'music';
-	if (MOVIE_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return 'movie';
-	if (BOOK_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return 'book';
-	if (RECIPE_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return 'recipe';
+	if (matchesDomain(domain, MUSIC_DOMAINS)) return 'music';
+	if (matchesDomain(domain, MOVIE_DOMAINS)) return 'movie';
+	if (matchesDomain(domain, BOOK_DOMAINS)) return 'book';
+	if (matchesDomain(domain, RECIPE_DOMAINS)) return 'recipe';
+	if (matchesDomain(domain, GITHUB_DOMAINS)) return 'github';
+	if (matchesDomain(domain, ARTICLE_DOMAINS)) return 'article';
+	if (matchesDomain(domain, SOCIAL_DOMAINS)) return 'social';
 
 	return null;
 }

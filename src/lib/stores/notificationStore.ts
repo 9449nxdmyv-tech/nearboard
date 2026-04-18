@@ -32,14 +32,19 @@ export const notificationStore = writable<NotificationState>(initial);
 
 const NOTIF_INIT_KEY = 'nb_notif_initialized';
 
+let _initialized = false;
+let _fcmUnsub: (() => void) | null = null;
+
 /**
  * Initializes notification infrastructure for the current platform.
  * - Native (iOS/Android): Sets up Capacitor push listeners
  * - Web: Registers service worker and foreground FCM listener
  * Does NOT request permission — that's deferred to requestNotificationPermission.
+ * Safe to call multiple times — no-ops after first init.
  */
 export async function initNotifications(userId: string): Promise<void> {
-	if (!browser) return;
+	if (!browser || _initialized) return;
+	_initialized = true;
 
 	const { isNativePush } = await import('$lib/native/pushService');
 
@@ -48,6 +53,14 @@ export async function initNotifications(userId: string): Promise<void> {
 	} else {
 		await initWebNotifications(userId);
 	}
+}
+
+/** Tears down FCM foreground listener. Call on logout or app teardown. */
+export function teardownNotifications(): void {
+	_fcmUnsub?.();
+	_fcmUnsub = null;
+	_initialized = false;
+	notificationStore.set(initial);
 }
 
 /**
@@ -226,7 +239,8 @@ async function activateWebFCM(userId: string): Promise<void> {
 	}));
 
 	if (token) {
-		onForegroundMessage((payload) => {
+		_fcmUnsub?.();
+		_fcmUnsub = onForegroundMessage((payload) => {
 			// Data-only messages: title/body are in data payload, not notification
 			const data = payload.data ?? {};
 			const boardId = data.boardId;

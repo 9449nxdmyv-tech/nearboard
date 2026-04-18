@@ -16,12 +16,47 @@ export type AgeGroup = 'adult' | 'teen';
 
 // ─── Experience Settings ─────────────────────────────────────────────────────
 
-export type ScrollBehavior = 'load-more' | 'paged' | 'infinite';
-export type VideoPlayback = 'tap-to-play' | 'wifi-autoplay' | 'muted-autoplay' | 'full-autoplay';
-export type FeedOrder = 'newest' | 'oldest' | 'most-active' | 'curated';
-export type ConversationMode = 'board' | 'hybrid' | 'chat';
-export type LayoutStyle = 'single-column' | 'masonry' | 'compact-grid';
-export type ExperiencePreset = 'calm' | 'balanced' | 'lively' | 'custom';
+// Const arrays are the single source of truth for allowed values — derive types
+// from them and use the arrays for runtime validation (e.g. `.includes(value)`).
+
+export const SCROLL_BEHAVIORS = ['load-more', 'paged', 'infinite'] as const;
+export type ScrollBehavior = typeof SCROLL_BEHAVIORS[number];
+
+export const VIDEO_PLAYBACKS = ['tap-to-play', 'wifi-autoplay', 'muted-autoplay', 'full-autoplay'] as const;
+export type VideoPlayback = typeof VIDEO_PLAYBACKS[number];
+
+export const FEED_ORDERS = ['newest', 'oldest', 'most-active', 'curated'] as const;
+export type FeedOrder = typeof FEED_ORDERS[number];
+
+export const CONVERSATION_MODES = ['board', 'hybrid', 'chat'] as const;
+export type ConversationMode = typeof CONVERSATION_MODES[number];
+
+export const LAYOUT_STYLES = ['single-column', 'masonry', 'compact-grid'] as const;
+export type LayoutStyle = typeof LAYOUT_STYLES[number];
+
+export const EXPERIENCE_PRESETS_LIST = ['calm', 'balanced', 'lively', 'custom'] as const;
+export type ExperiencePreset = typeof EXPERIENCE_PRESETS_LIST[number];
+
+/** Type guard — checks if a string is a valid ScrollBehavior. */
+export function isScrollBehavior(v: unknown): v is ScrollBehavior {
+	return typeof v === 'string' && (SCROLL_BEHAVIORS as readonly string[]).includes(v);
+}
+/** Type guard — checks if a string is a valid VideoPlayback. */
+export function isVideoPlayback(v: unknown): v is VideoPlayback {
+	return typeof v === 'string' && (VIDEO_PLAYBACKS as readonly string[]).includes(v);
+}
+/** Type guard — checks if a string is a valid FeedOrder. */
+export function isFeedOrder(v: unknown): v is FeedOrder {
+	return typeof v === 'string' && (FEED_ORDERS as readonly string[]).includes(v);
+}
+/** Type guard — checks if a string is a valid ConversationMode. */
+export function isConversationMode(v: unknown): v is ConversationMode {
+	return typeof v === 'string' && (CONVERSATION_MODES as readonly string[]).includes(v);
+}
+/** Type guard — checks if a string is a valid LayoutStyle. */
+export function isLayoutStyle(v: unknown): v is LayoutStyle {
+	return typeof v === 'string' && (LAYOUT_STYLES as readonly string[]).includes(v);
+}
 
 export interface UserExperiencePreferences {
 	scrollBehavior: ScrollBehavior;
@@ -285,15 +320,18 @@ export interface ProductContentDoc extends BaseContentDoc {
 	type: 'product';
 	url: string;
 	title: string;
+	description: string | null;
 	image: string | null;
-	price: string;
 	domain: string;
+	favicon: string | null;
+	enrichment?: import('./api').LinkEnrichment | null;
+	contentHash?: string;
+	/** Price tracking fields */
+	price: string;
 	originalPrice: string | null;
 	lastCheckedPrice: string | null;
 	lastCheckedAt: Timestamp | null;
 	priceDrop: boolean;
-	/** Reference to /globalContent/{contentHash} for deduplication */
-	contentHash?: string;
 }
 
 export interface VoiceContentDoc extends BaseContentDoc {

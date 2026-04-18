@@ -5,11 +5,11 @@
 <script lang="ts">
 	import type { ListCardProps } from '$lib/types/ui';
 	import Card from '$lib/components/ui/Card.svelte';
-	import { List, ListItem, Checkbox, Badge } from 'konsta/svelte';
+	import { Checkbox, Badge } from 'konsta/svelte';
 
 	let {
 		id, boardId, title, items, authorId, authorName, authorPhotoURL, createdAt, onToggleItem,
-		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onEdit, onDelete, onShare
+		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onEdit, onDelete, onShare, onCommentClick
 	}: ListCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -17,6 +17,7 @@
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onShare?: () => void;
+		onCommentClick?: () => void;
 	} = $props();
 
 	const completedCount = $derived(items.filter((i) => i.completed).length);
@@ -40,6 +41,7 @@
 	{onEdit}
 	{onDelete}
 	{onShare}
+	{onCommentClick}
 >
 	<!-- Title -->
 	<div class="flex items-center justify-between mb-3">
@@ -52,7 +54,7 @@
 	</div>
 
 	<!-- Progress bar -->
-	<div class="w-full h-2 bg-surface-2 rounded-full mb-4 overflow-hidden">
+	<div class="w-full h-2 bg-surface-2 rounded-full mb-3 overflow-hidden">
 		<div
 			class="h-full bg-primary transition-all duration-300"
 			style="width: {progress}%"
@@ -60,19 +62,17 @@
 	</div>
 
 	<!-- List items -->
-	<List outline class="max-h-64 overflow-y-auto">
+	<div class="space-y-1">
 		{#each items as item (item.id)}
-			<ListItem>
-				<label class="flex items-center gap-3 w-full cursor-pointer">
-					<Checkbox
-						checked={item.completed}
-						onchange={() => onToggleItem?.(item.id)}
-					/>
-					<span class="flex-1 {item.completed ? 'line-through text-muted' : ''}">
-						{item.text}
-					</span>
-				</label>
-			</ListItem>
+			<div class="flex items-center gap-3 p-2 rounded-xl {item.completed ? 'opacity-50' : ''}">
+				<Checkbox
+					checked={item.completed}
+					onchange={() => onToggleItem?.(item.id)}
+				/>
+				<span class="flex-1 text-[15px] {item.completed ? 'line-through text-muted' : ''}">
+					{item.text}
+				</span>
+			</div>
 		{/each}
-	</List>
+	</div>
 </Card>
