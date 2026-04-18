@@ -55,6 +55,12 @@ service cloud.firestore {
       match /readState/{docId} {
         allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
+
+      // On This Day memories (written by Cloud Functions)
+      match /memories/{memoryId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // ─── Boards ────────────────────────────────────────────────────────
@@ -214,6 +220,12 @@ service cloud.firestore {
         // Only members can read briefings (private-only social graph)
         allow read: if isMember(boardId);
         // Only Cloud Functions write briefings (admin SDK bypasses rules)
+        allow write: if false;
+      }
+
+      // ─── Smart Reminders (sent by Cloud Functions) ────────────────
+      match /reminders_sent/{reminderId} {
+        allow read: if isMember(boardId);
         allow write: if false;
       }
 
