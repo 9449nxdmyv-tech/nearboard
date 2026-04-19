@@ -59,7 +59,7 @@
 		xs: 'w-5 h-5 text-[8px]',
 		sm: 'w-7 h-7 text-[10px]',
 		md: 'w-10 h-10 text-xs',
-		lg: 'w-14 h-14 text-base'
+		lg: 'w-16 h-16 text-lg'
 	};
 
 	function initial(member: MemberDoc): string {

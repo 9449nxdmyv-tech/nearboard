@@ -314,7 +314,7 @@
 		<main class="px-4">
 			<!-- Members -->
 			{#if board && !loading}
-				<div class="flex flex-col items-center gap-2 mt-4 mb-3">
+				<div class="flex flex-col items-center gap-2.5 mt-5 mb-6">
 					<AvatarStack uids={board.memberIds} {boardId} size="lg" limit={4} />
 					<span class="text-[12px] text-muted font-medium">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
 				</div>
@@ -322,9 +322,9 @@
 				<!-- Sort + filter pills: sort sits at the leading edge as a fixed
 				     affordance; filter pills scroll beside it. -->
 				{#if pillOptions.length > 1 || visibleContent.length > 1}
-					<div class="-mx-4 mb-3">
+					<div class="-mx-4 mb-4">
 						<div class="overflow-x-auto overflow-y-hidden scrollbar-hide">
-							<div class="inline-flex items-center gap-1.5 px-4 py-1 min-w-full">
+							<div class="inline-flex items-center gap-3 px-4 py-1.5 min-w-full">
 								<!-- Sort pill (icon + caret) -->
 								<button
 									bind:this={sortMenuTarget}
@@ -341,7 +341,7 @@
 								</button>
 
 								{#if pillOptions.length > 1}
-									<div class="w-px h-4 bg-border shrink-0 mx-0.5" aria-hidden="true"></div>
+									<div class="w-px h-5 bg-border shrink-0" aria-hidden="true"></div>
 								{/if}
 
 								{#each pillOptions as opt (opt.value)}
