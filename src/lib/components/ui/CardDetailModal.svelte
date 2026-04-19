@@ -593,12 +593,13 @@
 				</h1>
 				{/if}
 
-				<!-- Default-link description sits directly under the title so the
-				     OG/meta summary is the first thing readers see. Variant-aware
-				     branches below (movie, place, etc.) keep their own descriptions. -->
+				<!-- Link description sits directly under the title for every
+				     variant so the OG/meta summary is the first thing readers
+				     see. Only long-form enriched payloads (recipe steps, article
+				     HTML) stay below the comments — see Content Body below. -->
 				{#if item.type === 'link'}
 					{@const link = item as LinkContentDoc}
-					{#if !link.enrichment && link.description}
+					{#if link.description}
 						<p class="text-[14px] text-on-surface/75 leading-relaxed mt-2">{link.description}</p>
 					{/if}
 				{/if}
@@ -710,14 +711,9 @@
 				{#if item.type === 'link'}
 					{@const link = item as LinkContentDoc}
 					{#if link.enrichment && isVideoEnrichment(link.enrichment)}
-						{#if link.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
-						{/if}
+						<!-- video enrichment: description already shown above title -->
 					{:else if link.enrichment && isMovieEnrichment(link.enrichment)}
 						{@const movie = link.enrichment}
-						{#if link.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
-						{/if}
 						<div class="space-y-2 mt-3">
 							{#if movie.director}
 								<p class="text-sm"><span class="font-bold text-muted uppercase text-[10px] tracking-wider mr-2">Director</span> {movie.director}</p>
@@ -728,17 +724,11 @@
 						</div>
 					{:else if link.enrichment && isBookEnrichment(link.enrichment)}
 						{@const book = link.enrichment}
-						{#if link.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
-						{/if}
 						{#if book.publisher}
 							<p class="text-xs text-muted mt-2">Published by {book.publisher} {book.publishDate ? `· ${book.publishDate}` : ''}</p>
 						{/if}
 					{:else if link.enrichment && isPlaceEnrichment(link.enrichment)}
 						{@const place = link.enrichment}
-						{#if link.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
-						{/if}
 						<div class="space-y-3 mt-3">
 							{#if place.address}
 								<div class="flex gap-3 items-start text-sm">
@@ -775,10 +765,6 @@
 							</Button>
 						</a>
 					{:else if link.enrichment && isGithubEnrichment(link.enrichment)}
-						{@const gh = link.enrichment}
-						{#if gh.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{gh.description}</p>
-						{/if}
 						<a href={link.url} target="_blank" rel="noopener noreferrer" class="mt-4 block">
 							<Button large rounded class="w-full">
 								<Icon icon="ph:github-logo" class="mr-2" />
@@ -962,8 +948,6 @@
 								<div class="article-content text-[16px] leading-relaxed">
 									{@html article.contentHtml}
 								</div>
-							{:else if link.description}
-								<p class="text-[15px] text-on-surface/80 leading-relaxed mb-4">{link.description}</p>
 							{/if}
 						{/if}
 
