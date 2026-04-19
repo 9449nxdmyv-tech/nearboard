@@ -314,9 +314,8 @@
 		<main class="px-4">
 			<!-- Members -->
 			{#if board && !loading}
-				<div class="flex flex-col items-center gap-2.5 mt-5 mb-6">
+				<div class="flex justify-center mt-5 mb-6">
 					<AvatarStack uids={board.memberIds} {boardId} size="lg" limit={4} />
-					<span class="text-[12px] text-muted font-medium">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
 				</div>
 
 				<!-- Sort + filter pills: sort sits at the leading edge as a fixed
@@ -348,23 +347,16 @@
 									{@const active = filterType === opt.value}
 									<button
 										onclick={() => { filterType = opt.value; }}
-										class="relative inline-flex items-center justify-center w-9 h-9 rounded-full
+										class="inline-flex items-center justify-center w-9 h-9 rounded-full
 											press-scale transition-colors shrink-0
 											{active
 												? 'bg-primary text-white shadow-sm'
 												: 'bg-surface-1 text-on-surface active:bg-surface-2'}"
 										aria-pressed={active}
-										aria-label="{opt.label} ({opt.count})"
-										title="{opt.label} · {opt.count}"
+										aria-label={opt.label}
+										title={opt.label}
 									>
 										<Icon icon={opt.icon} class="text-[15px]" />
-										{#if opt.count > 0 && opt.value !== 'all'}
-											<span
-												class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
-													text-[9px] font-bold leading-4 tabular-nums text-center
-													{active ? 'bg-white text-primary' : 'bg-on-surface/85 text-surface'}"
-											>{opt.count}</span>
-										{/if}
 									</button>
 								{/each}
 							</div>

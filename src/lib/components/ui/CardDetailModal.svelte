@@ -593,6 +593,16 @@
 				</h1>
 				{/if}
 
+				<!-- Default-link description sits directly under the title so the
+				     OG/meta summary is the first thing readers see. Variant-aware
+				     branches below (movie, place, etc.) keep their own descriptions. -->
+				{#if item.type === 'link'}
+					{@const link = item as LinkContentDoc}
+					{#if !link.enrichment && link.description}
+						<p class="text-[14px] text-on-surface/75 leading-relaxed mt-2">{link.description}</p>
+					{/if}
+				{/if}
+
 				<!-- Poll / List / Voice content (between title and comments) -->
 				{#if item.type === 'poll'}
 					{@const poll = item as PollContentDoc}
@@ -775,10 +785,6 @@
 								View Repository
 							</Button>
 						</a>
-					{:else if !(link.enrichment && (isRecipeEnrichment(link.enrichment) || isArticleEnrichment(link.enrichment)))}
-						{#if link.description}
-							<p class="text-[14px] text-on-surface/70 leading-relaxed mt-3 line-clamp-3">{link.description}</p>
-						{/if}
 					{/if}
 				{:else if item.type === 'note'}
 					{@const note = item as NoteContentDoc}

@@ -15,14 +15,13 @@
 		setFeedItems,
 		setFeedLoading,
 		sortFeedItems,
-		markAllFeedRead,
-		setSortMode
+		setSortMode,
+		type FeedSortMode
 	} from '$lib/stores';
 	import {
 		subscribeToBoardContentPaginated,
 		fetchLatestBoardContent,
 		isContentVisible,
-		updateLastSeen,
 		getBoard
 	} from '$lib/firebase';
 	import type { ContentDoc } from '$lib/types';
@@ -33,11 +32,50 @@
 	import MasonryGrid from '$lib/components/ui/MasonryGrid.svelte';
 	import { globalExperience } from '$lib/stores';
 
-	import { Page } from 'konsta/svelte';
+	import { Page, Popover } from 'konsta/svelte';
 	import CardDetailModal from '$lib/components/ui/CardDetailModal.svelte';
 
-	const sortedItems = $derived(sortFeedItems($feedStore.items, $feedStore.sortMode));
+	type FeedFilterType = 'all' | 'note' | 'list' | 'link' | 'photo' | 'video' | 'voice' | 'poll' | 'location' | 'product';
+
+	const FILTER_OPTIONS: { value: FeedFilterType; label: string; icon: string }[] = [
+		{ value: 'all', label: 'All', icon: 'ph:squares-four' },
+		{ value: 'note', label: 'Notes', icon: 'ph:note-pencil' },
+		{ value: 'list', label: 'Lists', icon: 'ph:list-checks' },
+		{ value: 'link', label: 'Links', icon: 'ph:link' },
+		{ value: 'product', label: 'Products', icon: 'ph:shopping-bag' },
+		{ value: 'photo', label: 'Photos', icon: 'ph:camera' },
+		{ value: 'video', label: 'Videos', icon: 'ph:video-camera' },
+		{ value: 'voice', label: 'Voice', icon: 'ph:microphone' },
+		{ value: 'poll', label: 'Polls', icon: 'ph:chart-bar' },
+		{ value: 'location', label: 'Places', icon: 'ph:map-pin' }
+	];
+
+	const SORT_OPTIONS: { value: FeedSortMode; label: string; icon: string; description: string }[] = [
+		{ value: 'latest', label: 'Newest first', icon: 'ph:clock-counter-clockwise', description: 'Latest across your boards' },
+		{ value: 'oldest', label: 'Oldest first', icon: 'ph:clock', description: 'Catch up from the start' },
+		{ value: 'unread', label: 'Unread first', icon: 'ph:circle-dashed', description: 'Things you haven\u2019t seen yet' },
+		{ value: 'by-board', label: 'By board', icon: 'ph:kanban', description: 'Grouped by board name' },
+		{ value: 'most-active', label: 'Most active', icon: 'ph:fire', description: 'Busy boards first' }
+	];
+
+	let filterType = $state<FeedFilterType>('all');
+	let sortMenuOpen = $state(false);
+	let sortMenuTarget = $state<HTMLButtonElement | undefined>();
+
+	const filteredItems = $derived(
+		filterType === 'all'
+			? $feedStore.items
+			: $feedStore.items.filter((f) => f.content.type === filterType)
+	);
+	const sortedItems = $derived(sortFeedItems(filteredItems, $feedStore.sortMode));
 	const feedLayout = $derived($globalExperience.layoutStyle);
+	const currentSortOption = $derived(SORT_OPTIONS.find((o) => o.value === $feedStore.sortMode) ?? SORT_OPTIONS[0]);
+
+	/** Only show filter pills for content types that have at least one item. */
+	const pillOptions = $derived.by(() => {
+		const present = new Set($feedStore.items.map((f) => f.content.type));
+		return FILTER_OPTIONS.filter((opt) => opt.value === 'all' || present.has(opt.value));
+	});
 
 	let detailItemId = $state<string | null>(null);
 	let detailBoardId = $state('');
@@ -197,34 +235,10 @@
 		};
 	});
 
-	async function markAllRead() {
-		const user = $userStore.user;
-		if (!user) return;
-		try {
-			const boards = $boardStore.boards;
-			await Promise.all([
-				updateLastSeen(user.uid),
-				...boards.map((b) => import('$lib/firebase').then(({ markBoardRead }) => markBoardRead(b.id, user.uid)))
-			]);
-			markAllFeedRead();
-			showToast('Marked all as read', 'success');
-		} catch {
-			showToast('Failed to mark as read', 'error');
-		}
-	}
 </script>
 
 <Page>
-	<Header title="Feed">
-		{#if !$feedStore.loading && $feedStore.unseenCount > 0}
-			<button
-				onclick={markAllRead}
-				class="text-xs text-primary font-medium"
-			>
-				Mark all read
-			</button>
-		{/if}
-	</Header>
+	<Header title="Feed" />
 
 	<main class="flex-1 px-4">
 		{#if $feedStore.loading}
@@ -239,14 +253,89 @@
 					</div>
 				{/each}
 			</div>
-		{:else if sortedItems.length === 0}
+		{:else if $feedStore.items.length === 0}
 			<EmptyState
 				icon="ph:rss"
 				title="Feed is empty"
 				description="Content from all your boards will appear here"
 			/>
 		{:else}
-			<div class="mt-4">
+			<!-- Filter + sort pills — mirrors the board page chrome. -->
+			{#if pillOptions.length > 1}
+				<div class="-mx-4 mt-4 mb-3">
+					<div class="overflow-x-auto overflow-y-hidden scrollbar-hide">
+						<div class="inline-flex items-center gap-3 px-4 py-1.5 min-w-full">
+							<button
+								bind:this={sortMenuTarget}
+								onclick={() => { sortMenuOpen = !sortMenuOpen; }}
+								class="inline-flex items-center justify-center w-9 h-9 rounded-full
+									press-scale transition-colors shrink-0
+									bg-surface-1 text-on-surface active:bg-surface-2"
+								aria-haspopup="menu"
+								aria-expanded={sortMenuOpen}
+								aria-label="Sort: {currentSortOption.label}"
+								title="Sort: {currentSortOption.label}"
+							>
+								<Icon icon={currentSortOption.icon} class="text-[15px] text-on-surface" />
+							</button>
+
+							<div class="w-px h-5 bg-border shrink-0" aria-hidden="true"></div>
+
+							{#each pillOptions as opt (opt.value)}
+								{@const active = filterType === opt.value}
+								<button
+									onclick={() => { filterType = opt.value; }}
+									class="inline-flex items-center justify-center w-9 h-9 rounded-full
+										press-scale transition-colors shrink-0
+										{active
+											? 'bg-primary text-white shadow-sm'
+											: 'bg-surface-1 text-on-surface active:bg-surface-2'}"
+									aria-pressed={active}
+									aria-label={opt.label}
+									title={opt.label}
+								>
+									<Icon icon={opt.icon} class="text-[15px]" />
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+
+				<Popover opened={sortMenuOpen} target={sortMenuTarget} onBackdropClick={() => { sortMenuOpen = false; }}>
+					<div class="py-1 min-w-[220px]" role="menu">
+						{#each SORT_OPTIONS as opt (opt.value)}
+							{@const active = $feedStore.sortMode === opt.value}
+							<button
+								role="menuitemradio"
+								aria-checked={active}
+								onclick={() => { setSortMode(opt.value); sortMenuOpen = false; }}
+								class="w-full flex items-start gap-3 px-4 py-2.5 text-left active:bg-surface-1 transition-colors
+									{active ? 'text-primary' : 'text-on-surface'}"
+							>
+								<Icon icon={opt.icon} class="text-base mt-0.5 shrink-0 {active ? 'text-primary' : 'text-muted'}" />
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center gap-2">
+										<span class="text-sm font-medium">{opt.label}</span>
+										{#if active}<Icon icon="ph:check" class="text-sm text-primary" />{/if}
+									</div>
+									<div class="text-[11px] text-muted mt-0.5">{opt.description}</div>
+								</div>
+							</button>
+						{/each}
+					</div>
+				</Popover>
+			{/if}
+
+			{#if sortedItems.length === 0}
+				<EmptyState
+					icon="ph:funnel"
+					title="No items found"
+					description="No items match your current filter"
+					actionLabel="Clear filter"
+					onAction={() => { filterType = 'all'; }}
+				/>
+			{:else}
+			<div class={pillOptions.length > 1 ? '' : 'mt-4'}>
 				<MasonryGrid columns={2} layout={feedLayout}>
 					{#each sortedItems as feedItem, i (feedItem.content.id)}
 						<div class="stagger-fade-in" style="--stagger-index: {i}">
@@ -282,6 +371,7 @@
 					{/each}
 				</MasonryGrid>
 			</div>
+			{/if}
 		{/if}
 	</main>
 </Page>
