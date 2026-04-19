@@ -14,7 +14,7 @@
 		uids?: string[];
 		boardId?: string;
 		limit?: number;
-		size?: 'xs' | 'sm' | 'md';
+		size?: 'xs' | 'sm' | 'md' | 'lg';
 		showCount?: boolean;
 	} = $props();
 
@@ -58,7 +58,8 @@
 	const sizeClasses: Record<string, string> = {
 		xs: 'w-5 h-5 text-[8px]',
 		sm: 'w-7 h-7 text-[10px]',
-		md: 'w-10 h-10 text-xs'
+		md: 'w-10 h-10 text-xs',
+		lg: 'w-14 h-14 text-base'
 	};
 
 	function initial(member: MemberDoc): string {

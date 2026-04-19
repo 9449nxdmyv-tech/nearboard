@@ -57,9 +57,64 @@
 	);
 	const currentPath = $derived($page.url.pathname);
 
-	// Bottom padding: tabbar + safe area for home indicator
-	// ~100px+ total: tabbar (~50px) + pb-safe min (16px) + FAB protrusion (8px) + visual buffer
-	const bottomPaddingStyle = $derived(showTabbar ? 'padding-bottom: 120px' : '');
+	// Konsta's iOS Tabbar already adds safe-area + 16px padding internally
+	// (pb-safe-4), so the outer wrapper doesn't stack another pb-safe on top —
+	// that was doubling the home-indicator clearance and eating content.
+	// Total nav height: 64 (inner) + 16 (internal buffer) + safe-area.
+	// Content clears the nav + a little room for the FAB sticking up.
+	const bottomPaddingStyle = $derived(
+		showTabbar ? 'padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px))' : ''
+	);
+
+	// ─── Tabbar hide-on-scroll ──────────────────────────────────
+	// Hide while the user is actively scrolling down, restore on scroll-up or
+	// when scrolling pauses. Keeps more vertical room for content on phones.
+	let tabbarHidden = $state(false);
+	let lastScrollY = 0;
+	let scrollIdleTimer: ReturnType<typeof setTimeout> | undefined;
+	let scrollFrame = 0;
+
+	function handleScroll() {
+		if (scrollFrame) return;
+		scrollFrame = requestAnimationFrame(() => {
+			scrollFrame = 0;
+			const y = window.scrollY;
+			const delta = y - lastScrollY;
+			// Small movements near the top shouldn't hide — avoids flicker.
+			if (y < 80) {
+				tabbarHidden = false;
+			} else if (delta > 6) {
+				tabbarHidden = true;
+			} else if (delta < -6) {
+				tabbarHidden = false;
+			}
+			lastScrollY = y;
+			clearTimeout(scrollIdleTimer);
+			scrollIdleTimer = setTimeout(() => { tabbarHidden = false; }, 180);
+		});
+	}
+
+	$effect(() => {
+		if (!browser || !showTabbar) {
+			tabbarHidden = false;
+			return;
+		}
+		lastScrollY = window.scrollY;
+		window.addEventListener('scroll', handleScroll, { passive: true });
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			clearTimeout(scrollIdleTimer);
+			if (scrollFrame) cancelAnimationFrame(scrollFrame);
+			scrollFrame = 0;
+		};
+	});
+
+	// Reset hidden state on route change so a new page always starts with
+	// the tabbar visible.
+	$effect(() => {
+		$page.url.pathname;
+		tabbarHidden = false;
+	});
 
 	/** Extract boardId from route params */
 	const routeBoardId = $derived(
@@ -305,7 +360,11 @@
 
 		<!-- Bottom Tabbar with center FAB -->
 		{#if showTabbar}
-			<div class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light pb-safe">
+			<div
+				class="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border-light
+					transition-transform duration-200 ease-out
+					{tabbarHidden ? 'translate-y-full' : 'translate-y-0'}"
+			>
 				<div class="relative">
 					<!-- Center FAB button -->
 					<button

@@ -314,9 +314,9 @@
 		<main class="px-4">
 			<!-- Members -->
 			{#if board && !loading}
-				<div class="flex flex-col items-center gap-1.5 mt-4 mb-3">
-					<AvatarStack uids={board.memberIds} {boardId} size="md" />
-					<span class="text-[11px] text-muted font-medium">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
+				<div class="flex flex-col items-center gap-2 mt-4 mb-3">
+					<AvatarStack uids={board.memberIds} {boardId} size="lg" limit={4} />
+					<span class="text-[12px] text-muted font-medium">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
 				</div>
 
 				<!-- Sort + filter pills: sort sits at the leading edge as a fixed
@@ -325,20 +325,19 @@
 					<div class="-mx-4 mb-3">
 						<div class="overflow-x-auto overflow-y-hidden scrollbar-hide">
 							<div class="inline-flex items-center gap-1.5 px-4 py-1 min-w-full">
-								<!-- Sort pill -->
+								<!-- Sort pill (icon + caret) -->
 								<button
 									bind:this={sortMenuTarget}
 									onclick={() => { sortMenuOpen = !sortMenuOpen; }}
-									class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
-										text-[12px] font-medium whitespace-nowrap press-scale transition-colors shrink-0
+									class="inline-flex items-center gap-1 w-9 h-9 justify-center rounded-full
+										press-scale transition-colors shrink-0
 										bg-surface-1 text-on-surface active:bg-surface-2"
 									aria-haspopup="menu"
 									aria-expanded={sortMenuOpen}
 									aria-label="Sort: {currentSortOption.label}"
+									title="Sort: {currentSortOption.label}"
 								>
-									<Icon icon={currentSortOption.icon} class="text-xs text-muted" />
-									<span>{currentSortOption.label}</span>
-									<Icon icon="ph:caret-down" class="text-[10px] text-muted" />
+									<Icon icon={currentSortOption.icon} class="text-[15px] text-on-surface" />
 								</button>
 
 								{#if pillOptions.length > 1}
@@ -349,16 +348,23 @@
 									{@const active = filterType === opt.value}
 									<button
 										onclick={() => { filterType = opt.value; }}
-										class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
-											text-[12px] font-medium whitespace-nowrap press-scale transition-colors
+										class="relative inline-flex items-center justify-center w-9 h-9 rounded-full
+											press-scale transition-colors shrink-0
 											{active
 												? 'bg-primary text-white shadow-sm'
 												: 'bg-surface-1 text-on-surface active:bg-surface-2'}"
 										aria-pressed={active}
+										aria-label="{opt.label} ({opt.count})"
+										title="{opt.label} · {opt.count}"
 									>
-										<Icon icon={opt.icon} class="text-xs {active ? '' : 'text-muted'}" />
-										<span>{opt.label}</span>
-										<span class="tabular-nums text-[10px] {active ? 'text-white/75' : 'text-muted'}">{opt.count}</span>
+										<Icon icon={opt.icon} class="text-[15px]" />
+										{#if opt.count > 0 && opt.value !== 'all'}
+											<span
+												class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
+													text-[9px] font-bold leading-4 tabular-nums text-center
+													{active ? 'bg-white text-primary' : 'bg-on-surface/85 text-surface'}"
+											>{opt.count}</span>
+										{/if}
 									</button>
 								{/each}
 							</div>
