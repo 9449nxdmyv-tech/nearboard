@@ -69,6 +69,7 @@ export {
 	getAllReadTimestamps,
 	loadMoreContent,
 	subscribeToBoardContentPaginated,
+	fetchLatestBoardContent,
 	CONTENT_PAGE_SIZE,
 	getRecentVideos
 } from './boardService';

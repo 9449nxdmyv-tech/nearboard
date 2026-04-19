@@ -34,10 +34,14 @@ let lastCheckedBoardKey = '';
 
 /**
  * Compute unread set using a single consolidated readState doc (1 read total).
- * Only re-fetches when the board list changes (by comparing sorted IDs).
+ * Re-fetches when the board list OR any board's lastActivityAt changes,
+ * so newly-written content flips its source board to unread in real time.
  */
 async function refreshUnreadState(userId: string, boards: BoardDoc[]): Promise<void> {
-	const boardKey = boards.map((b) => b.id).sort().join(',');
+	const boardKey = boards
+		.map((b) => `${b.id}:${b.lastActivityAt?.toMillis?.() ?? 0}`)
+		.sort()
+		.join(',');
 	if (boardKey === lastCheckedBoardKey) return;
 	lastCheckedBoardKey = boardKey;
 

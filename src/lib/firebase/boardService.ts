@@ -384,6 +384,17 @@ export async function loadMoreContent(
 }
 
 /**
+ * One-shot fetch of the first page of board content (no listener).
+ * Use for feed rendering of low-activity boards where a live subscription
+ * isn't worth the socket/memory overhead.
+ */
+export async function fetchLatestBoardContent(boardId: string): Promise<ContentDoc[]> {
+	const q = query(contentCol(boardId), orderBy('createdAt', 'desc'), firestoreLimit(CONTENT_PAGE_SIZE));
+	const snapshot = await getDocs(q);
+	return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ContentDoc);
+}
+
+/**
  * Subscribes to the first page of board content (real-time).
  * Returns an unsubscribe function and calls onUpdate with items + last doc snapshot.
  */

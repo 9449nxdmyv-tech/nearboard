@@ -13,6 +13,7 @@
 	import type { BoardDoc, PageMetadata } from '$lib/types';
 	import SheetHeader from './SheetHeader.svelte';
 	import ChatInput from './ChatInput.svelte';
+	import { swipeToDismiss } from '$lib/utils/swipeToDismiss';
 
 	export type CaptureType = 'note' | 'link' | 'photo' | 'video' | 'voice' | 'list' | 'poll' | 'location';
 
@@ -182,6 +183,7 @@
 <!-- Sheet -->
 <div
 	bind:this={sheetRef}
+	use:swipeToDismiss={{ onDismiss: onClose }}
 	class="fixed bottom-0 left-0 right-0 z-[101] bg-surface rounded-t-[20px] shadow-xl pb-safe max-h-[90vh] overflow-y-auto"
 	transition:fly={{ y: 300, duration: 250 }}
 >

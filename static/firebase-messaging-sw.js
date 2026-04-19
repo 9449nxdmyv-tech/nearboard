@@ -50,13 +50,19 @@ self.addEventListener('notificationclick', (event) => {
 	const url = boardId ? `/board/${boardId}` : '/';
 
 	event.waitUntil(
-		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
 			for (const client of clients) {
-				if (client.url.includes(self.location.origin)) {
-					// Post message to let SvelteKit handle SPA routing (no full reload)
-					client.postMessage({ type: 'NOTIFICATION_CLICK', boardId });
-					return client.focus();
-				}
+				if (!client.url.includes(self.location.origin)) continue;
+				// Try SPA routing via postMessage; fall back to navigate() if the
+				// client has no listener yet or postMessage is rejected.
+				try { client.postMessage({ type: 'NOTIFICATION_CLICK', boardId }); } catch { /* */ }
+				try {
+					if (!client.url.endsWith(url) && typeof client.navigate === 'function') {
+						const navigated = await client.navigate(url).catch(() => null);
+						if (navigated) return navigated.focus();
+					}
+				} catch { /* */ }
+				return client.focus();
 			}
 			return self.clients.openWindow(url);
 		})

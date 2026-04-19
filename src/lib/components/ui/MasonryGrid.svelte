@@ -25,7 +25,17 @@
 		{@render children()}
 	</div>
 {:else if layout === 'compact-grid'}
-	<div class="relative z-0 grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 [&>div]:overflow-hidden {extraClass}">
+	<!--
+	  Uniform square tiles. Each direct child is forced to aspect-square with
+	  overflow-hidden so every card renders as a consistent thumbnail; the
+	  inner article keeps its own styling but is clipped from the bottom.
+	-->
+	<div
+		class="relative z-0 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3
+			[&>div]:aspect-square [&>div]:overflow-hidden [&>div]:rounded-[var(--radius-card)]
+			[&>div>article]:h-full [&>div>article]:shadow-none [&>div>article]:rounded-none
+			{extraClass}"
+	>
 		{@render children()}
 	</div>
 {:else}

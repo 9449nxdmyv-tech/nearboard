@@ -133,10 +133,12 @@
 		}
 	}
 
+	let loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+
 	onMount(() => {
 		console.log('Popup mounted. Checking auth state...');
 		// Set a timeout for loading state to prevent infinite spinner
-		const loadingTimeout = setTimeout(() => {
+		loadingTimeout = setTimeout(() => {
 			if (loading) {
 				loading = false;
 				if (!user) {
@@ -218,7 +220,16 @@
 			loading = false;
 		});
 
-		return unsubscribe;
+		return () => {
+			unsubscribe();
+			if (loadingTimeout) { clearTimeout(loadingTimeout); loadingTimeout = null; }
+			if (recordingInterval) { clearInterval(recordingInterval); recordingInterval = null; }
+			if (recordingTimeout) { clearTimeout(recordingTimeout); recordingTimeout = null; }
+			// Stop recording + release microphone if popup closes mid-capture
+			if (mediaRecorder && mediaRecorder.state === 'recording') {
+				try { mediaRecorder.stop(); } catch { /* ignore */ }
+			}
+		};
 	});
 
 	async function handleSignIn() {

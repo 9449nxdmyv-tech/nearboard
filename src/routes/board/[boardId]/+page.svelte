@@ -22,10 +22,11 @@
 	import { goto } from '$app/navigation';
 	import { setActiveBoard, userStore, showToast, boardContentPagination, resetContentPagination, loadMoreBoardContent } from '$lib/stores';
 	import { copyToClipboard } from '$lib/utils/clipboard';
-	import type { BoardDoc, ContentDoc, MemberDoc } from '$lib/types';
+	import type { BoardDoc, ContentDoc, MemberDoc, FeedOrder } from '$lib/types';
+	import { Popover } from 'konsta/svelte';
 	import { getEffectiveExperience } from '$lib/stores';
 	import { shareContent } from '$lib/utils/share';
-	import { Page, Sheet, Actions, ActionsGroup, ActionsButton, ActionsLabel } from 'konsta/svelte';
+	import { Page, Actions, ActionsGroup, ActionsButton } from 'konsta/svelte';
 	import ContentRenderer from '$lib/components/ui/ContentRenderer.svelte';
 	import CardDetailModal from '$lib/components/ui/CardDetailModal.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -55,9 +56,19 @@
 		{ value: 'location', label: 'Places', icon: 'ph:map-pin' }
 	];
 
+	const SORT_OPTIONS: { value: FeedOrder; label: string; icon: string; description: string }[] = [
+		{ value: 'newest', label: 'Newest first', icon: 'ph:clock-counter-clockwise', description: 'Latest additions on top' },
+		{ value: 'oldest', label: 'Oldest first', icon: 'ph:clock', description: 'Earliest first, story order' },
+		{ value: 'most-active', label: 'Most active', icon: 'ph:fire', description: 'Comments and reactions first' },
+		{ value: 'curated', label: 'Curated', icon: 'ph:sparkle', description: 'A thoughtful mix' }
+	];
+
 	let filterType = $state<BoardFilterType>('all');
 	let showFabMenu = $state(false);
-	let showFilterSheet = $state(false);
+	// `null` means "follow the board/user setting"; a concrete value is a session override.
+	let sortOverride = $state<FeedOrder | null>(null);
+	let sortMenuOpen = $state(false);
+	let sortMenuTarget = $state<HTMLButtonElement | undefined>();
 
 	let board = $state<BoardDoc | null>(null);
 	let firstPageContent = $state<ContentDoc[]>([]);
@@ -122,19 +133,59 @@
 	const visibleContent = $derived(
 		allContent.filter((item) => isContentVisible(item, isOwner))
 	);
+
+	const effectiveSort: FeedOrder = $derived(sortOverride ?? boardExperience.feedOrder);
+
+	function engagementScore(item: ContentDoc): number {
+		const comments = item.commentCount ?? 0;
+		const acks = item.acknowledgments ? Object.keys(item.acknowledgments).length : 0;
+		return comments * 2 + acks;
+	}
+
+	function sortBoardItems(items: ContentDoc[], order: FeedOrder): ContentDoc[] {
+		const sorted = [...items];
+		const ms = (i: ContentDoc) => i.createdAt?.toMillis?.() ?? 0;
+		switch (order) {
+			case 'oldest':
+				return sorted.sort((a, b) => ms(a) - ms(b));
+			case 'most-active':
+				return sorted.sort((a, b) => {
+					const diff = engagementScore(b) - engagementScore(a);
+					return diff !== 0 ? diff : ms(b) - ms(a);
+				});
+			case 'curated':
+				// No backend ranking yet — fall back to newest so the option is
+				// still honored without producing a random shuffle.
+				return sorted.sort((a, b) => ms(b) - ms(a));
+			case 'newest':
+			default:
+				return sorted.sort((a, b) => ms(b) - ms(a));
+		}
+	}
+
 	const filteredContent = $derived.by(() => {
-		const items = filterType === 'all'
+		const filtered = filterType === 'all'
 			? visibleContent
 			: visibleContent.filter((item) => item.type === filterType);
-		if (boardExperience.feedOrder === 'oldest') {
-			return [...items].reverse();
-		}
-		return items;
+		return sortBoardItems(filtered, effectiveSort);
 	});
 
-	const activeFilterCount = $derived(
-		FILTER_OPTIONS.filter(opt => opt.value !== 'all' && visibleContent.some(c => c.type === opt.value)).length
-	);
+	const currentSortOption = $derived(SORT_OPTIONS.find((o) => o.value === effectiveSort) ?? SORT_OPTIONS[0]);
+
+	/** Filter options that have at least one item in the board, with counts. */
+	const pillOptions = $derived.by(() => {
+		const counts = new Map<BoardFilterType, number>();
+		for (const item of visibleContent) counts.set(item.type as BoardFilterType, (counts.get(item.type as BoardFilterType) ?? 0) + 1);
+		const out: { value: BoardFilterType; label: string; icon: string; count: number }[] = [
+			{ value: 'all', label: 'All', icon: FILTER_OPTIONS[0].icon, count: visibleContent.length }
+		];
+		for (const opt of FILTER_OPTIONS) {
+			if (opt.value === 'all') continue;
+			const c = counts.get(opt.value) ?? 0;
+			if (c > 0) out.push({ ...opt, count: c });
+		}
+		return out;
+	});
 
 	const nudge = $derived.by(() => {
 		const user = $userStore.user;
@@ -183,11 +234,6 @@
 	function openSettings() {
 		showFabMenu = false;
 		goto(`/board/${boardId}/settings`);
-	}
-
-	function toggleFilterSheet() {
-		showFabMenu = false;
-		showFilterSheet = !showFilterSheet;
 	}
 
 	onMount(() => {
@@ -266,26 +312,94 @@
 	{:else}
 		<!-- Board / Hybrid mode: card grid -->
 		<main class="px-4">
-			<!-- Members + filter -->
+			<!-- Members -->
 			{#if board && !loading}
-				<div class="flex flex-col items-center gap-1.5 mt-4 mb-2">
+				<div class="flex flex-col items-center gap-1.5 mt-4 mb-3">
 					<AvatarStack uids={board.memberIds} {boardId} size="md" />
 					<span class="text-[11px] text-muted font-medium">{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}</span>
-
-					{#if filterType !== 'all'}
-						<button
-							onclick={() => { filterType = 'all'; }}
-							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium
-								bg-primary text-white shadow-sm press-scale mt-1"
-						>
-							<Icon icon={FILTER_OPTIONS.find(o => o.value === filterType)?.icon ?? 'ph:funnel'} class="text-xs" />
-							{FILTER_OPTIONS.find(o => o.value === filterType)?.label}
-							<Icon icon="ph:x" class="text-[10px]" />
-						</button>
-					{/if}
 				</div>
 
-				<hr class="border-surface-1 mb-4" />
+				<!-- Sort + filter pills: sort sits at the leading edge as a fixed
+				     affordance; filter pills scroll beside it. -->
+				{#if pillOptions.length > 1 || visibleContent.length > 1}
+					<div class="-mx-4 mb-3">
+						<div class="overflow-x-auto overflow-y-hidden scrollbar-hide">
+							<div class="inline-flex items-center gap-1.5 px-4 py-1 min-w-full">
+								<!-- Sort pill -->
+								<button
+									bind:this={sortMenuTarget}
+									onclick={() => { sortMenuOpen = !sortMenuOpen; }}
+									class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+										text-[12px] font-medium whitespace-nowrap press-scale transition-colors shrink-0
+										bg-surface-1 text-on-surface active:bg-surface-2"
+									aria-haspopup="menu"
+									aria-expanded={sortMenuOpen}
+									aria-label="Sort: {currentSortOption.label}"
+								>
+									<Icon icon={currentSortOption.icon} class="text-xs text-muted" />
+									<span>{currentSortOption.label}</span>
+									<Icon icon="ph:caret-down" class="text-[10px] text-muted" />
+								</button>
+
+								{#if pillOptions.length > 1}
+									<div class="w-px h-4 bg-border shrink-0 mx-0.5" aria-hidden="true"></div>
+								{/if}
+
+								{#each pillOptions as opt (opt.value)}
+									{@const active = filterType === opt.value}
+									<button
+										onclick={() => { filterType = opt.value; }}
+										class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+											text-[12px] font-medium whitespace-nowrap press-scale transition-colors
+											{active
+												? 'bg-primary text-white shadow-sm'
+												: 'bg-surface-1 text-on-surface active:bg-surface-2'}"
+										aria-pressed={active}
+									>
+										<Icon icon={opt.icon} class="text-xs {active ? '' : 'text-muted'}" />
+										<span>{opt.label}</span>
+										<span class="tabular-nums text-[10px] {active ? 'text-white/75' : 'text-muted'}">{opt.count}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					</div>
+
+					<Popover opened={sortMenuOpen} target={sortMenuTarget} onBackdropClick={() => { sortMenuOpen = false; }}>
+						<div class="py-1 min-w-[220px]" role="menu">
+							{#each SORT_OPTIONS as opt (opt.value)}
+								{@const active = effectiveSort === opt.value}
+								<button
+									role="menuitemradio"
+									aria-checked={active}
+									onclick={() => { sortOverride = opt.value; sortMenuOpen = false; }}
+									class="w-full flex items-start gap-3 px-4 py-2.5 text-left active:bg-surface-1 transition-colors
+										{active ? 'text-primary' : 'text-on-surface'}"
+								>
+									<Icon icon={opt.icon} class="text-base mt-0.5 shrink-0 {active ? 'text-primary' : 'text-muted'}" />
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-medium">{opt.label}</span>
+											{#if active}<Icon icon="ph:check" class="text-sm text-primary" />{/if}
+										</div>
+										<div class="text-[11px] text-muted mt-0.5">{opt.description}</div>
+									</div>
+								</button>
+							{/each}
+							{#if sortOverride !== null && sortOverride !== boardExperience.feedOrder}
+								<div class="border-t border-border-light mt-1 pt-1">
+									<button
+										onclick={() => { sortOverride = null; sortMenuOpen = false; }}
+										class="w-full flex items-center gap-2 px-4 py-2 text-left text-[11px] text-muted active:bg-surface-1 transition-colors"
+									>
+										<Icon icon="ph:arrow-counter-clockwise" class="text-xs" />
+										Reset to board default ({SORT_OPTIONS.find(o => o.value === boardExperience.feedOrder)?.label})
+									</button>
+								</div>
+							{/if}
+						</div>
+					</Popover>
+				{/if}
 			{/if}
 
 			{#if loading}
@@ -396,9 +510,6 @@
 <div class="relative z-50">
 <Actions opened={showFabMenu} onBackdropClick={() => { showFabMenu = false; }}>
 	<ActionsGroup>
-		<ActionsButton onClick={toggleFilterSheet} bold={filterType !== 'all'}>
-			Filter {filterType !== 'all' ? `(${FILTER_OPTIONS.find(o => o.value === filterType)?.label})` : ''}
-		</ActionsButton>
 		<ActionsButton onClick={copyShareLink}>
 			Invite to Board
 		</ActionsButton>
@@ -413,43 +524,6 @@
 	</ActionsGroup>
 </Actions>
 </div>
-
-<!-- Filter bottom sheet -->
-<Sheet opened={showFilterSheet} onBackdropClick={() => { showFilterSheet = false; }}>
-	<div class="px-5 pt-4 pb-2 flex items-center justify-between">
-		<h3 class="text-[15px] font-semibold text-on-surface">Filter by type</h3>
-		{#if filterType !== 'all'}
-			<button
-				onclick={() => { filterType = 'all'; showFilterSheet = false; }}
-				class="text-[13px] text-primary font-medium press-scale"
-			>
-				Clear
-			</button>
-		{/if}
-	</div>
-
-	<div class="px-4 pb-5">
-		<div class="grid grid-cols-3 gap-2">
-			{#each FILTER_OPTIONS as opt (opt.value)}
-				{@const count = opt.value === 'all' ? visibleContent.length : visibleContent.filter(c => c.type === opt.value).length}
-				{@const active = filterType === opt.value}
-				{#if opt.value === 'all' || count > 0}
-					<button
-						onclick={() => { filterType = opt.value; showFilterSheet = false; }}
-						class="flex flex-col items-center gap-1.5 py-3 rounded-2xl transition-all duration-200 press-scale
-							{active
-								? 'bg-primary text-white shadow-sm'
-								: 'bg-surface-1 text-on-surface active:bg-surface-2'}"
-					>
-						<Icon icon={opt.icon} class="text-xl {active ? '' : 'text-muted'}" />
-						<span class="text-[11px] font-medium">{opt.label}</span>
-						<span class="text-[10px] {active ? 'text-white/70' : 'text-muted'} tabular-nums">{count}</span>
-					</button>
-				{/if}
-			{/each}
-		</div>
-	</div>
-</Sheet>
 
 {#if confirmDelete}
 	<ConfirmDialog

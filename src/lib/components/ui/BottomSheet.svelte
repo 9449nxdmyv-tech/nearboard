@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
 	import { Sheet, Navbar, NavbarBackLink } from 'konsta/svelte';
+	import { swipeToDismiss } from '$lib/utils/swipeToDismiss';
 
 	let {
 		open,
@@ -21,6 +22,10 @@
 		closeOnBackdrop?: boolean;
 	} = $props();
 
+	// Anchor inside the Konsta Sheet children — we walk up to the sheet
+	// container in the effect below so we can attach the swipe action to it.
+	let innerAnchor = $state<HTMLElement | null>(null);
+
 	function handleBackdropClick() {
 		if (closeOnBackdrop) onClose();
 	}
@@ -28,6 +33,17 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onClose();
 	}
+
+	$effect(() => {
+		if (!open || !innerAnchor) return;
+		const sheetEl = innerAnchor.parentElement as HTMLElement | null;
+		if (!sheetEl) return;
+		const action = swipeToDismiss(sheetEl, {
+			onDismiss: onClose,
+			disabled: !closeOnBackdrop
+		});
+		return () => action?.destroy?.();
+	});
 </script>
 
 <svelte:window onkeydown={open ? handleKeydown : undefined} />
@@ -42,6 +58,7 @@
 	onBackdropClick={handleBackdropClick}
 	class="!max-w-lg !mx-auto"
 >
+	<div bind:this={innerAnchor} class="contents"></div>
 	{#if title}
 		<Navbar title={title} subtitle={subtitle} left={navLeft} />
 	{:else}

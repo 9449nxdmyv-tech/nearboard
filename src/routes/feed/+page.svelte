@@ -4,7 +4,9 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import Icon from '@iconify/svelte';
+	import { hapticLight } from '$lib/utils/haptics';
 	import {
 		userStore,
 		boardStore,
@@ -18,6 +20,7 @@
 	} from '$lib/stores';
 	import {
 		subscribeToBoardContentPaginated,
+		fetchLatestBoardContent,
 		isContentVisible,
 		updateLastSeen,
 		getBoard
@@ -46,6 +49,62 @@
 		shareContent(item, feedBoardId);
 	}
 
+	// ─── Windowed subscriptions ──────────────────────────────────────────
+	// Boards currently receiving real-time updates. Reactive so the UI can
+	// show a "Go live" affordance on boards that are one-shot fetches only.
+	let liveBoardIds = $state(new SvelteSet<string>());
+	const unsubsByBoard = new Map<string, () => void>();
+	const followedBoardMeta = new Map<string, { name: string; ownerId: string; allowComments: boolean }>();
+	const boardContentMap = new Map<string, ContentDoc[]>();
+	let rebuildTimer: ReturnType<typeof setTimeout>;
+
+	function rebuildFeed() {
+		clearTimeout(rebuildTimer);
+		rebuildTimer = setTimeout(rebuildFeedNow, 100);
+	}
+
+	function rebuildFeedNow() {
+		const user = $userStore.user;
+		const allItems: any[] = [];
+		const memberBoards = new Map<string, { name: string; ownerId: string; allowComments: boolean }>();
+		for (const b of $boardStore.boards) {
+			memberBoards.set(b.id, { name: b.name, ownerId: b.ownerId, allowComments: b.allowComments ?? true });
+		}
+
+		for (const [boardId, boardItems] of boardContentMap) {
+			const meta = memberBoards.get(boardId) ?? followedBoardMeta.get(boardId);
+			if (!meta) continue;
+			const isOwner = meta.ownerId === user?.uid;
+
+			for (const item of boardItems) {
+				if (isContentVisible(item, isOwner)) {
+					allItems.push({
+						content: item,
+						boardName: meta.name,
+						boardId,
+						isOwner,
+						allowComments: meta.allowComments
+					});
+				}
+			}
+		}
+
+		setFeedItems(allItems);
+	}
+
+	/** Promote a one-shot board to real-time updates. Idempotent. */
+	function goLive(boardId: string) {
+		if (unsubsByBoard.has(boardId)) return;
+		hapticLight();
+		liveBoardIds.add(boardId);
+		const unsub = subscribeToBoardContentPaginated(boardId, (items) => {
+			boardContentMap.set(boardId, items);
+			rebuildFeed();
+		});
+		unsubsByBoard.set(boardId, unsub);
+		showToast('Live updates on', 'success');
+	}
+
 	onMount(() => {
 		// Set initial sort mode from experience preferences
 		const feedOrder = $globalExperience.feedOrder;
@@ -67,74 +126,74 @@
 		if (boards.length === 0 && followOnlyIds.length === 0) return;
 
 		setFeedLoading(true);
-		const unsubs: (() => void)[] = [];
 
-		// Board metadata lookup (for followed boards we don't have in boardStore)
-		const boardMeta = new Map<string, { name: string; ownerId: string; allowComments: boolean }>();
-		for (const b of boards) {
-			boardMeta.set(b.id, { name: b.name, ownerId: b.ownerId, allowComments: b.allowComments ?? true });
-		}
+		// Windowed subscriptions: only the N most-recently-active boards get
+		// real-time listeners; the rest get a one-shot fetch. Keeps the open
+		// Firestore socket count bounded regardless of how many boards a user
+		// joins, while still showing their content in the feed. The user can
+		// promote any paused board via the "Go live" button in the card label.
+		const MAX_LIVE_SUBSCRIPTIONS = 6;
+		const sortedBoards = [...boards].sort((a, b) => {
+			const aT = a.lastActivityAt?.toMillis?.() ?? 0;
+			const bT = b.lastActivityAt?.toMillis?.() ?? 0;
+			return bT - aT;
+		});
+		const initialLiveIds = new Set(sortedBoards.slice(0, MAX_LIVE_SUBSCRIPTIONS).map((b) => b.id));
 
-		const boardContentMap = new Map<string, ContentDoc[]>();
-		let rebuildTimer: ReturnType<typeof setTimeout>;
+		const idle: (cb: () => void) => void =
+			typeof (globalThis as any).requestIdleCallback === 'function'
+				? (cb) => (globalThis as any).requestIdleCallback(cb, { timeout: 500 })
+				: (cb) => setTimeout(cb, 0);
 
-		function rebuildFeed() {
-			clearTimeout(rebuildTimer);
-			rebuildTimer = setTimeout(rebuildFeedNow, 100);
-		}
-
-		function rebuildFeedNow() {
-			const user = $userStore.user;
-			const allItems: any[] = [];
-
-			for (const [boardId, boardItems] of boardContentMap) {
-				const meta = boardMeta.get(boardId);
-				if (!meta) continue;
-				const isOwner = meta.ownerId === user?.uid;
-
-				for (const item of boardItems) {
-					if (isContentVisible(item, isOwner)) {
-						allItems.push({
-							content: item,
-							boardName: meta.name,
-							boardId,
-							isOwner,
-							allowComments: meta.allowComments
-						});
-					}
-				}
-			}
-
-			setFeedItems(allItems);
-		}
-
-		// Subscribe to member boards
-		for (const board of boards) {
-			unsubs.push(
-				subscribeToBoardContentPaginated(board.id, (items) => {
-					boardContentMap.set(board.id, items);
+		// Stagger subscription creation across idle ticks to avoid opening
+		// every Firestore socket in the same microtask on mount.
+		function scheduleSubscribe(boardId: string) {
+			idle(() => {
+				if (unsubsByBoard.has(boardId)) return;
+				liveBoardIds.add(boardId);
+				const unsub = subscribeToBoardContentPaginated(boardId, (items) => {
+					boardContentMap.set(boardId, items);
 					rebuildFeed();
-				})
-			);
+				});
+				unsubsByBoard.set(boardId, unsub);
+			});
 		}
 
-		// Subscribe to followed boards (fetch metadata first)
-		for (const fId of followOnlyIds) {
-			getBoard(fId).then(b => {
-				if (!b || !b.isPublic) return;
-				boardMeta.set(fId, { name: b.name, ownerId: b.ownerId, allowComments: false });
-				unsubs.push(
-					subscribeToBoardContentPaginated(fId, (items) => {
-						boardContentMap.set(fId, items);
+		for (const board of sortedBoards) {
+			if (initialLiveIds.has(board.id)) {
+				scheduleSubscribe(board.id);
+			} else {
+				// Low-activity boards: one-shot fetch, no listener
+				fetchLatestBoardContent(board.id)
+					.then((items) => {
+						boardContentMap.set(board.id, items);
 						rebuildFeed();
 					})
-				);
+					.catch(() => { /* permission denied or deleted — skip */ });
+			}
+		}
+
+		// Followed boards (non-member, typically few): always one-shot
+		for (const fId of followOnlyIds) {
+			getBoard(fId).then((b) => {
+				if (!b || !b.isPublic) return;
+				followedBoardMeta.set(fId, { name: b.name, ownerId: b.ownerId, allowComments: false });
+				return fetchLatestBoardContent(fId).then((items) => {
+					boardContentMap.set(fId, items);
+					rebuildFeed();
+				});
 			}).catch(() => { /* board may have been deleted */ });
 		}
 
+		// Rebuild when member board metadata (names, ownership) changes
+		const unsubBoardStore = boardStore.subscribe(() => rebuildFeed());
+
 		return () => {
 			clearTimeout(rebuildTimer);
-			unsubs.forEach((u) => u());
+			for (const u of unsubsByBoard.values()) u();
+			unsubsByBoard.clear();
+			liveBoardIds.clear();
+			unsubBoardStore();
 		};
 	});
 
@@ -191,10 +250,24 @@
 				<MasonryGrid columns={2} layout={feedLayout}>
 					{#each sortedItems as feedItem, i (feedItem.content.id)}
 						<div class="stagger-fade-in" style="--stagger-index: {i}">
-							<a href="/board/{feedItem.boardId}" class="inline-flex items-center gap-1.5 text-[11px] text-primary font-semibold mb-1 px-0.5">
-								<Icon icon="ph:kanban" class="text-xs" />
-								{feedItem.boardName}
-							</a>
+							<div class="flex items-center gap-1.5 mb-1 px-0.5">
+								<a href="/board/{feedItem.boardId}" class="inline-flex items-center gap-1.5 text-[11px] text-primary font-semibold">
+									<Icon icon="ph:kanban" class="text-xs" />
+									{feedItem.boardName}
+								</a>
+								{#if !liveBoardIds.has(feedItem.boardId)}
+									<button
+										type="button"
+										onclick={(e) => { e.stopPropagation(); goLive(feedItem.boardId); }}
+										class="inline-flex items-center gap-1 text-[10px] text-muted hover:text-accent transition-colors"
+										title="Enable real-time updates for this board"
+										aria-label="Enable live updates for {feedItem.boardName}"
+									>
+										<Icon icon="ph:lightning" class="text-[10px]" />
+										Go live
+									</button>
+								{/if}
+							</div>
 							<div onclick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; }} class="cursor-pointer">
 								<ContentRenderer
 									item={feedItem.content}

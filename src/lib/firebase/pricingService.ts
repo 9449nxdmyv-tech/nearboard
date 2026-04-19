@@ -118,22 +118,31 @@ export { parsePrice };
 
 /**
  * Fetches the price history entries for a product URL.
- * Returns numeric price points for charting.
+ * Returns numeric price points and their timestamps for charting.
  */
 export async function getPriceHistory(
 	productUrl: string
-): Promise<{ price: number; raw: string }[]> {
+): Promise<{ price: number; raw: string; checkedAt: Date }[]> {
 	try {
 		const docId = encodeURIComponent(productUrl).slice(0, 1500);
 		const snap = await getDoc(doc(db(), 'prices', docId));
 		if (!snap.exists()) return [];
 
-		const data = snap.data() as { entries?: { price: string }[] };
+		const data = snap.data() as { 
+			entries?: { price: string; checkedAt: any }[] 
+		};
 		if (!data.entries?.length) return [];
 
 		return data.entries
-			.map((e) => ({ price: parsePrice(e.price), raw: e.price }))
-			.filter((e) => !isNaN(e.price));
+			.map((e) => ({
+				price: parsePrice(e.price),
+				raw: e.price,
+				checkedAt: e.checkedAt?.toDate?.() ?? null
+			}))
+			.filter((e): e is { price: number; raw: string; checkedAt: Date } =>
+				!isNaN(e.price) && e.checkedAt !== null
+			)
+			.sort((a, b) => a.checkedAt.getTime() - b.checkedAt.getTime());
 	} catch {
 		return [];
 	}

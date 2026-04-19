@@ -52,7 +52,7 @@
 		authorPhotoURL: resolveAuthorPhoto
 			? resolveAuthorPhoto(item.authorId, item.authorPhotoURL)
 			: item.authorPhotoURL,
-		createdAt: item.createdAt?.toDate() ?? new Date(),
+		createdAt: item.createdAt?.toDate?.() ?? (item.createdAt instanceof Date ? item.createdAt : new Date()),
 		isBoardOwner,
 		allowComments,
 		expandComments,

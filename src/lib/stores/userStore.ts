@@ -69,10 +69,14 @@ export function initAuth(): () => void {
 			let userDoc = await getUserDoc(firebaseUser.uid);
 
 			// Race condition: onAuthStateChanged fires before ensureUserDoc
-			// finishes creating the doc. Retry once after a short delay.
+			// finishes creating the doc. Retry with exponential backoff so a
+			// slow network doesn't silently leave the caller with a stub doc.
 			if (!userDoc) {
-				await new Promise((r) => setTimeout(r, 1500));
-				userDoc = await getUserDoc(firebaseUser.uid);
+				for (const delay of [500, 1000, 2000, 4000]) {
+					await new Promise((r) => setTimeout(r, delay));
+					userDoc = await getUserDoc(firebaseUser.uid);
+					if (userDoc) break;
+				}
 			}
 
 			const resolvedUser: UserDoc = userDoc ?? {

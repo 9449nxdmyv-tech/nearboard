@@ -10,6 +10,7 @@
 	import { fly, fade } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import { useScrollLock } from '$lib/utils/scrollLock.svelte';
+	import { swipeToDismiss } from '$lib/utils/swipeToDismiss';
 	import type { Snippet } from 'svelte';
 
 	type Props = {
@@ -60,6 +61,7 @@
 		class="relative z-10 w-full h-full sm:h-auto bg-surface flex flex-col overflow-hidden {containerClass}"
 		in:fly={{ y: 40, duration: 300, easing: quintOut }}
 		onclick={(e) => e.stopPropagation()}
+		use:swipeToDismiss={{ onDismiss: onClose, disabled: !closeOnBackdrop }}
 	>
 		{@render children()}
 	</div>

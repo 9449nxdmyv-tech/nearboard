@@ -14,6 +14,7 @@
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
+import { promises as dns } from 'node:dns';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { enrichUrl, type EnrichmentResult } from '../utils/enrichmentService.js';
@@ -80,6 +81,27 @@ function isUrlSafe(targetUrl: string): { ok: boolean; error?: string } {
 	if (!['http:', 'https:'].includes(parsed.protocol)) return { ok: false, error: 'Only http/https URLs are allowed' };
 	if (isPrivateHost(parsed.hostname)) return { ok: false, error: 'Internal/private URLs are not allowed' };
 	return { ok: true };
+}
+
+/**
+ * DNS-resolves the hostname and rejects if any returned address is private,
+ * closing the DNS-rebinding bypass where a public hostname maps to a private IP.
+ */
+async function isUrlSafeWithDns(targetUrl: string): Promise<{ ok: boolean; error?: string }> {
+	const sync = isUrlSafe(targetUrl);
+	if (!sync.ok) return sync;
+	try {
+		const hostname = new URL(targetUrl).hostname.replace(/^\[|\]$/g, '');
+		// Skip DNS when the hostname is already a literal IP (already validated above)
+		if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':')) return { ok: true };
+		const records = await dns.lookup(hostname, { all: true });
+		for (const r of records) {
+			if (isPrivateHost(r.address)) return { ok: false, error: 'Internal/private URLs are not allowed' };
+		}
+		return { ok: true };
+	} catch {
+		return { ok: false, error: 'Could not resolve hostname' };
+	}
 }
 
 // ─── Rate limiter ────────────────────────────────────────────────────────────
@@ -714,7 +736,7 @@ export const ogMetadata = onRequest(
 			return;
 		}
 
-		const check = isUrlSafe(targetUrl);
+		const check = await isUrlSafeWithDns(targetUrl);
 		if (!check.ok) {
 			res.status(400).json({ error: check.error });
 			return;
