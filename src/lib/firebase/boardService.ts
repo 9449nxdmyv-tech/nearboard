@@ -28,7 +28,8 @@ import {
 	type Unsubscribe,
 	type QueryDocumentSnapshot,
 	type DocumentData,
-	writeBatch
+	writeBatch,
+	runTransaction
 } from 'firebase/firestore';
 import { db } from './app';
 import { wrapUrl } from '$lib/api/affiliateService';
@@ -536,20 +537,28 @@ export function subscribeToComments(
 
 /**
  * Deletes a comment. Only author or board owner can delete.
+ *
+ * Uses runTransaction so that the read-then-write decrement of commentCount
+ * is atomic — concurrent deletes can't double-decrement past zero.
  */
 export async function deleteComment(
 	boardId: string,
 	contentId: string,
 	commentId: string
 ): Promise<void> {
-	await deleteDoc(doc(db(), 'boards', boardId, 'content', contentId, 'comments', commentId));
-	// Decrement comment count on parent content doc (floor at 0)
+	const commentRef = doc(db(), 'boards', boardId, 'content', contentId, 'comments', commentId);
 	const contentRef = doc(db(), 'boards', boardId, 'content', contentId);
-	const snap = await getDoc(contentRef);
-	const current = (snap.data()?.commentCount as number) ?? 0;
-	if (current > 0) {
-		updateDoc(contentRef, { commentCount: increment(-1) }).catch(console.error);
-	}
+
+	await runTransaction(db(), async (tx) => {
+		const commentSnap = await tx.get(commentRef);
+		if (!commentSnap.exists()) return; // already deleted, nothing to do
+		const contentSnap = await tx.get(contentRef);
+		const current = (contentSnap.data()?.commentCount as number) ?? 0;
+		tx.delete(commentRef);
+		if (current > 0) {
+			tx.update(contentRef, { commentCount: increment(-1) });
+		}
+	});
 }
 
 // ─── Follow operations ────────────────────────────────────────────────────────
@@ -1038,22 +1047,26 @@ export async function cloneTemplate(
 	// Increment clone count
 	await updateDoc(doc(db(), 'templates', templateId), { cloneCount: increment(1) });
 
-	// Add content from template sections sequentially
-	// Write directly to Firestore (not via addContent) to avoid affiliate wrapping overhead
-	// and ensure all required fields are present for Firestore rules
-	for (const section of template.sections) {
-		try {
-			const contentData = {
+	// Add content from template sections in a single batch — atomic and
+	// avoids one network round-trip per section. Write directly (not via
+	// addContent) to skip affiliate wrapping and ensure all required fields
+	// are present for Firestore rules.
+	// writeBatch caps at 500 ops per commit; chunk if a template ever exceeds that.
+	const BATCH_LIMIT = 500;
+	const sections = template.sections;
+	for (let i = 0; i < sections.length; i += BATCH_LIMIT) {
+		const batch = writeBatch(db());
+		for (const section of sections.slice(i, i + BATCH_LIMIT)) {
+			const ref = doc(contentCol(boardId));
+			batch.set(ref, {
 				...sectionToContentData(section, boardId, userId),
 				boardId,
 				moderationStatus: 'approved' as const,
 				userIntent: 'Cloned from template',
 				createdAt: serverTimestamp()
-			};
-			await addDoc(contentCol(boardId), contentData);
-		} catch (err) {
-			console.error(`Failed to add template section "${section.title}" (${section.contentType}):`, err);
+			});
 		}
+		await batch.commit();
 	}
 
 	// Update board activity

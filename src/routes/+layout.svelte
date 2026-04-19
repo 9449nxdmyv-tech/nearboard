@@ -98,6 +98,12 @@
 			return;
 		}
 
+		// Close the sheet immediately so the backdrop doesn't block the UI
+		showCaptureSheet = false;
+
+		// Navigate to the board first so the listener is ready for the new content
+		if (!currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
+
 		try {
 			if (data.type === 'note') {
 				await addContent(bid, {
@@ -110,8 +116,6 @@
 					userIntent: 'Quick capture'
 				} as Omit<NoteContentDoc, 'id' | 'createdAt'>);
 				showToast('Note added!', 'success');
-				showCaptureSheet = false;
-				if (!currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 			} else {
 				const url = data.url;
 				const domain = new URL(url).hostname.replace('www.', '');
@@ -170,8 +174,6 @@
 					} as Omit<LinkContentDoc, 'id' | 'createdAt'>);
 					showToast('Link added!', 'success');
 				}
-				showCaptureSheet = false;
-				if (!currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 			}
 		} catch {
 			showToast('Failed to add content', 'error');

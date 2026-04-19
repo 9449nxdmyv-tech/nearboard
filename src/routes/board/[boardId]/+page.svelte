@@ -218,9 +218,11 @@
 				enableBoardSummaries(boardId).catch(() => {});
 			}
 		});
-		const unsubContent = subscribeToBoardContentPaginated(boardId, (items) => {
+		const unsubContent = subscribeToBoardContentPaginated(boardId, (items, lastDoc) => {
 			firstPageContent = items;
-			resetContentPagination(null);
+			resetContentPagination(lastDoc);
+		}, (err) => {
+			console.error('Board content subscription error:', err);
 		});
 		const unsubMembers = subscribeToBoardMembers(boardId, (m) => {
 			members = m;

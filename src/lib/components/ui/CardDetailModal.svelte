@@ -31,58 +31,75 @@
 	import { relativeTime } from '$lib/utils/dateFormatter';
 	import type { VoteDoc } from '$lib/types';
 
-	// ── Swipe back to close modal ──
+	// ── Swipe back to close modal (iOS-like edge swipe) ──
 	let swipeStartX = $state(0);
+	let swipeStartY = $state(0);
 	let isSwiping = $state(false);
-	let swipeThresholdReached = $state(false);
-	const SWIPE_THRESHOLD = 100;
-	const EDGE_THRESHOLD = 30; // Only trigger from left edge
+	let swipeDeltaX = $state(0);
+	let swipeDirection: 'horizontal' | 'vertical' | null = $state(null);
+	const SWIPE_THRESHOLD = 80;
+	const EDGE_THRESHOLD = 40;
 
 	function onModalTouchStart(e: TouchEvent) {
-		// Only trigger from left edge (within 30px)
 		const touch = e.touches[0];
 		if (touch.clientX > EDGE_THRESHOLD) return;
 
-		// Don't interfere with interactive elements
 		const target = e.target as HTMLElement;
 		if (target.closest('input, textarea, select, button, a, [data-no-swipe]')) return;
 
 		isSwiping = true;
 		swipeStartX = touch.clientX;
-		swipeThresholdReached = false;
+		swipeStartY = touch.clientY;
+		swipeDeltaX = 0;
+		swipeDirection = null;
 	}
 
 	function onModalTouchMove(e: TouchEvent) {
 		if (!isSwiping) return;
 
 		const touch = e.touches[0];
-		const deltaX = touch.clientX - swipeStartX;
+		const dx = touch.clientX - swipeStartX;
+		const dy = touch.clientY - swipeStartY;
 
-		// Only horizontal swipe to the right
-		if (deltaX <= 0) return;
+		// Lock direction after 8px of movement
+		if (!swipeDirection && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+			swipeDirection = Math.abs(dx) / (Math.abs(dy) + 0.1) > 1.2 ? 'horizontal' : 'vertical';
+			if (swipeDirection === 'vertical') { isSwiping = false; swipeDeltaX = 0; return; }
+		}
 
-		if (deltaX > SWIPE_THRESHOLD && !swipeThresholdReached) {
-			swipeThresholdReached = true;
+		if (swipeDirection === 'horizontal' && dx > 0) {
+			swipeDeltaX = dx;
 		}
 	}
 
-	function onModalTouchEnd(e: TouchEvent) {
+	function onModalTouchEnd() {
 		if (!isSwiping) return;
 		isSwiping = false;
 
-		const touch = e.changedTouches[0];
-		const deltaX = touch.clientX - swipeStartX;
-
-		if (deltaX > SWIPE_THRESHOLD && swipeThresholdReached) {
+		if (swipeDeltaX > SWIPE_THRESHOLD) {
 			hapticLight();
 			onClose();
 		}
+		swipeDeltaX = 0;
+		swipeDirection = null;
 	}
 
 	function onModalTouchCancel() {
 		isSwiping = false;
-		swipeThresholdReached = false;
+		swipeDeltaX = 0;
+		swipeDirection = null;
 	}
+
+	const swipeTransform = $derived(
+		swipeDeltaX > 0
+			? `translateX(${swipeDeltaX}px)`
+			: ''
+	);
+	const swipeOpacity = $derived(
+		swipeDeltaX > 0
+			? Math.max(0.3, 1 - swipeDeltaX / 400)
+			: 1
+	);
 
 	let {
 		item,
@@ -165,7 +182,8 @@
 
 	// ── Comments state ──
 	let comments = $state<CommentDoc[]>([]);
-	let showCommentsThread = $state(expandComments);
+	let showCommentsThread = $state(false);
+	$effect(() => { showCommentsThread = expandComments; });
 	const latestComment = $derived(comments.length > 0 ? comments[0] : null);
 
 	// ── Recipe collapsible state ──
@@ -348,6 +366,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="flex flex-col h-full bg-surface"
+		style="transform: {swipeTransform}; opacity: {swipeOpacity}; transition: {swipeDeltaX === 0 ? 'transform 0.3s ease, opacity 0.3s ease' : 'none'};"
 		ontouchstart={onModalTouchStart}
 		ontouchmove={onModalTouchMove}
 		ontouchend={onModalTouchEnd}
@@ -381,7 +400,7 @@
 
 		<!-- ─── Media Area (Sticky) ─── -->
 		{#if item.type !== 'poll' && item.type !== 'list'}
-		<div class="shrink-0 z-20 bg-black relative">
+		<div class="shrink-0 z-20 bg-black relative" style="padding-top: env(safe-area-inset-top, 0px);">
 
 			{#if item.type === 'photo'}
 				{@const photo = item as PhotoContentDoc}
@@ -452,7 +471,7 @@
 						onpause={() => { videoPlaying = false; }}
 						onended={() => { videoPlaying = false; }}
 						controls={videoPlaying}
-					/>
+					></video>
 					{#if !videoPlaying}
 						<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 						<div class="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer" onclick={toggleVideo}>
@@ -545,7 +564,12 @@
 
 		<!-- ─── Content Area (Scrollable) ─── -->
 		<div class="flex-1 overflow-y-auto">
-			<div class="px-5 {item.type === 'poll' || item.type === 'list' ? 'pt-16' : 'pt-4'} pb-20">
+			<div
+				class="px-5 pb-20"
+				style="padding-top: {item.type === 'poll' || item.type === 'list' || item.type === 'note'
+					? 'calc(env(safe-area-inset-top, 0px) + 4rem)'
+					: '1rem'};"
+			>
 				<!-- Title -->
 				{#if item.type !== 'note'}
 				<h1 class="text-[19px] font-bold text-on-surface leading-tight">

@@ -46,7 +46,11 @@
 
 	const autoplay = $derived(shouldAutoplay());
 
-	let loaded = $state(autoplay);
+	// `loaded` flips true when autoplay is on (eager) or when the user taps play.
+	// Initialized false; effect mirrors autoplay so that toggling the prop after
+	// mount actually loads the iframe.
+	let loaded = $state(false);
+	$effect(() => { if (autoplay) loaded = true; });
 	let imageError = $state(false);
 	const thumbnail = $derived(image ?? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`);
 

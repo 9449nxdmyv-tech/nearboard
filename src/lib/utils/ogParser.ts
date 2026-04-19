@@ -970,22 +970,25 @@ export function parseOgTags(html: string, url: string): PageMetadata {
 					ALLOWED_ATTR: ['href', 'src', 'alt', 'title']
 				});
 
+				const textContent = article.textContent ?? '';
+
 				if (enrichment && enrichment.kind === 'article') {
 					const art = enrichment as ArticleEnrichment;
 					art.contentHtml = cleanHtml;
-					if (!art.bodyText && article.textContent) {
-						art.bodyText = article.textContent.trim().slice(0, 10000);
+					if (!art.bodyText && textContent) {
+						art.bodyText = textContent.trim().slice(0, 10000);
 					}
 					if (article.byline && !art.author) art.author = article.byline;
 					if (article.siteName && !art.siteName) art.siteName = article.siteName;
 				} else if (!enrichment) {
+					const wordCount = textContent ? textContent.split(/\s+/).length : 0;
 					enrichment = {
 						kind: 'article',
 						author: article.byline || null,
 						publishedDate: null,
-						readingTime: `${Math.max(1, Math.round(article.textContent.split(/\s+/).length / 200))} min read`,
+						readingTime: wordCount > 0 ? `${Math.max(1, Math.round(wordCount / 200))} min read` : null,
 						siteName: article.siteName || null,
-						bodyText: article.textContent.trim().slice(0, 10000),
+						bodyText: textContent ? textContent.trim().slice(0, 10000) : null,
 						contentHtml: cleanHtml
 					};
 					type = 'article';

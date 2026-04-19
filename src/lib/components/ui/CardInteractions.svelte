@@ -59,7 +59,7 @@
 				{isDetail ? 'px-3 py-2 text-primary' : 'py-2 px-3 text-muted'}"
 			aria-label="Share"
 		>
-			<Icon icon="ph:share-network" class={isDetail ? 'text-xl' : 'text-lg'} />
+			<Icon icon="ph:share-fat" class={isDetail ? 'text-xl' : 'text-lg'} />
 		</button>
 	</div>
 </div>

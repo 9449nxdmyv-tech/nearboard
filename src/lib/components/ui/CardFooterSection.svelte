@@ -53,21 +53,21 @@
 		onCommentClick?: () => void;
 	} = $props();
 
-	// Real-time comment count subscription
-	let liveCommentCount = $state(initialCommentCount ?? 0);
+	// Real-time comment count. Sync effect mirrors prop changes; live
+	// subscription overrides once the first snapshot arrives.
+	let liveCommentCount = $state(0);
+
+	$effect(() => {
+		if (initialCommentCount !== undefined) {
+			liveCommentCount = initialCommentCount;
+		}
+	});
 
 	$effect(() => {
 		if (contentId && boardId) {
 			return subscribeToComments(boardId, contentId, (comments) => {
 				liveCommentCount = comments.length;
 			});
-		}
-	});
-
-	// Sync with prop changes
-	$effect(() => {
-		if (initialCommentCount !== undefined) {
-			liveCommentCount = initialCommentCount;
 		}
 	});
 
@@ -78,8 +78,8 @@
 	const defaultExpand = $derived(
 		expandComments || conversationMode === 'chat'
 	);
-	let showComments = $state(expandComments);
-	// Sync default expansion when conversationMode changes
+	let showComments = $state(false);
+	// Sync default expansion when defaultExpand changes (eager on mount)
 	$effect(() => { showComments = defaultExpand; });
 
 	let menuOpen = $state(false);

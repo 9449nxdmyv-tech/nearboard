@@ -69,7 +69,7 @@
 			autoplay={autoplay}
 			muted={autoplay && muted}
 			playsinline
-		/>
+		></video>
 
 		{#if !playing}
 			<div

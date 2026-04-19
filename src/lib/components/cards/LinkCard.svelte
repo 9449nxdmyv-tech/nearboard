@@ -165,8 +165,8 @@
 	{onCommentClick}
 	headerContent={(youtubeId || (image && !imageError)) ? linkHeader : undefined}
 >
-	{#if !image || imageError}
-		<!-- Compact fallback with icon + source -->
+	{#if !youtubeId && (!image || imageError)}
+		<!-- Compact fallback with icon + source (skip for YouTube — header badge is enough) -->
 		<div class="flex items-center gap-2.5 mb-2">
 			<div class="w-9 h-9 rounded-[var(--radius-sm)] bg-primary/10 flex items-center justify-center shrink-0">
 				<Icon icon={getVariantIcon()} class="text-lg text-primary" />
@@ -177,7 +177,8 @@
 
 	<h3 class="font-semibold text-[15px] text-on-surface leading-snug">{title}</h3>
 
-	{#if description}
+	{#if description && enrichment && (isRecipeEnrichment(enrichment) || isMovieEnrichment(enrichment) || isBookEnrichment(enrichment) || isPlaceEnrichment(enrichment) || isMusicEnrichment(enrichment) || isGithubEnrichment(enrichment))}
+		<!-- Description for enrichment types that show structured data instead of their own excerpt -->
 		<p class="text-[13px] text-muted leading-relaxed line-clamp-3 mt-1">{description}</p>
 	{/if}
 

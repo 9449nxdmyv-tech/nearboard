@@ -29,7 +29,7 @@
 </script>
 
 <Page>
-	<Header title="Today" />
+	<Header title="Today" backHref="/" />
 
 	<PullToRefresh onRefresh={async () => { loadTodayData($boardStore.boards, $userStore.user?.uid); }}>
 		<main class="flex-1 px-4 pb-6">

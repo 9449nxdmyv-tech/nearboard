@@ -242,7 +242,7 @@
 						type="text"
 						placeholder="Add a name (optional)"
 						value={locationName}
-						onInput={(e) => { locationName = (e.target as HTMLInputElement).value; }}
+						oninput={(e) => { locationName = (e.currentTarget as HTMLInputElement).value; }}
 						class="flex-1 text-[14px] bg-transparent text-on-surface placeholder:text-muted/40 outline-none py-1"
 					/>
 				</div>
