@@ -595,11 +595,13 @@
 
 				<!-- Link description sits directly under the title for every
 				     variant so the OG/meta summary is the first thing readers
-				     see. Only long-form enriched payloads (recipe steps, article
-				     HTML) stay below the comments — see Content Body below. -->
+				     see. Articles and recipes are the exception — their long-form
+				     body (contentHtml / description / steps) renders below the
+				     comments in Content Body. -->
 				{#if item.type === 'link'}
 					{@const link = item as LinkContentDoc}
-					{#if link.description}
+					{@const isLongForm = link.enrichment && (isArticleEnrichment(link.enrichment) || isRecipeEnrichment(link.enrichment))}
+					{#if link.description && !isLongForm}
 						<p class="text-[14px] text-on-surface/75 leading-relaxed mt-2">{link.description}</p>
 					{/if}
 				{/if}
@@ -948,6 +950,8 @@
 								<div class="article-content text-[16px] leading-relaxed">
 									{@html article.contentHtml}
 								</div>
+							{:else if link.description}
+								<p class="text-[15px] text-on-surface/80 leading-relaxed mb-4">{link.description}</p>
 							{/if}
 						{/if}
 
