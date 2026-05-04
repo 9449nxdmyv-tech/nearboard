@@ -40,7 +40,6 @@
 	import LivingSummaryCard from '$lib/components/ui/LivingSummaryCard.svelte';
 	import SkeletonCard from '$lib/components/ui/SkeletonCard.svelte';
 	import SwipeAction from '$lib/components/ui/SwipeAction.svelte';
-	import BoardChatView from '$lib/components/ui/BoardChatView.svelte';
 	import { getNudgeToShow } from '$lib/utils/onboardingUtils';
 	import { getEmptyBoardPrompt } from '$lib/utils/emptyStatePrompts';
 
@@ -115,7 +114,6 @@
 	const boardExperience = $derived(getEffectiveExperience($userStore.user?.experiencePreferences, board?.experienceOverrides));
 	const scrollBehavior = $derived(boardExperience.scrollBehavior);
 	setContext('videoPlayback', () => boardExperience.videoPlayback);
-	setContext('commentLayout', () => boardExperience.commentLayout);
 
 	// Infinite scroll observer
 	let infiniteScrollEl = $state<HTMLDivElement | undefined>();
@@ -316,21 +314,7 @@
 		]}
 	/>
 
-	{#if boardExperience.commentLayout === 'chat' && !loading}
-		<!-- Chat layout: full-height message thread -->
-		<main class="flex-1 flex flex-col overflow-hidden relative">
-			<BoardChatView
-				{board}
-				content={visibleContent}
-				{boardId}
-				{isOwner}
-				onDetailOpen={(itemId) => { detailItemId = itemId; detailBoardId = boardId; detailExpandComments = false; }}
-			onReplyOpen={(itemId) => { detailItemId = itemId; detailBoardId = boardId; detailExpandComments = true; }}
-			/>
-		</main>
-	{:else}
-		<!-- Inline layout: card grid -->
-		<main class="px-4">
+	<main class="px-4">
 			<!-- Living Summary header — the "welcome home" message.
 			     Sits above member faces and filters so it's the first thing readers see. -->
 			{#if board && !loading && board.enableLivingSummary !== false}
@@ -527,8 +511,7 @@
 					{/if}
 				</div>
 			{/if}
-		</main>
-	{/if}
+	</main>
 </Page>
 
 <!-- Board actions sheet (z-50 ensures it's above bottom tabbar z-40) -->

@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
 	import type { Timestamp } from 'firebase/firestore';
-	import { getContext } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { Popover } from 'konsta/svelte';
 	import Icon from '@iconify/svelte';
@@ -13,8 +12,6 @@
 	import CardInteractions from './CardInteractions.svelte';
 	import CardFooter from './CardFooter.svelte';
 	import CardComments from './CardComments.svelte';
-	import type { CommentLayout } from '$lib/types/firestore';
-	import { globalExperience } from '$lib/stores';
 	import { subscribeToComments } from '$lib/firebase/boardService';
 
 	let {
@@ -71,16 +68,9 @@
 		}
 	});
 
-	const getCommentLayout = getContext<(() => CommentLayout) | undefined>('commentLayout');
-	const commentLayout = $derived(getCommentLayout?.() ?? $globalExperience.commentLayout);
-
-	// In chat layout, auto-expand comments; in inline layout, hidden by default
-	const defaultExpand = $derived(
-		expandComments || commentLayout === 'chat'
-	);
 	let showComments = $state(false);
-	// Sync default expansion when defaultExpand changes (eager on mount)
-	$effect(() => { showComments = defaultExpand; });
+	// Default to collapsed; honor the expandComments prop on mount/change.
+	$effect(() => { showComments = expandComments; });
 
 	let menuOpen = $state(false);
 	let menuTarget = $state<HTMLButtonElement | undefined>();

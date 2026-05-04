@@ -14,7 +14,7 @@
 	import { signOut, uploadAvatar, updateDisplayName, updatePhotoURL, updateUserFields, deleteAccount } from '$lib/firebase';
 	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
 	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
-	import type { ScrollBehavior, VideoPlayback, FeedOrder, CommentLayout, LayoutStyle, ExperiencePreset, UserExperiencePreferences } from '$lib/types/firestore';
+	import type { ScrollBehavior, VideoPlayback, FeedOrder, LayoutStyle, ExperiencePreset, UserExperiencePreferences } from '$lib/types/firestore';
 	import { shareContent } from '$lib/native';
 	import { getFunctions, httpsCallable } from 'firebase/functions';
 	import { app } from '$lib/firebase/app';
@@ -56,7 +56,6 @@
 			scrollBehavior: merged.scrollBehavior ?? experience.scrollBehavior,
 			videoPlayback: merged.videoPlayback ?? experience.videoPlayback,
 			feedOrder: merged.feedOrder ?? experience.feedOrder,
-			commentLayout: merged.commentLayout ?? experience.commentLayout,
 			layoutStyle: merged.layoutStyle ?? experience.layoutStyle
 		};
 		full.preset = detectPreset(full);
@@ -487,19 +486,6 @@
 				<option value="oldest">Oldest first</option>
 				<option value="most-active">Most active</option>
 				<option value="curated">Board curated</option>
-			</ListInput>
-
-			<!-- Comment layout -->
-			<ListInput
-				outline
-				label="Comments"
-				type="select"
-				value={experience.commentLayout}
-				onInput={(e) => saveExperience({ commentLayout: e.target.value as CommentLayout })}
-				disabled={savingExperience}
-			>
-				<option value="inline">Inline under each card</option>
-				<option value="chat">Open chat thread</option>
 			</ListInput>
 
 			<!-- Layout style -->

@@ -31,7 +31,7 @@
 	import { Toggle } from 'konsta/svelte';
 	import { hapticLight } from '$lib/utils/haptics';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
-	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, CommentLayout, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
+	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
 	import { globalExperience, getEffectiveExperience } from '$lib/stores';
 	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
 	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
@@ -99,7 +99,6 @@
 			scrollBehavior: prefs.scrollBehavior,
 			videoPlayback: prefs.videoPlayback,
 			feedOrder: prefs.feedOrder,
-			commentLayout: prefs.commentLayout,
 			layoutStyle: prefs.layoutStyle
 		};
 		await updateBoard(boardId, { experienceOverrides: merged });
@@ -472,18 +471,6 @@
 							<option value="oldest">Oldest first</option>
 							<option value="most-active">Most active</option>
 							<option value="curated">Board curated</option>
-						</ListInput>
-
-						<ListInput
-							outline
-							label="Comments"
-							type="select"
-							value={effectiveExperience.commentLayout}
-							onInput={(e) => saveBoardExperience({ commentLayout: e.target.value as CommentLayout })}
-							disabled={savingExperience}
-						>
-							<option value="inline">Inline under each card</option>
-							<option value="chat">Open chat thread</option>
 						</ListInput>
 
 						<ListInput

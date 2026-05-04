@@ -12,7 +12,7 @@ import type {
 	ExperiencePreset
 } from '$lib/types/firestore';
 
-const SETTING_KEYS = ['scrollBehavior', 'videoPlayback', 'feedOrder', 'commentLayout', 'layoutStyle'] as const;
+const SETTING_KEYS = ['scrollBehavior', 'videoPlayback', 'feedOrder', 'layoutStyle'] as const;
 
 /**
  * Resolve the effective experience for a given context.

@@ -74,7 +74,6 @@ export const DEFAULT_EXPERIENCE: UserExperiencePreferences = {
 	scrollBehavior: 'load-more',
 	videoPlayback: 'tap-to-play',
 	feedOrder: 'newest',
-	commentLayout: 'inline',
 	layoutStyle: 'single-column',
 	preset: 'calm'
 };
@@ -85,21 +84,18 @@ export const EXPERIENCE_PRESETS: Record<'calm' | 'balanced' | 'lively', Omit<Use
 		scrollBehavior: 'load-more',
 		videoPlayback: 'tap-to-play',
 		feedOrder: 'newest',
-		commentLayout: 'inline',
 		layoutStyle: 'single-column'
 	},
 	balanced: {
 		scrollBehavior: 'paged',
 		videoPlayback: 'wifi-autoplay',
 		feedOrder: 'most-active',
-		commentLayout: 'inline',
 		layoutStyle: 'single-column'
 	},
 	lively: {
 		scrollBehavior: 'infinite',
 		videoPlayback: 'muted-autoplay',
 		feedOrder: 'most-active',
-		commentLayout: 'chat',
 		layoutStyle: 'masonry'
 	}
 };

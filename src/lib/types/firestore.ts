@@ -28,9 +28,6 @@ export type VideoPlayback = typeof VIDEO_PLAYBACKS[number];
 export const FEED_ORDERS = ['newest', 'oldest', 'most-active', 'curated'] as const;
 export type FeedOrder = typeof FEED_ORDERS[number];
 
-export const COMMENT_LAYOUTS = ['inline', 'chat'] as const;
-export type CommentLayout = typeof COMMENT_LAYOUTS[number];
-
 export const LAYOUT_STYLES = ['single-column', 'masonry', 'compact-grid'] as const;
 export type LayoutStyle = typeof LAYOUT_STYLES[number];
 
@@ -49,10 +46,6 @@ export function isVideoPlayback(v: unknown): v is VideoPlayback {
 export function isFeedOrder(v: unknown): v is FeedOrder {
 	return typeof v === 'string' && (FEED_ORDERS as readonly string[]).includes(v);
 }
-/** Type guard — checks if a string is a valid CommentLayout. */
-export function isCommentLayout(v: unknown): v is CommentLayout {
-	return typeof v === 'string' && (COMMENT_LAYOUTS as readonly string[]).includes(v);
-}
 /** Type guard — checks if a string is a valid LayoutStyle. */
 export function isLayoutStyle(v: unknown): v is LayoutStyle {
 	return typeof v === 'string' && (LAYOUT_STYLES as readonly string[]).includes(v);
@@ -62,7 +55,6 @@ export interface UserExperiencePreferences {
 	scrollBehavior: ScrollBehavior;
 	videoPlayback: VideoPlayback;
 	feedOrder: FeedOrder;
-	commentLayout: CommentLayout;
 	layoutStyle: LayoutStyle;
 	preset?: ExperiencePreset;
 	updatedAt?: Timestamp;
@@ -73,7 +65,6 @@ export interface BoardExperienceOverrides {
 	scrollBehavior?: ScrollBehavior;
 	videoPlayback?: VideoPlayback;
 	feedOrder?: FeedOrder;
-	commentLayout?: CommentLayout;
 	layoutStyle?: LayoutStyle;
 	updatedAt?: Timestamp;
 }

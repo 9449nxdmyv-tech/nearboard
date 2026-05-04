@@ -79,9 +79,11 @@
 
 	let detailItemId = $state<string | null>(null);
 	let detailBoardId = $state('');
-	const detailItem = $derived(
-		detailItemId ? sortedItems.find((f) => f.content.id === detailItemId)?.content ?? null : null
+	let detailExpandComments = $state(false);
+	const detailFeedItem = $derived(
+		detailItemId ? sortedItems.find((f) => f.content.id === detailItemId) ?? null : null
 	);
+	const detailItem = $derived(detailFeedItem?.content ?? null);
 
 	function handleShareCard(item: ContentDoc, feedBoardId: string) {
 		shareContent(item, feedBoardId);
@@ -365,7 +367,7 @@
 									</button>
 								{/if}
 							</div>
-							<div onclick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; }} class="cursor-pointer">
+							<div onclick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; detailExpandComments = false; }} class="cursor-pointer">
 								<ContentRenderer
 									item={feedItem.content}
 									boardId={feedItem.boardId}
@@ -373,7 +375,7 @@
 									allowComments={feedItem.allowComments}
 									layout={feedLayout}
 									onShare={(item) => handleShareCard(item, feedItem.boardId)}
-									onCommentClick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; }}
+									onCommentClick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; detailExpandComments = true; }}
 								/>
 							</div>
 						</div>
@@ -385,13 +387,17 @@
 	</main>
 </Page>
 
-{#if detailItem}
+{#if detailItem && detailFeedItem}
 	<CardDetailModal
 		item={detailItem}
 		boardId={detailBoardId}
-		onClose={() => { detailItemId = null; }}
+		isBoardOwner={detailFeedItem.isOwner}
+		allowComments={detailFeedItem.allowComments}
+		expandComments={detailExpandComments}
+		onClose={() => { detailItemId = null; detailExpandComments = false; }}
 		onShare={(it) => {
 			detailItemId = null;
+			detailExpandComments = false;
 			handleShareCard(it, detailBoardId);
 		}}
 	/>
