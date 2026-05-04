@@ -218,7 +218,7 @@
 
 			<!-- Dots -->
 			<div class="flex items-center justify-center gap-2 py-3 shrink-0">
-				{#each Array(TOTAL_SLIDES) as _, i}
+				{#each Array(TOTAL_SLIDES) as _, i (i)}
 					<button
 						class="h-2 rounded-full transition-all duration-300
 							{i === currentSlide ? 'w-7 bg-accent' : 'w-2 bg-border'}"
@@ -480,7 +480,7 @@
 			</div>
 			<!-- Waveform bars -->
 			<div class="flex items-end gap-[2px] h-4">
-				{#each [3, 6, 4, 9, 5, 11, 7, 4, 10, 6, 3, 8, 5, 9, 4, 7, 10, 5, 3, 7] as h, i}
+				{#each [3, 6, 4, 9, 5, 11, 7, 4, 10, 6, 3, 8, 5, 9, 4, 7, 10, 5, 3, 7] as h, i (i)}
 					<div
 						class="flex-1 rounded-full bg-accent"
 						style="height: {h * 1.3}px; opacity: {i < 12 ? 0.5 : 0.15}"
@@ -524,7 +524,7 @@
 			<div class="mt-3 pt-3 border-t border-border">
 				<p class="text-[8px] text-muted uppercase tracking-wider font-medium mb-2">Price history</p>
 				<div class="flex items-end gap-[3px] h-8">
-					{#each [70, 72, 68, 75, 72, 78, 80, 85, 95, 88, 82, 40] as pct, i}
+					{#each [70, 72, 68, 75, 72, 78, 80, 85, 95, 88, 82, 40] as pct, i (i)}
 						<div
 							class="flex-1 rounded-sm transition-all {i === 11 ? 'bg-success' : 'bg-accent/15'}"
 							style="height: {pct}%;"
@@ -579,7 +579,7 @@
 					<Icon icon="ph:play-fill" class="text-[10px]" />
 				</button>
 				<div class="flex-1 flex items-end gap-[2px] h-3.5">
-					{#each [2, 5, 3, 7, 4, 9, 6, 3, 8, 5, 2, 7, 4, 8, 3, 5, 9, 4, 2, 6, 5, 8, 3, 4] as h}
+					{#each [2, 5, 3, 7, 4, 9, 6, 3, 8, 5, 2, 7, 4, 8, 3, 5, 9, 4, 2, 6, 5, 8, 3, 4] as h, i (i)}
 						<div class="flex-1 rounded-full bg-accent/30" style="height: {h * 1.2}px;"></div>
 					{/each}
 				</div>

@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import {
@@ -35,9 +36,14 @@
 	async function handleCoverSelect(e: Event) {
 		const target = e.target as HTMLInputElement;
 		if (!target.files?.[0]) return;
+		if (coverUrl) URL.revokeObjectURL(coverUrl);
 		coverFile = target.files[0];
 		coverUrl = URL.createObjectURL(coverFile);
 	}
+
+	onDestroy(() => {
+		if (coverUrl) URL.revokeObjectURL(coverUrl);
+	});
 
 	// Step 3: Invite
 	let contacts = $state<Contact[]>([]);

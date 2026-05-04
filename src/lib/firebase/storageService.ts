@@ -32,12 +32,14 @@ const IMAGE_SIZES = {
  */
 async function resizeImage(file: File, maxDimension: number): Promise<Blob> {
 	return new Promise((resolve, reject) => {
+		const objectUrl = URL.createObjectURL(file);
 		const img = new Image();
+		const cleanup = () => URL.revokeObjectURL(objectUrl);
 		img.onload = () => {
 			// Calculate new dimensions maintaining aspect ratio
 			let width = img.width;
 			let height = img.height;
-			
+
 			if (width > height) {
 				if (width > maxDimension) {
 					height = Math.round((height * maxDimension) / width);
@@ -49,21 +51,23 @@ async function resizeImage(file: File, maxDimension: number): Promise<Blob> {
 					height = maxDimension;
 				}
 			}
-			
+
 			// Create canvas and resize
 			const canvas = document.createElement('canvas');
 			canvas.width = width;
 			canvas.height = height;
 			const ctx = canvas.getContext('2d');
 			if (!ctx) {
+				cleanup();
 				reject(new Error('Could not get canvas context'));
 				return;
 			}
 			ctx.drawImage(img, 0, 0, width, height);
-			
+
 			// Convert to blob with quality optimization
 			canvas.toBlob(
 				(blob) => {
+					cleanup();
 					if (blob) resolve(blob);
 					else reject(new Error('Failed to create blob'));
 				},
@@ -71,21 +75,24 @@ async function resizeImage(file: File, maxDimension: number): Promise<Blob> {
 				0.85 // Quality setting
 			);
 		};
-		img.onerror = () => reject(new Error('Failed to load image'));
-		img.src = URL.createObjectURL(file);
+		img.onerror = () => {
+			cleanup();
+			reject(new Error('Failed to load image'));
+		};
+		img.src = objectUrl;
 	});
 }
 
 /**
- * Uploads multiple size variants of an image and returns URLs.
+ * Uploads thumbnail/medium/large size variants. The original must be uploaded
+ * separately by the caller (so progress can be tracked on the largest blob).
  */
-async function uploadImageVariants(
+async function uploadResizedVariants(
 	boardId: string,
-	userId: string,
 	file: File,
 	baseFilename: string
-): Promise<{ thumbnail: string; medium: string; large: string; original: string }> {
-	const sizes = await Promise.all(
+): Promise<{ thumbnail: string; medium: string; large: string }> {
+	const [thumbnail, medium, large] = await Promise.all(
 		Object.entries(IMAGE_SIZES).map(async ([sizeName, dimension]) => {
 			const resizedBlob = await resizeImage(file, dimension);
 			const storageRef = ref(storage(), `boards/${boardId}/photos/${sizeName}_${baseFilename}`);
@@ -93,18 +100,8 @@ async function uploadImageVariants(
 			return getDownloadURL(storageRef);
 		})
 	);
-	
-	// Upload original at full resolution
-	const originalRef = ref(storage(), `boards/${boardId}/photos/original_${baseFilename}`);
-	await uploadBytes(originalRef, file, { contentType: file.type });
-	const originalUrl = await getDownloadURL(originalRef);
-	
-	return {
-		thumbnail: sizes[0],
-		medium: sizes[1],
-		large: sizes[2],
-		original: originalUrl
-	};
+
+	return { thumbnail, medium, large };
 }
 
 /**
@@ -195,9 +192,11 @@ export async function uploadVoiceNote(
 	audioBlob: Blob,
 	onProgress?: (pct: number) => void
 ): Promise<string> {
-	const filename = `${Date.now()}-${userId}.webm`;
+	const contentType = audioBlob.type || 'audio/webm';
+	const ext = contentType.split('/')[1]?.split(';')[0] || 'webm';
+	const filename = `${Date.now()}-${userId}.${ext}`;
 	const storageRef = ref(storage(), `boards/${boardId}/voice/${filename}`);
-	await uploadWithProgress(storageRef, audioBlob, { contentType: 'audio/webm' }, onProgress);
+	await uploadWithProgress(storageRef, audioBlob, { contentType }, onProgress);
 	return getDownloadURL(storageRef);
 }
 
@@ -215,15 +214,14 @@ export async function uploadPhoto(
 	validateFile(file, MAX_IMAGE_BYTES, 'Image', ALLOWED_IMAGE_TYPES);
 	const ext = getFileExtension(file, 'jpg');
 	const baseFilename = `${Date.now()}-${userId}.${ext}`;
-	
-	// Upload with progress tracking for original file
-	if (onProgress) {
-		const storageRef = ref(storage(), `boards/${boardId}/photos/original_${baseFilename}`);
-		await uploadWithProgress(storageRef, file, { contentType: file.type }, onProgress);
-		// For variants, we don't track progress individually to avoid complexity
-	}
-	
-	return uploadImageVariants(boardId, userId, file, baseFilename);
+
+	// Upload the original once — with progress if requested — then derive variants.
+	const originalRef = ref(storage(), `boards/${boardId}/photos/original_${baseFilename}`);
+	await uploadWithProgress(originalRef, file, { contentType: file.type }, onProgress);
+	const originalUrl = await getDownloadURL(originalRef);
+
+	const variants = await uploadResizedVariants(boardId, file, baseFilename);
+	return { ...variants, original: originalUrl };
 }
 
 /**
@@ -252,8 +250,15 @@ export async function uploadVideo(
 	onProgress?: (pct: number) => void
 ): Promise<string> {
 	validateFile(videoBlob, MAX_VIDEO_BYTES, 'Video', ALLOWED_VIDEO_TYPES);
-	const filename = `${Date.now()}-${userId}.webm`;
+	const contentType = videoBlob.type || 'video/webm';
+	const extMap: Record<string, string> = {
+		'video/webm': 'webm',
+		'video/mp4': 'mp4',
+		'video/quicktime': 'mov'
+	};
+	const ext = extMap[contentType.split(';')[0]] || 'webm';
+	const filename = `${Date.now()}-${userId}.${ext}`;
 	const storageRef = ref(storage(), `boards/${boardId}/videos/${filename}`);
-	await uploadWithProgress(storageRef, videoBlob, { contentType: 'video/webm' }, onProgress);
+	await uploadWithProgress(storageRef, videoBlob, { contentType }, onProgress);
 	return getDownloadURL(storageRef);
 }

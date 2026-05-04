@@ -164,7 +164,7 @@
 
 		{#if sections.length > 0}
 			<List inset strong>
-				{#each sections as section, i}
+				{#each sections as section, i (i)}
 					{#snippet sectionMedia()}
 						<Icon icon={CONTENT_TYPES.find(t => t.value === section.contentType)?.icon ?? 'ph:note-pencil'} class="text-base text-on-surface/60" />
 					{/snippet}
@@ -206,7 +206,7 @@
 				value={sectionType}
 				onInput={(e) => { sectionType = e.target.value; }}
 			>
-				{#each CONTENT_TYPES as ct}
+				{#each CONTENT_TYPES as ct (ct.value)}
 					<option value={ct.value}>{ct.label}</option>
 				{/each}
 			</ListInput>
@@ -252,7 +252,7 @@
 					<p class="text-xs text-muted mb-3 leading-relaxed line-clamp-2">{description.trim()}</p>
 
 					<div class="flex gap-1.5 flex-wrap">
-						{#each sections.slice(0, 3) as section}
+						{#each sections.slice(0, 3) as section, i (i)}
 							<span class="px-2 py-0.5 bg-surface rounded-full text-[10px] text-muted border border-border">
 								{section.title}
 							</span>

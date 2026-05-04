@@ -30,8 +30,8 @@
 	import WhatsAppImportSheet from '$lib/components/ui/WhatsAppImportSheet.svelte';
 	import { Toggle } from 'konsta/svelte';
 	import { hapticLight } from '$lib/utils/haptics';
-	import { avatarInitial } from '$lib/utils/textFormatter';
-	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, ConversationMode, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
+	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import type { BoardDoc, MemberDoc, ContentDoc, InviteDoc, JoinRequestDoc, ScrollBehavior, VideoPlayback, FeedOrder, CommentLayout, LayoutStyle, BoardExperienceOverrides } from '$lib/types';
 	import { globalExperience, getEffectiveExperience } from '$lib/stores';
 	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
 	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
@@ -99,7 +99,7 @@
 			scrollBehavior: prefs.scrollBehavior,
 			videoPlayback: prefs.videoPlayback,
 			feedOrder: prefs.feedOrder,
-			conversationMode: prefs.conversationMode,
+			commentLayout: prefs.commentLayout,
 			layoutStyle: prefs.layoutStyle
 		};
 		await updateBoard(boardId, { experienceOverrides: merged });
@@ -315,6 +315,27 @@
 					<span class="text-xs text-muted">{board?.allowComments ? 'On' : 'Off'}</span>
 				{/if}
 			{/snippet}
+			{#snippet publicAfter()}
+				{#if isOwner}
+					<Toggle
+						checked={board?.isPublic ?? false}
+						onChange={async () => {
+							if (!board) return;
+							hapticLight();
+							const newState = !board.isPublic;
+							try {
+								await updateBoard(boardId, { isPublic: newState });
+								board = { ...board, isPublic: newState };
+								showToast(newState ? 'Board is now public' : 'Board is now private', 'success');
+							} catch {
+								showToast('Could not change visibility', 'error');
+							}
+						}}
+					/>
+				{:else}
+					<span class="text-xs text-muted">{board?.isPublic ? 'Public' : 'Private'}</span>
+				{/if}
+			{/snippet}
 			<List inset strong>
 				<ListItem
 					title="Auto-update summary"
@@ -325,6 +346,11 @@
 					title="Allow comments"
 					subtitle="Enable discussion on content cards"
 					after={commentsAfter}
+				/>
+				<ListItem
+					title="Public board"
+					subtitle="Anyone with the link can view + follow"
+					after={publicAfter}
 				/>
 			</List>
 
@@ -392,7 +418,7 @@
 				{#if overridesEnabled}
 					<Block>
 						<Segmented strong rounded>
-							{#each ['calm', 'balanced', 'lively'] as preset}
+							{#each ['calm', 'balanced', 'lively'] as preset (preset)}
 								<SegmentedButton
 									active={effectiveExperience.preset === preset}
 									onClick={() => selectBoardPreset(preset as 'calm' | 'balanced' | 'lively')}
@@ -450,15 +476,14 @@
 
 						<ListInput
 							outline
-							label="Board vs Chat"
+							label="Comments"
 							type="select"
-							value={effectiveExperience.conversationMode}
-							onInput={(e) => saveBoardExperience({ conversationMode: e.target.value as ConversationMode })}
+							value={effectiveExperience.commentLayout}
+							onInput={(e) => saveBoardExperience({ commentLayout: e.target.value as CommentLayout })}
 							disabled={savingExperience}
 						>
-							<option value="board">Board mode</option>
-							<option value="hybrid">Hybrid mode</option>
-							<option value="chat">Chat mode</option>
+							<option value="inline">Inline under each card</option>
+							<option value="chat">Open chat thread</option>
 						</ListInput>
 
 						<ListInput
@@ -566,13 +591,7 @@
 			<List inset strong>
 				{#each members as member (member.userId)}
 					{#snippet memberMedia()}
-						{#if member.photoURL}
-							<img src={member.photoURL} alt={member.displayName} class="w-8 h-8 rounded-full object-cover" />
-						{:else}
-							<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs text-primary font-medium">
-								{avatarInitial(member.displayName || member.userId)}
-							</div>
-						{/if}
+						<Avatar name={member.displayName || member.userId} photoURL={member.photoURL} size="md" />
 					{/snippet}
 					{#snippet memberAfter()}
 						{#if member.userId === board?.ownerId}
@@ -605,13 +624,7 @@
 				<List inset strong>
 					{#each joinRequests as request (request.id)}
 						{#snippet reqMedia()}
-							{#if request.requesterPhotoURL}
-								<img src={request.requesterPhotoURL} alt={request.requesterName} class="w-8 h-8 rounded-full object-cover" />
-							{:else}
-								<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs text-primary font-medium">
-									{avatarInitial(request.requesterName)}
-								</div>
-							{/if}
+							<Avatar name={request.requesterName} photoURL={request.requesterPhotoURL} size="md" />
 						{/snippet}
 						{#snippet reqAfter()}
 							<div class="flex gap-1.5">

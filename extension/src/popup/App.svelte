@@ -72,7 +72,8 @@
 				stream.getTracks().forEach((t) => t.stop());
 				audioBlob = new Blob(chunks, { type: 'audio/webm' });
 				recording = false;
-				recordingElapsed = 0;
+				// Keep recordingElapsed — saveVoiceNote reads it for durationMs.
+				// startRecording resets it to 0 on the next recording.
 				if (recordingInterval) { clearInterval(recordingInterval); recordingInterval = null; }
 				if (recordingTimeout) { clearTimeout(recordingTimeout); recordingTimeout = null; }
 			};
@@ -118,6 +119,7 @@
 				authorPhotoURL: user.photoURL,
 				createdAt: serverTimestamp(),
 				moderationStatus: 'approved',
+				userIntent: 'Extension voice note',
 				type: 'voice',
 				audioUrl,
 				durationMs: recordingElapsed || MAX_VOICE_DURATION_MS
@@ -304,7 +306,8 @@
 				authorName: user.displayName ?? user.email ?? '',
 				authorPhotoURL: user.photoURL,
 				createdAt: serverTimestamp(),
-				moderationStatus: 'approved' // Default for extension saves
+				moderationStatus: 'approved', // Default for extension saves
+				userIntent: 'Saved from extension'
 			};
 
 			if (contentType === 'product' && metadata.price) {

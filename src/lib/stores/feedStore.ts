@@ -67,19 +67,6 @@ export function setFeedItems(items: FeedItem[]): void {
 	feedStore.update((s) => ({ ...s, items, unseenCount, loading: false }));
 }
 
-/**
- * Marks all current items as read by updating their lastReadAt to now.
- * Call after persisting the read state to Firestore.
- */
-export function markAllFeedRead(): void {
-	const now = new Date();
-	feedStore.update((s) => ({
-		...s,
-		items: s.items.map((i) => ({ ...i, lastReadAt: now })),
-		unseenCount: 0
-	}));
-}
-
 export function setCalmBriefings(briefings: CalmBriefing[]): void {
 	feedStore.update((s) => ({ ...s, calmBriefings: briefings }));
 }

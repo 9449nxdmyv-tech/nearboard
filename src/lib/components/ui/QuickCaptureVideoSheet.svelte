@@ -23,7 +23,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	// ─── Phase management ────────────────────────────────────────────────
@@ -74,9 +74,11 @@
 		}
 	}
 
+	let destroyed = false;
 	onDestroy(cleanup);
 
 	function cleanup() {
+		destroyed = true;
 		clearTimers();
 		if (recorder && recorder.state !== 'inactive') recorder.stop();
 		if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -148,13 +150,26 @@
 	function startRecording() {
 		if (!stream) return;
 		hapticHeavy();
+		// Negotiate MIME type — iOS Safari doesn't support webm
+		const candidates = [
+			'video/webm;codecs=vp9,opus',
+			'video/webm;codecs=vp8,opus',
+			'video/webm',
+			'video/mp4;codecs=h264,aac',
+			'video/mp4'
+		];
+		const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t));
+		const opts: MediaRecorderOptions = { videoBitsPerSecond: 2_500_000 };
+		if (mimeType) opts.mimeType = mimeType;
 		const chunks: Blob[] = [];
-		const mr = new MediaRecorder(stream, { mimeType: 'video/webm', videoBitsPerSecond: 2_500_000 });
+		const mr = new MediaRecorder(stream, opts);
+		const recordedType = mr.mimeType || mimeType || 'video/webm';
 		mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 		mr.onstop = () => {
-			videoFile = new Blob(chunks, { type: 'video/webm' });
-			videoPreviewUrl = URL.createObjectURL(videoFile);
 			if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+			if (destroyed) return;
+			videoFile = new Blob(chunks, { type: recordedType });
+			videoPreviewUrl = URL.createObjectURL(videoFile);
 			phase = 'review';
 		};
 		mr.start();
@@ -299,10 +314,12 @@
 				thumbnailBlob: thumbBlob
 			});
 
-			// Clear local refs so cleanup doesn't revoke what the upload needs
+			// Clear local refs so cleanup doesn't revoke what the upload needs.
+			// Revoke the preview URL (nothing else holds it) before nulling.
+			if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
 			videoFile = null;
 			videoPreviewUrl = null;
-			onClose();
+			onClose(true);
 		} catch {
 			showToast('Failed to prepare video');
 			busy = false;
@@ -312,7 +329,7 @@
 	function handleClose() {
 		if (recording) stopRecording();
 		cleanup();
-		onClose();
+		onClose(false);
 	}
 
 	function handleBackdropClick(e: MouseEvent) {

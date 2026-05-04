@@ -5,7 +5,7 @@
                Only renders if at least one board has videos from the past week.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { fade, fly, scale } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import Icon from '@iconify/svelte';
@@ -161,6 +161,11 @@
 	// Cleanup on close
 	$effect(() => {
 		if (!viewerOpen) stopProgress();
+	});
+
+	onDestroy(() => {
+		stopProgress();
+		if (videoEl && !videoEl.paused) videoEl.pause();
 	});
 </script>
 

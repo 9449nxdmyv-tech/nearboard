@@ -18,7 +18,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -47,8 +47,8 @@
 				boardId, authorId: user.uid, authorName: user.displayName || user.email, authorPhotoURL: user.photoURL
 			} as Omit<ListContentDoc, 'id' | 'createdAt'>);
 			hapticSuccess();
-			showToast('List saved!');
-			onClose();
+			showToast('List saved!', 'success');
+			onClose(true);
 		} catch { showToast('Failed to save list'); }
 		finally { busy = false; }
 	}

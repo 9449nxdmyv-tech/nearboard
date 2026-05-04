@@ -184,7 +184,7 @@
 				<p class="text-xs text-muted/30">Start the conversation below</p>
 			</div>
 		{:else}
-			{#each grouped as group}
+			{#each grouped as group (group.label)}
 				<!-- Date divider -->
 				<div class="flex items-center gap-3 my-4 first:mt-1">
 					<div class="flex-1 h-px bg-border-light"></div>

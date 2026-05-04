@@ -6,8 +6,8 @@
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import { CARD_ENTRANCE } from '$lib/config/animations';
-	import { avatarInitial } from '$lib/utils/textFormatter';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
+	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import { Page } from 'konsta/svelte';
 	import { boardStore, userStore } from '$lib/stores';
 	import { getPublicUserProfiles } from '$lib/firebase';
@@ -36,10 +36,13 @@
 		}
 
 		loading = true;
+		let cancelled = false;
 		getPublicUserProfiles(uniqueIds).then((profiles) => {
+			if (cancelled) return;
 			people = profiles.sort((a, b) => a.displayName.localeCompare(b.displayName));
 			loading = false;
 		});
+		return () => { cancelled = true; };
 	});
 
 	function getBoardCount(userId: string): number {
@@ -61,7 +64,7 @@
 	<div class="px-4 sm:px-6 py-5">
 		{#if loading}
 			<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-				{#each Array(8) as _}
+				{#each Array(8) as _, i (i)}
 					<div class="bg-card rounded-card border border-border/50 p-5 animate-pulse">
 						<div class="w-14 h-14 rounded-full bg-border/60 mx-auto mb-3"></div>
 						<div class="h-3.5 bg-border/60 rounded-full w-2/3 mx-auto mb-2.5"></div>
@@ -94,20 +97,9 @@
 
 						<!-- Avatar — overlapping header -->
 						<div class="flex flex-col items-center -mt-8 px-4 pb-4">
-							{#if person.photoURL}
-								<img
-									src={person.photoURL}
-									alt={person.displayName}
-									class="w-14 h-14 rounded-full object-cover ring-3 ring-card shadow-md mb-2.5
-										group-hover:ring-accent/20 transition-all duration-200"
-								/>
-							{:else}
-								<div class="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center
-									text-xl text-accent font-bold ring-3 ring-card shadow-md mb-2.5
-									group-hover:ring-accent/20 transition-all duration-200">
-									{avatarInitial(person.displayName)}
-								</div>
-							{/if}
+							<div class="mb-2.5 group-hover:scale-105 transition-transform duration-200">
+								<Avatar name={person.displayName} photoURL={person.photoURL} size="lg" ring="card" />
+							</div>
 
 							<p class="text-[13px] font-semibold text-primary truncate w-full text-center leading-tight">
 								{person.displayName}

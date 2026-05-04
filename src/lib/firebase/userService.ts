@@ -101,19 +101,50 @@ export async function signOut(): Promise<void> {
 }
 
 /**
+ * Derives a friendly default display name from a user's email or uid.
+ * Title-cases the email handle (foo.bar → Foo Bar) so it reads naturally.
+ */
+function defaultDisplayName(user: Pick<User, 'email' | 'uid'>): string {
+	const handle = user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+	if (handle) {
+		return handle
+			.split(' ')
+			.filter(Boolean)
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join(' ');
+	}
+	return 'New friend';
+}
+
+/**
  * Creates or updates a user document in Firestore to ensure it's complete.
+ * Backfills displayName from the email handle when Firebase Auth doesn't supply one
+ * (common with email magic-link signups).
  */
 async function ensureUserDoc(user: User): Promise<void> {
 	const userRef = doc(db(), 'users', user.uid);
 	const userSnap = await getDoc(userRef);
 
-	if (!userSnap.exists() || !userSnap.data().email) {
+	const existing = userSnap.exists() ? (userSnap.data() as Record<string, unknown>) : null;
+	const existingName = typeof existing?.displayName === 'string' ? (existing.displayName as string).trim() : '';
+	const resolvedName = user.displayName?.trim() || existingName || defaultDisplayName(user);
+
+	// Sync the derived name back to Firebase Auth so future reads of currentUser are consistent.
+	if (!user.displayName?.trim() && resolvedName) {
+		try {
+			await updateProfile(user, { displayName: resolvedName });
+		} catch {
+			// Non-fatal — Firestore is the source of truth.
+		}
+	}
+
+	if (!userSnap.exists() || !existing?.email || !existingName) {
 		const referredBy =
 			typeof window !== 'undefined' ? window.localStorage.getItem(REFERRAL_STORAGE_KEY) : null;
 
 		const userData: Record<string, unknown> = {
 			uid: user.uid,
-			displayName: user.displayName ?? '',
+			displayName: resolvedName,
 			email: user.email ?? '',
 			photoURL: user.photoURL ?? null,
 			referredBy: referredBy ?? null
@@ -248,16 +279,29 @@ export async function deleteAccount(): Promise<void> {
 	const firebaseUser = auth().currentUser;
 	if (!firebaseUser) throw new Error('Not signed in');
 
-	// Delete Firestore user doc first (while we still have auth)
+	// Pre-flight a benign auth-touching call so requires-recent-login fails fast,
+	// BEFORE we delete the Firestore doc. Without this we'd wipe user data and
+	// only then discover that auth deletion can't proceed, leaving the auth
+	// account orphaned. Re-running updateProfile with the same name is a no-op
+	// when the credential is recent enough.
+	try {
+		await updateProfile(firebaseUser, { displayName: firebaseUser.displayName ?? '' });
+	} catch (err: unknown) {
+		const code = (err as { code?: string }).code ?? '';
+		if (code === 'auth/requires-recent-login') {
+			throw new Error('Please sign out and sign back in, then try again.');
+		}
+		throw new Error(friendlyAuthError(code));
+	}
+
+	// Auth credential is fresh — safe to wipe Firestore (triggers onUserDelete
+	// cascade) and then delete the auth user itself.
 	await deleteDoc(doc(db(), 'users', firebaseUser.uid));
 
 	try {
 		await deleteUser(firebaseUser);
 	} catch (err: unknown) {
 		const code = (err as { code?: string }).code ?? '';
-		if (code === 'auth/requires-recent-login') {
-			throw new Error('Please sign out and sign back in, then try again.');
-		}
 		throw new Error(friendlyAuthError(code));
 	}
 }

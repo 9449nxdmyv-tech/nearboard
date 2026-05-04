@@ -10,7 +10,6 @@ export {
 	setSortMode,
 	toggleCalmMode,
 	setFeedItems,
-	markAllFeedRead,
 	setCalmBriefings,
 	setFeedLoading,
 	sortFeedItems,

@@ -14,7 +14,7 @@
 	import { userStore, showToast, requestNotificationPermission } from '$lib/stores';
 	import { getBoard, joinBoard, getPendingInvites, getUserDoc } from '$lib/firebase';
 	import type { BoardDoc, UserDoc } from '$lib/types';
-	import { avatarInitial } from '$lib/utils/textFormatter';
+	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import BoardPreviewMosaic from '$lib/components/ui/BoardPreviewMosaic.svelte';
 
 	const boardId = $derived($page.params.boardId ?? '');
@@ -173,32 +173,22 @@
 				in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration }}
 			>
 				<div class="bg-card/95 backdrop-blur-sm rounded-card border border-border shadow-card p-8 text-center">
-					<Icon icon="ph:check-circle-fill" class="text-4xl text-success mb-4" />
+					<div class="flex justify-center mb-4">
+						<Icon icon="ph:check-circle-fill" class="text-4xl text-success" />
+					</div>
 					<h1 class="font-display text-xl font-semibold text-primary mb-2">You're already in</h1>
 					<p class="text-sm text-muted mb-2">You're a member of <strong>{board.name}</strong>.</p>
 
 					{#if memberProfiles.length > 0}
 						<div class="flex items-center justify-center gap-1 mb-6">
 							<div class="flex -space-x-2">
-								{#each memberProfiles.slice(0, 5) as member}
-									{#if member.photoURL}
-										<img
-											src={member.photoURL}
-											alt={member.displayName}
-											class="w-8 h-8 rounded-full object-cover border-2 border-card"
-											title={member.displayName}
-										/>
-									{:else}
-										<div
-											class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent text-xs font-semibold border-2 border-card"
-											title={member.displayName}
-										>
-											{avatarInitial(member.displayName)}
-										</div>
-									{/if}
+								{#each memberProfiles.slice(0, 5) as member (member.uid)}
+									<div class="ring-2 ring-card rounded-full">
+										<Avatar name={member.displayName} photoURL={member.photoURL} size="md" />
+									</div>
 								{/each}
 								{#if memberCount > 5}
-									<div class="w-8 h-8 rounded-full bg-muted/20 flex items-center justify-center text-muted text-xs font-semibold border-2 border-card">
+									<div class="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center text-muted text-xs font-semibold border-2 border-card">
 										+{memberCount - 5}
 									</div>
 								{/if}
@@ -230,17 +220,7 @@
 					<!-- Inviter -->
 					<div class="flex flex-col items-center">
 						{#if owner}
-							{#if owner.photoURL}
-								<img
-									src={owner.photoURL}
-									alt={owner.displayName}
-									class="w-14 h-14 rounded-full object-cover ring-2 ring-accent/20"
-								/>
-							{:else}
-								<div class="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center text-accent font-semibold text-lg ring-2 ring-accent/20">
-									{avatarInitial(owner.displayName)}
-								</div>
-							{/if}
+							<Avatar name={owner.displayName} photoURL={owner.photoURL} size="lg" ring="accent" />
 							<p class="text-sm text-primary mt-3">
 								<span class="font-semibold">{owner.displayName || 'Someone'}</span>
 								<span class="text-muted"> invited you to join</span>
@@ -274,25 +254,13 @@
 					{#if otherMembers.length > 0 || (owner && memberCount > 1)}
 						<div class="flex items-center justify-center mt-5 gap-1">
 							<div class="flex -space-x-2">
-								{#each otherMembers.slice(0, 4) as member}
-									{#if member.photoURL}
-										<img
-											src={member.photoURL}
-											alt={member.displayName}
-											class="w-8 h-8 rounded-full object-cover border-2 border-card"
-											title={member.displayName}
-										/>
-									{:else}
-										<div
-											class="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent text-xs font-semibold border-2 border-card"
-											title={member.displayName}
-										>
-											{avatarInitial(member.displayName)}
-										</div>
-									{/if}
+								{#each otherMembers.slice(0, 4) as member (member.uid)}
+									<div class="ring-2 ring-card rounded-full">
+										<Avatar name={member.displayName} photoURL={member.photoURL} size="md" />
+									</div>
 								{/each}
 								{#if memberCount > 5}
-									<div class="w-8 h-8 rounded-full bg-muted/20 flex items-center justify-center text-muted text-xs font-semibold border-2 border-card">
+									<div class="w-10 h-10 rounded-full bg-muted/20 flex items-center justify-center text-muted text-xs font-semibold border-2 border-card">
 										+{memberCount - 5}
 									</div>
 								{/if}

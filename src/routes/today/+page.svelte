@@ -31,7 +31,7 @@
 <Page>
 	<Header title="Today" backHref="/" />
 
-	<PullToRefresh onRefresh={async () => { loadTodayData($boardStore.boards, $userStore.user?.uid); }}>
+	<PullToRefresh onRefresh={async () => { await loadTodayData($boardStore.boards, $userStore.user?.uid); }}>
 		<main class="flex-1 px-4 pb-6">
 			{#if $todayStore.error}
 				<Block class="!text-center !mt-12">

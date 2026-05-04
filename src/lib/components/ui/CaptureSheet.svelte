@@ -14,6 +14,7 @@
 	import SheetHeader from './SheetHeader.svelte';
 	import ChatInput from './ChatInput.svelte';
 	import { swipeToDismiss } from '$lib/utils/swipeToDismiss';
+	import { onDestroy } from 'svelte';
 
 	export type CaptureType = 'note' | 'link' | 'photo' | 'video' | 'voice' | 'list' | 'poll' | 'location';
 
@@ -72,6 +73,11 @@
 	const selectedBoard = $derived(boards.find(b => b.id === selectedBoardId));
 
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+	onDestroy(() => {
+		clearTimeout(debounceTimer);
+		previewAbort?.abort();
+	});
 
 	function handleInput() {
 		const trimmed = text.trim();

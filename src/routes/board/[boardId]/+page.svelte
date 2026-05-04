@@ -12,6 +12,7 @@
 		subscribeToBoardMembers,
 		markBoardRead,
 		syncMemberProfile,
+		heartbeatPresence,
 		deleteContent,
 		deleteBoard,
 		toggleListItem,
@@ -21,11 +22,12 @@
 	} from '$lib/firebase';
 	import { goto } from '$app/navigation';
 	import { setActiveBoard, userStore, showToast, boardContentPagination, resetContentPagination, loadMoreBoardContent } from '$lib/stores';
+	import { isPlus } from '$lib/utils/tier';
 	import { copyToClipboard } from '$lib/utils/clipboard';
 	import type { BoardDoc, ContentDoc, MemberDoc, FeedOrder } from '$lib/types';
 	import { Popover } from 'konsta/svelte';
 	import { getEffectiveExperience } from '$lib/stores';
-	import { shareContent } from '$lib/utils/share';
+	import { shareContent, shareBoardInvite } from '$lib/utils/share';
 	import { Page, Actions, ActionsGroup, ActionsButton } from 'konsta/svelte';
 	import ContentRenderer from '$lib/components/ui/ContentRenderer.svelte';
 	import CardDetailModal from '$lib/components/ui/CardDetailModal.svelte';
@@ -40,6 +42,7 @@
 	import SwipeAction from '$lib/components/ui/SwipeAction.svelte';
 	import BoardChatView from '$lib/components/ui/BoardChatView.svelte';
 	import { getNudgeToShow } from '$lib/utils/onboardingUtils';
+	import { getEmptyBoardPrompt } from '$lib/utils/emptyStatePrompts';
 
 	type BoardFilterType = 'all' | 'note' | 'list' | 'link' | 'photo' | 'video' | 'voice' | 'poll' | 'location' | 'product';
 
@@ -108,10 +111,11 @@
 	const boardId = $derived($page.params.boardId ?? '');
 	const inviteLink = $derived(board ? generateShareLink(boardId) : '');
 	const isOwner = $derived(board?.ownerId === $userStore.user?.uid);
+	const isUserPlus = $derived(isPlus($userStore.user));
 	const boardExperience = $derived(getEffectiveExperience($userStore.user?.experiencePreferences, board?.experienceOverrides));
 	const scrollBehavior = $derived(boardExperience.scrollBehavior);
 	setContext('videoPlayback', () => boardExperience.videoPlayback);
-	setContext('conversationMode', () => boardExperience.conversationMode);
+	setContext('commentLayout', () => boardExperience.commentLayout);
 
 	// Infinite scroll observer
 	let infiniteScrollEl = $state<HTMLDivElement | undefined>();
@@ -231,6 +235,11 @@
 		await copyToClipboard(inviteLink, 'Invite link copied!');
 	}
 
+	async function inviteFromAvatarStack() {
+		if (!inviteLink) return;
+		await shareBoardInvite(board?.name ?? '', inviteLink);
+	}
+
 	function openSettings() {
 		showFabMenu = false;
 		goto(`/board/${boardId}/settings`);
@@ -274,18 +283,28 @@
 			members = m;
 		});
 
+		// Presence heartbeat — drives the soft pulse on AvatarStack for users
+		// actively viewing the board. Pinged on mount and every 30s; the pulse
+		// fades client-side once the timestamp ages past ~90s.
+		let presenceTimer: ReturnType<typeof setInterval> | undefined;
+		if (user) {
+			heartbeatPresence(boardId, user.uid).catch(() => {});
+			presenceTimer = setInterval(() => {
+				if (document.visibilityState === 'visible') {
+					heartbeatPresence(boardId, user.uid).catch(() => {});
+				}
+			}, 30_000);
+		}
+
 		return () => {
 			unsubBoard();
 			unsubContent();
 			unsubMembers();
+			if (presenceTimer) clearInterval(presenceTimer);
 			setActiveBoard(null);
 		};
 	});
 
-	$effect(() => {
-		filterType;
-		resetContentPagination(null);
-	});
 </script>
 
 <Page>
@@ -297,8 +316,8 @@
 		]}
 	/>
 
-	{#if boardExperience.conversationMode === 'chat' && !loading}
-		<!-- Chat mode: full-height message thread -->
+	{#if boardExperience.commentLayout === 'chat' && !loading}
+		<!-- Chat layout: full-height message thread -->
 		<main class="flex-1 flex flex-col overflow-hidden relative">
 			<BoardChatView
 				{board}
@@ -310,12 +329,20 @@
 			/>
 		</main>
 	{:else}
-		<!-- Board / Hybrid mode: card grid -->
+		<!-- Inline layout: card grid -->
 		<main class="px-4">
+			<!-- Living Summary header — the "welcome home" message.
+			     Sits above member faces and filters so it's the first thing readers see. -->
+			{#if board && !loading && board.enableLivingSummary !== false}
+				<div class="mt-8">
+					<LivingSummaryCard {board} isAdmin={isOwner} isPlus={isUserPlus} contentCount={visibleContent.length} />
+				</div>
+			{/if}
+
 			<!-- Members -->
 			{#if board && !loading}
-				<div class="flex justify-center mt-5 mb-6">
-					<AvatarStack uids={board.memberIds} {boardId} size="lg" limit={4} />
+				<div class="flex justify-start mt-6 mb-6">
+					<AvatarStack uids={board.memberIds} {boardId} size="lg" limit={4} onInvite={inviteFromAvatarStack} />
 				</div>
 
 				<!-- Sort + filter pills: sort sits at the leading edge as a fixed
@@ -402,17 +429,18 @@
 
 			{#if loading}
 				<div class="grid grid-cols-2 gap-3 mt-4">
-					{#each Array(6) as _, i}
+					{#each Array(6) as _, i (i)}
 						<div class="stagger-fade-in" style="--stagger-index: {i}">
 							<SkeletonCard variant={i % 3 === 0 ? 'photo' : 'small'} />
 						</div>
 					{/each}
 				</div>
 			{:else if visibleContent.length === 0}
+				{@const prompt = getEmptyBoardPrompt(board?.template)}
 				<EmptyState
-					icon="ph:kanban"
-					title="This board is empty"
-					description="Tap + to add notes, links, photos, and more"
+					icon={prompt.icon}
+					title={prompt.title}
+					description={prompt.description}
 				/>
 			{:else if filteredContent.length === 0}
 				<EmptyState
@@ -423,9 +451,6 @@
 					onAction={() => { filterType = 'all'; }}
 				/>
 			{:else}
-				{#if board && board.enableLivingSummary !== false}
-					<LivingSummaryCard {board} isAdmin={isOwner} contentCount={visibleContent.length} />
-				{/if}
 				{#if nudge}
 					<NudgeCard {nudge} onaction={handleNudgeAction} />
 				{/if}
@@ -442,6 +467,7 @@
 											isBoardOwner={isOwner}
 											allowComments={board?.allowComments}
 											{resolveAuthorPhoto}
+											layout={boardExperience.layoutStyle}
 											onDelete={(it) => { confirmDelete = { id: it.id, type: it.type }; }}
 											onToggleListItem={(contentItem, itemId) => toggleListItem(boardId, contentItem.id, contentItem.items, itemId)}
 											onShare={handleShareCard}
@@ -457,6 +483,7 @@
 										isBoardOwner={isOwner}
 										allowComments={board?.allowComments}
 										{resolveAuthorPhoto}
+										layout={boardExperience.layoutStyle}
 										onDelete={(it) => { confirmDelete = { id: it.id, type: it.type }; }}
 										onToggleListItem={(contentItem, itemId) => toggleListItem(boardId, contentItem.id, contentItem.items, itemId)}
 										onShare={handleShareCard}

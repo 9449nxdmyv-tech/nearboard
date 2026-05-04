@@ -39,6 +39,7 @@ import type {
 	MemberDoc,
 	ContentDoc,
 	LinkContentDoc,
+	ListContentDoc,
 	ProductContentDoc,
 	ListItem,
 	BriefingDoc,
@@ -65,9 +66,6 @@ export interface CreateBoardOptions {
 /**
  * Creates a new board and adds the creator as owner member.
  * Returns the new board ID.
- * 
- * Lever 6 (Monetization): Enforces 3-board limit for free tier users.
- * Throws error if user has reached their board creation limit.
  */
 export async function createBoard(
 	name: string,
@@ -78,24 +76,7 @@ export async function createBoard(
 	photoURL: string | null = null,
 	options?: CreateBoardOptions
 ): Promise<string> {
-	// Lever 6: Check board creation limit
-	const FREE_TIER_BOARD_LIMIT = 3;
-	
 	const userRef = doc(db(), 'users', userId);
-	const userSnap = await getDoc(userRef);
-	
-	if (userSnap.exists()) {
-		const userData = userSnap.data();
-		const tier = userData?.subscriptionTier || 'free';
-		const ownedCount = userData?.ownedBoardCount || 0;
-		
-		// Skip limit check for onboarding boards and template clones
-		if (!options?.isOnboarding && !options?.isTemplateClone) {
-			if (tier === 'free' && ownedCount >= FREE_TIER_BOARD_LIMIT) {
-				throw new Error('BOARD_LIMIT_REACHED');
-			}
-		}
-	}
 
 	const boardData: Record<string, unknown> = {
 		name,
@@ -138,7 +119,6 @@ export async function createBoard(
 	};
 	await setDoc(doc(db(), 'boards', boardRef.id, 'members', userId), memberData);
 
-	// Lever 6: Increment owned board count (skip for onboarding and template clones)
 	if (!options?.isOnboarding && !options?.isTemplateClone) {
 		await updateDoc(userRef, {
 			ownedBoardCount: increment(1)
@@ -451,6 +431,66 @@ export async function getRecentVideos(
 }
 
 /**
+ * Appends items to an existing list card with the given title, or creates a new
+ * list if none exists. Used by the Pro Digest CTAs (recipe → shopping list,
+ * movie → watchlist, book → reading list) so repeated taps consolidate into a
+ * single list rather than creating duplicates.
+ *
+ * Matches case-insensitively on title. Dedupes by item text against the
+ * existing list so re-adding the same movie is a no-op.
+ *
+ * Returns the list's content id (existing or newly created).
+ */
+export async function appendOrCreateList(
+	boardId: string,
+	title: string,
+	newItems: { text: string }[],
+	author: { uid: string; displayName: string; photoURL: string | null }
+): Promise<string> {
+	// Pull all list cards on the board and find the first one whose title matches.
+	// We don't filter server-side because Firestore can't AND `type == 'list'` with
+	// a case-insensitive title equality, and the result set is already small.
+	const snap = await getDocs(query(contentCol(boardId), where('type', '==', 'list')));
+	const targetTitle = title.trim().toLowerCase();
+	const existing = snap.docs.find((d) => {
+		const data = d.data() as ListContentDoc;
+		return (data.title || '').trim().toLowerCase() === targetTitle;
+	});
+
+	if (existing) {
+		const data = existing.data() as ListContentDoc;
+		const existingTexts = new Set((data.items || []).map((i) => i.text.trim().toLowerCase()));
+		const additions: ListItem[] = newItems
+			.map((i) => i.text.trim())
+			.filter((text) => text.length > 0 && !existingTexts.has(text.toLowerCase()))
+			.map((text) => ({ id: crypto.randomUUID(), text, completed: false }));
+
+		if (additions.length > 0) {
+			await updateDoc(doc(db(), 'boards', boardId, 'content', existing.id), {
+				items: [...(data.items || []), ...additions]
+			});
+		}
+		return existing.id;
+	}
+
+	// No matching list — create one.
+	const items: ListItem[] = newItems
+		.map((i) => i.text.trim())
+		.filter((text) => text.length > 0)
+		.map((text) => ({ id: crypto.randomUUID(), text, completed: false }));
+
+	return await addContent(boardId, {
+		type: 'list',
+		title,
+		items,
+		boardId,
+		authorId: author.uid,
+		authorName: author.displayName,
+		authorPhotoURL: author.photoURL
+	} as Omit<ListContentDoc, 'id' | 'createdAt' | 'moderationStatus'>);
+}
+
+/**
  * Toggles a list item's completed state inside a ListContentDoc.
  */
 export async function toggleListItem(
@@ -522,9 +562,7 @@ export async function addComment(
 		...(mentions.length > 0 ? { mentions } : {})
 	});
 
-	// Update comment count on parent content doc + rate limit timestamp
-	const contentRef = doc(db(), 'boards', boardId, 'content', contentId);
-	updateDoc(contentRef, { commentCount: increment(1) }).catch(console.error);
+	// commentCount is updated by the onCommentWrite trigger (single source of truth)
 	updateDoc(memberRef, { lastCommentAt: serverTimestamp() }).catch(console.error);
 
 	return ref.id;
@@ -548,9 +586,7 @@ export function subscribeToComments(
 
 /**
  * Deletes a comment. Only author or board owner can delete.
- *
- * Uses runTransaction so that the read-then-write decrement of commentCount
- * is atomic — concurrent deletes can't double-decrement past zero.
+ * commentCount is updated by the onCommentWrite trigger.
  */
 export async function deleteComment(
 	boardId: string,
@@ -558,18 +594,7 @@ export async function deleteComment(
 	commentId: string
 ): Promise<void> {
 	const commentRef = doc(db(), 'boards', boardId, 'content', contentId, 'comments', commentId);
-	const contentRef = doc(db(), 'boards', boardId, 'content', contentId);
-
-	await runTransaction(db(), async (tx) => {
-		const commentSnap = await tx.get(commentRef);
-		if (!commentSnap.exists()) return; // already deleted, nothing to do
-		const contentSnap = await tx.get(contentRef);
-		const current = (contentSnap.data()?.commentCount as number) ?? 0;
-		tx.delete(commentRef);
-		if (current > 0) {
-			tx.update(contentRef, { commentCount: increment(-1) });
-		}
-	});
+	await deleteDoc(commentRef);
 }
 
 // ─── Follow operations ────────────────────────────────────────────────────────
@@ -651,6 +676,7 @@ export function subscribeToLatestBriefing(
 
 /**
  * Casts a vote on a poll. One vote per user — uses userId as doc ID.
+ * Re-calling with a different optionId switches the vote.
  */
 export async function voteOnPoll(
 	boardId: string,
@@ -661,6 +687,19 @@ export async function voteOnPoll(
 	await setDoc(
 		doc(db(), 'boards', boardId, 'content', contentId, 'votes', userId),
 		{ userId, optionId, votedAt: serverTimestamp() }
+	);
+}
+
+/**
+ * Removes the current user's vote — used for tap-to-unvote.
+ */
+export async function removeVote(
+	boardId: string,
+	contentId: string,
+	userId: string
+): Promise<void> {
+	await deleteDoc(
+		doc(db(), 'boards', boardId, 'content', contentId, 'votes', userId)
 	);
 }
 
@@ -764,9 +803,10 @@ export async function joinBoard(
 	const memberIds = (data.memberIds as string[]) ?? [];
 	if (memberIds.includes(userId)) return; // already a member
 
-	// Single board update: add to memberIds (and decrement pendingInviteCount if invite)
+	// Use arrayUnion so two concurrent joins don't clobber each other's memberIds
+	// via read-modify-write. arrayUnion is server-side and idempotent.
 	const boardUpdate: Record<string, unknown> = {
-		memberIds: [...memberIds, userId]
+		memberIds: arrayUnion(userId)
 	};
 	if (inviteId) {
 		boardUpdate.pendingInviteCount = increment(-1);
@@ -797,14 +837,11 @@ export async function joinBoard(
  */
 export async function removeMember(boardId: string, userId: string): Promise<void> {
 	const boardRef = doc(db(), 'boards', boardId);
-	const boardSnap = await getDoc(boardRef);
-	if (!boardSnap.exists()) throw new Error('Board not found');
-
-	const data = boardSnap.data();
-	const memberIds = (data.memberIds as string[]) ?? [];
-
+	// arrayRemove is atomic and avoids read-modify-write races against concurrent
+	// joins/removes. The previous filter() approach could resurrect a removed
+	// member if a join landed between read and write.
 	await updateDoc(boardRef, {
-		memberIds: memberIds.filter((id) => id !== userId)
+		memberIds: arrayRemove(userId)
 	});
 
 	await deleteDoc(doc(db(), 'boards', boardId, 'members', userId));
@@ -842,6 +879,23 @@ export async function updateMemberDigestMuted(
 	await updateDoc(doc(db(), 'boards', boardId, 'members', userId), {
 		digestMuted: muted
 	});
+}
+
+/**
+ * Heartbeat used by the board view to drive AvatarStack's presence pulse.
+ * Cheap setDoc-merge — should be called on board open and every ~30s while open.
+ * Stale writes are tolerated; the pulse fades out client-side once the timestamp
+ * ages past the freshness threshold (~90s).
+ */
+export async function heartbeatPresence(boardId: string, userId: string): Promise<void> {
+	try {
+		await setDoc(doc(db(), 'boards', boardId, 'members', userId), {
+			lastViewedAt: serverTimestamp()
+		}, { merge: true });
+	} catch (err) {
+		// Presence is best-effort — never crash the board view if it fails.
+		console.warn('heartbeatPresence failed:', err);
+	}
 }
 
 /**

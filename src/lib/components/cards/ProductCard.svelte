@@ -5,7 +5,6 @@
 <script lang="ts">
 	import type { ProductCardProps } from '$lib/types/ui';
 	import Card from '$lib/components/ui/Card.svelte';
-	import { Button } from 'konsta/svelte';
 	import Icon from '@iconify/svelte';
 	import MetadataPill from './link/MetadataPill.svelte';
 	import {
@@ -19,7 +18,7 @@
 		originalPrice, lastCheckedPrice, lastCheckedAt, priceDrop,
 		authorId, authorName, authorPhotoURL, createdAt,
 		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick,
-		enrichment, description, favicon
+		enrichment, description, favicon, layout
 	}: ProductCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -38,7 +37,7 @@
 			<img
 				src={image}
 				alt={title}
-				class="w-full h-48 object-cover transition-transform duration-300 hover:scale-[1.02]"
+				class="w-full aspect-square object-cover transition-transform duration-300 hover:scale-[1.02]"
 				loading="lazy"
 				onerror={() => (imageError = true)}
 			/>
@@ -75,6 +74,7 @@
 	{onShare}
 	{onDelete}
 	{onCommentClick}
+	{layout}
 	headerContent={image && !imageError ? productHeader : undefined}
 >
 
@@ -89,9 +89,11 @@
 			</div>
 		{/if}
 
-		<a href={url} target="_blank" rel="noopener noreferrer" class="block group">
-			<h3 class="text-[15px] font-semibold text-on-surface leading-snug group-hover:text-primary transition-colors">{title}</h3>
-		</a>
+		{#if title?.trim()}
+			<a href={url} target="_blank" rel="noopener noreferrer" class="block group">
+				<h3 class="text-[15px] font-semibold text-on-surface leading-snug group-hover:text-primary transition-colors">{title}</h3>
+			</a>
+		{/if}
 
 		{#if domain && (!image || imageError)}
 			<div class="flex items-center gap-1.5 text-[11px] text-muted font-medium">
@@ -139,13 +141,5 @@
 				</div>
 			{/if}
 		{/if}
-
-		<!-- View button -->
-		<a href={url} target="_blank" rel="noopener noreferrer">
-			<Button small rounded class="w-full mt-2">
-				<Icon icon="ph:shopping-bag" class="mr-2" />
-				View Product
-			</Button>
-		</a>
 	</div>
 </Card>

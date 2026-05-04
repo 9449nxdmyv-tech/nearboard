@@ -28,8 +28,8 @@ export type VideoPlayback = typeof VIDEO_PLAYBACKS[number];
 export const FEED_ORDERS = ['newest', 'oldest', 'most-active', 'curated'] as const;
 export type FeedOrder = typeof FEED_ORDERS[number];
 
-export const CONVERSATION_MODES = ['board', 'hybrid', 'chat'] as const;
-export type ConversationMode = typeof CONVERSATION_MODES[number];
+export const COMMENT_LAYOUTS = ['inline', 'chat'] as const;
+export type CommentLayout = typeof COMMENT_LAYOUTS[number];
 
 export const LAYOUT_STYLES = ['single-column', 'masonry', 'compact-grid'] as const;
 export type LayoutStyle = typeof LAYOUT_STYLES[number];
@@ -49,9 +49,9 @@ export function isVideoPlayback(v: unknown): v is VideoPlayback {
 export function isFeedOrder(v: unknown): v is FeedOrder {
 	return typeof v === 'string' && (FEED_ORDERS as readonly string[]).includes(v);
 }
-/** Type guard — checks if a string is a valid ConversationMode. */
-export function isConversationMode(v: unknown): v is ConversationMode {
-	return typeof v === 'string' && (CONVERSATION_MODES as readonly string[]).includes(v);
+/** Type guard — checks if a string is a valid CommentLayout. */
+export function isCommentLayout(v: unknown): v is CommentLayout {
+	return typeof v === 'string' && (COMMENT_LAYOUTS as readonly string[]).includes(v);
 }
 /** Type guard — checks if a string is a valid LayoutStyle. */
 export function isLayoutStyle(v: unknown): v is LayoutStyle {
@@ -62,7 +62,7 @@ export interface UserExperiencePreferences {
 	scrollBehavior: ScrollBehavior;
 	videoPlayback: VideoPlayback;
 	feedOrder: FeedOrder;
-	conversationMode: ConversationMode;
+	commentLayout: CommentLayout;
 	layoutStyle: LayoutStyle;
 	preset?: ExperiencePreset;
 	updatedAt?: Timestamp;
@@ -73,7 +73,7 @@ export interface BoardExperienceOverrides {
 	scrollBehavior?: ScrollBehavior;
 	videoPlayback?: VideoPlayback;
 	feedOrder?: FeedOrder;
-	conversationMode?: ConversationMode;
+	commentLayout?: CommentLayout;
 	layoutStyle?: LayoutStyle;
 	updatedAt?: Timestamp;
 }
@@ -112,11 +112,11 @@ export interface UserDoc {
 	lastDigestSentAt?: Timestamp;
 	/** IDs of public boards the user follows (read-only access, feed updates). */
 	followingBoardIds?: string[];
-	/** Number of boards owned by this user (Lever 6 — monetization). Free tier: 3 boards. */
+	/** Number of boards owned by this user (informational — no cap on free tier). */
 	ownedBoardCount?: number;
-	/** Subscription tier: 'free' | 'supporter' | 'lifetime' (Lever 6 — monetization) */
-	subscriptionTier?: 'free' | 'supporter' | 'lifetime';
-	/** Timestamp when supporter/lifetime subscription started */
+	/** Subscription tier: 'free' or 'plus'. Plus gates voice briefings and manual AI regen. */
+	subscriptionTier?: 'free' | 'plus';
+	/** Timestamp when Plus subscription started. */
 	subscriptionStartedAt?: Timestamp;
 	/** User-controlled social experience preferences (global defaults). */
 	experiencePreferences?: UserExperiencePreferences;
@@ -213,6 +213,8 @@ export interface MemberDoc {
 	joinedViaInviteId?: string | null;
 	/** If true, this board is excluded from the user's email digest. */
 	digestMuted?: boolean;
+	/** Heartbeat timestamp written while the board page is open. Drives the presence pulse on AvatarStack. */
+	lastViewedAt?: Timestamp;
 }
 
 export interface BriefingDoc {
@@ -344,6 +346,9 @@ export interface VoiceContentDoc extends BaseContentDoc {
 	captureSource?: 'manual' | 'siri-shortcut' | 'android-voice-intent';
 	/** Timestamp when voice was captured (may differ from createdAt for shortcuts) */
 	capturedAt?: Timestamp;
+	/** Pre-computed waveform peaks (0–1, ~64 values) — derived from the audio blob at upload.
+	 *  Renderers fall back to a deterministic shape when this is missing (legacy notes). */
+	waveform?: number[];
 }
 
 export interface PollOption {

@@ -55,6 +55,15 @@
 	// Body scroll lock
 	useConditionalScrollLock(() => open);
 
+	// Reset loading/error state whenever the source image changes so that
+	// reopening the viewer on a different image doesn't reuse stale state.
+	$effect(() => {
+		src; // track
+		isLoading = true;
+		imageError = false;
+		resetZoom();
+	});
+
 	// Keyboard escape handling
 	$effect(() => {
 		if (open) {
@@ -98,7 +107,7 @@
 			const touch = e.touches[0];
 			const now = Date.now();
 
-			if (now - lastTapTime < 300 && isZoomed) {
+			if (now - lastTapTime < 300) {
 				// Double tap - zoom in/out
 				e.preventDefault();
 				hapticMedium();
@@ -107,10 +116,15 @@
 				} else {
 					zoomToPoint(touch.clientX, touch.clientY);
 				}
+				lastTapTime = 0; // prevent triple-tap cascading
+				return;
 			} else if (!isZoomed) {
 				// Start drag for swipe to close
 				dragging = true;
 				dragStartY = touch.clientY;
+				tapPosition = { x: touch.clientX, y: touch.clientY };
+			} else {
+				// Zoomed single touch — seed pan origin so first delta isn't stale
 				tapPosition = { x: touch.clientX, y: touch.clientY };
 			}
 
@@ -201,7 +215,8 @@
 
 	function handleShare() {
 		if (shareUrl) {
-			navigator.share?.({ url: shareUrl });
+			// Swallow AbortError when the user cancels the system share sheet.
+			navigator.share?.({ url: shareUrl }).catch(() => {});
 		}
 	}
 </script>

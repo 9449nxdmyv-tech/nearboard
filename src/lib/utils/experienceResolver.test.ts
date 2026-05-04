@@ -9,7 +9,7 @@ describe('resolveEffectiveExperience', () => {
 		expect(result.scrollBehavior).toBe('load-more');
 		expect(result.videoPlayback).toBe('tap-to-play');
 		expect(result.feedOrder).toBe('newest');
-		expect(result.conversationMode).toBe('board');
+		expect(result.commentLayout).toBe('inline');
 		expect(result.layoutStyle).toBe('single-column');
 		expect(result.preset).toBe('calm');
 	});
@@ -19,14 +19,14 @@ describe('resolveEffectiveExperience', () => {
 			scrollBehavior: 'infinite',
 			videoPlayback: 'muted-autoplay',
 			feedOrder: 'most-active',
-			conversationMode: 'chat',
+			commentLayout: 'chat',
 			layoutStyle: 'masonry'
 		};
 		const result = resolveEffectiveExperience(userPrefs);
 		expect(result.scrollBehavior).toBe('infinite');
 		expect(result.videoPlayback).toBe('muted-autoplay');
 		expect(result.feedOrder).toBe('most-active');
-		expect(result.conversationMode).toBe('chat');
+		expect(result.commentLayout).toBe('chat');
 		expect(result.layoutStyle).toBe('masonry');
 	});
 
@@ -35,7 +35,7 @@ describe('resolveEffectiveExperience', () => {
 			scrollBehavior: 'paged',
 			videoPlayback: 'tap-to-play',
 			feedOrder: 'newest',
-			conversationMode: 'board',
+			commentLayout: 'inline',
 			layoutStyle: 'single-column'
 		};
 		// Only change scroll
@@ -74,18 +74,18 @@ describe('resolveEffectiveExperience', () => {
 			scrollBehavior: 'paged',
 			videoPlayback: 'wifi-autoplay',
 			feedOrder: 'newest',
-			conversationMode: 'hybrid',
+			commentLayout: 'inline',
 			layoutStyle: 'masonry'
 		};
 		const boardOverrides: BoardExperienceOverrides = {
 			enabled: true,
-			conversationMode: 'chat',
+			commentLayout: 'chat',
 			layoutStyle: 'single-column'
 		};
 		const result = resolveEffectiveExperience(userPrefs, boardOverrides);
 		expect(result.scrollBehavior).toBe('paged'); // from user
 		expect(result.videoPlayback).toBe('wifi-autoplay'); // from user
-		expect(result.conversationMode).toBe('chat'); // from board override
+		expect(result.commentLayout).toBe('chat'); // from board override
 		expect(result.layoutStyle).toBe('single-column'); // from board override
 	});
 });
@@ -111,7 +111,7 @@ describe('detectPreset', () => {
 			scrollBehavior: 'infinite',
 			videoPlayback: 'tap-to-play',
 			feedOrder: 'oldest',
-			conversationMode: 'board',
+			commentLayout: 'inline',
 			layoutStyle: 'compact-grid'
 		};
 		expect(detectPreset(prefs)).toBe('custom');

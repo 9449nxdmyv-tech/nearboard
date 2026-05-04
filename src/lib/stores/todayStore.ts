@@ -15,7 +15,7 @@ export interface BoardBriefing {
 	briefing: BriefingDoc;
 }
 
-export interface UnplayedVoice {
+export interface RecentVoice {
 	boardId: string;
 	boardName: string;
 	contentId: string;
@@ -47,7 +47,7 @@ export interface TodayState {
 	loading: boolean;
 	error: string | null;
 	briefings: BoardBriefing[];
-	unplayedVoiceNotes: UnplayedVoice[];
+	recentVoiceNotes: RecentVoice[];
 	streaks: BoardStreak[];
 	reminders: BoardReminder[];
 	newItemCounts: BoardItemCounts[];
@@ -58,7 +58,7 @@ const initial: TodayState = {
 	loading: false,
 	error: null,
 	briefings: [],
-	unplayedVoiceNotes: [],
+	recentVoiceNotes: [],
 	streaks: [],
 	reminders: [],
 	newItemCounts: [],
@@ -67,13 +67,18 @@ const initial: TodayState = {
 
 export const todayStore = writable<TodayState>(initial);
 
+// Request counter so a slow in-flight load can't overwrite a newer one (e.g.,
+// pull-to-refresh fired during the initial fetch).
+let activeRequestId = 0;
+
 /**
  * Loads Today Dashboard data across all user boards.
- * Fetches latest briefing, unplayed voice notes, streak info, reminders,
+ * Fetches latest briefing, recent voice notes, streak info, reminders,
  * and new item counts per board.
  */
 export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<void> {
 	if (!browser) return;
+	const requestId = ++activeRequestId;
 	todayStore.update((s) => ({ ...s, loading: true, error: null }));
 
 	try {
@@ -97,7 +102,7 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 		// Fetch all boards in parallel instead of sequentially (avoids N+1)
 		const boardResults = await Promise.all(boards.map(async (board) => {
 			const briefings: BoardBriefing[] = [];
-			const unplayedVoiceNotes: UnplayedVoice[] = [];
+			const recentVoiceNotes: RecentVoice[] = [];
 			const streaks: BoardStreak[] = [];
 			const reminders: BoardReminder[] = [];
 
@@ -148,7 +153,7 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 
 			for (const d of voiceSnap.docs) {
 				const data = d.data() as VoiceContentDoc;
-				unplayedVoiceNotes.push({
+				recentVoiceNotes.push({
 					boardId: board.id,
 					boardName: board.name,
 					contentId: d.id,
@@ -180,12 +185,12 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 				});
 			}
 
-			return { briefings, unplayedVoiceNotes, streaks, reminders, itemCounts };
+			return { briefings, recentVoiceNotes, streaks, reminders, itemCounts };
 		}));
 
 		// Merge results from all boards
 		const briefings = boardResults.flatMap((r) => r.briefings);
-		const unplayedVoiceNotes = boardResults.flatMap((r) => r.unplayedVoiceNotes);
+		const recentVoiceNotes = boardResults.flatMap((r) => r.recentVoiceNotes);
 		const streaks = boardResults.flatMap((r) => r.streaks);
 		const reminders = boardResults.flatMap((r) => r.reminders);
 		const newItemCounts = boardResults
@@ -204,17 +209,19 @@ export async function loadTodayData(boards: BoardDoc[], uid?: string): Promise<v
 			memories = memoriesSnap.docs.map(d => ({ ...d.data() }) as MemoryDoc);
 		}
 
+		if (requestId !== activeRequestId) return; // newer request superseded this one
 		todayStore.set({
 			loading: false,
 			error: null,
 			briefings,
-			unplayedVoiceNotes,
+			recentVoiceNotes,
 			streaks,
 			reminders,
 			newItemCounts,
 			memories
 		});
 	} catch (err) {
+		if (requestId !== activeRequestId) return;
 		console.error('loadTodayData failed:', err);
 		todayStore.update((s) => ({
 			...s,

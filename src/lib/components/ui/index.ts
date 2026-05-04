@@ -1,4 +1,5 @@
 export { default as AgeGate } from './AgeGate.svelte';
+export { default as Avatar } from './Avatar.svelte';
 export { default as AvatarStack } from './AvatarStack.svelte';
 export { default as BoardPreviewMosaic } from './BoardPreviewMosaic.svelte';
 export { default as BoardChatView } from './BoardChatView.svelte';

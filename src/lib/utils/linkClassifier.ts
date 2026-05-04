@@ -10,7 +10,7 @@
  *   4. Depth Level (introductory, intermediate, advanced, expert)
  */
 
-import { extractDomain, extractDomain as extractDomainFromUrl } from './contentDetection';
+import { extractDomain as extractDomainFromUrl } from './contentDetection';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

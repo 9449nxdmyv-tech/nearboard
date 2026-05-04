@@ -1,29 +1,22 @@
 /**
  * @file agentRateLimiter.ts
- * @description Rate limiting for AI agents/bots (Lever 7 — Agent guardrails).
+ * @description Rate limiting for AI agents/bots.
  *              Tracks agent activity and enforces limits to prevent bulk adds
  *              without human oversight.
- * 
- * Rules:
- * - Known agents: 10 cards per minute, 50 cards per hour
- * - Unknown sources: 5 cards per minute, 20 cards per hour
- * - Bulk adds (>10 cards in 1 minute) require human confirmation
+ *
+ * Limits scale with the board owner's tier — Plus subscribers get 2× headroom.
  */
 
 import { db } from './app';
-import { 
-	doc, 
-	getDoc, 
-	setDoc, 
-	updateDoc, 
-	Timestamp,
-	collection,
-	query,
-	where,
-	orderBy,
-	limit,
-	getDocs
+import {
+	doc,
+	getDoc,
+	setDoc,
+	updateDoc,
+	Timestamp
 } from 'firebase/firestore';
+import { isPlus } from '$lib/utils/tier';
+import type { UserDoc } from '$lib/types';
 
 interface AgentActivity {
 	agentId: string;
@@ -34,37 +27,44 @@ interface AgentActivity {
 	hourlyResetAt: Timestamp;
 }
 
-const AGENT_LIMITS = {
-	perMinute: 10,
-	perHour: 50,
-	bulkThreshold: 10  // Cards in 1 minute that trigger confirmation
-};
+interface RateLimits {
+	perMinute: number;
+	perHour: number;
+	bulkThreshold: number;
+}
 
-const UNKNOWN_AGENT_LIMITS = {
-	perMinute: 5,
-	perHour: 20,
-	bulkThreshold: 5
-};
+const FREE_KNOWN_LIMITS: RateLimits   = { perMinute: 10, perHour: 50,  bulkThreshold: 10 };
+const FREE_UNKNOWN_LIMITS: RateLimits = { perMinute: 5,  perHour: 20,  bulkThreshold: 5  };
+const PLUS_KNOWN_LIMITS: RateLimits   = { perMinute: 20, perHour: 150, bulkThreshold: 20 };
+const PLUS_UNKNOWN_LIMITS: RateLimits = { perMinute: 10, perHour: 60,  bulkThreshold: 10 };
+
+function resolveLimits(agentId: string, boardOwner: Pick<UserDoc, 'subscriptionTier'> | null): RateLimits {
+	const known = isKnownAgent(agentId);
+	if (isPlus(boardOwner)) return known ? PLUS_KNOWN_LIMITS : PLUS_UNKNOWN_LIMITS;
+	return known ? FREE_KNOWN_LIMITS : FREE_UNKNOWN_LIMITS;
+}
 
 /**
  * Checks if an agent can add a card without exceeding rate limits.
- * Returns { allowed: boolean, reason?: string, requiresConfirmation?: boolean }
+ * Limits scale with the board owner's tier (Plus = 2× headroom).
  */
 export async function checkAgentRateLimit(
 	agentId: string,
 	boardId: string
-): Promise<{ 
-	allowed: boolean; 
+): Promise<{
+	allowed: boolean;
 	reason?: string;
 	requiresConfirmation?: boolean;
 	remainingPerMinute?: number;
 	remainingPerHour?: number;
 }> {
 	const now = Timestamp.now();
-	const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-	const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-	const limits = isKnownAgent(agentId) ? AGENT_LIMITS : UNKNOWN_AGENT_LIMITS;
+	const boardSnap = await getDoc(doc(db(), 'boards', boardId));
+	const ownerId = boardSnap.data()?.ownerId as string | undefined;
+	const ownerSnap = ownerId ? await getDoc(doc(db(), 'users', ownerId)) : null;
+	const owner = (ownerSnap?.data() ?? null) as Pick<UserDoc, 'subscriptionTier'> | null;
+	const limits = resolveLimits(agentId, owner);
 
 	// Get agent activity for this board
 	const activityRef = doc(db(), 'agentActivity', `${agentId}_${boardId}`);

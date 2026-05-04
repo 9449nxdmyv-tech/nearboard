@@ -13,7 +13,7 @@
 	import CardInteractions from './CardInteractions.svelte';
 	import CardFooter from './CardFooter.svelte';
 	import CardComments from './CardComments.svelte';
-	import type { ConversationMode } from '$lib/types/firestore';
+	import type { CommentLayout } from '$lib/types/firestore';
 	import { globalExperience } from '$lib/stores';
 	import { subscribeToComments } from '$lib/firebase/boardService';
 
@@ -71,12 +71,12 @@
 		}
 	});
 
-	const getConversationMode = getContext<(() => ConversationMode) | undefined>('conversationMode');
-	const conversationMode = $derived(getConversationMode?.() ?? $globalExperience.conversationMode);
+	const getCommentLayout = getContext<(() => CommentLayout) | undefined>('commentLayout');
+	const commentLayout = $derived(getCommentLayout?.() ?? $globalExperience.commentLayout);
 
-	// In chat mode, auto-expand comments; in board mode, hidden by default
+	// In chat layout, auto-expand comments; in inline layout, hidden by default
 	const defaultExpand = $derived(
-		expandComments || conversationMode === 'chat'
+		expandComments || commentLayout === 'chat'
 	);
 	let showComments = $state(false);
 	// Sync default expansion when defaultExpand changes (eager on mount)
@@ -138,14 +138,4 @@
 	<div class="px-3 sm:px-4 py-3" transition:slide={{ duration: 200 }}>
 		<CardComments {boardId} {contentId} {isBoardOwner} {allowComments} />
 	</div>
-{:else if conversationMode === 'hybrid' && allowComments && liveCommentCount && liveCommentCount > 0}
-	<!-- Hybrid mode: show comment count hint -->
-	<button
-		onclick={() => { hapticLight(); showComments = true; }}
-		class="w-full px-3 sm:px-4 py-2 text-left border-t border-surface-1"
-	>
-		<span class="text-[11px] text-muted">
-			{liveCommentCount} comment{liveCommentCount > 1 ? 's' : ''} — tap to view
-		</span>
-	</button>
 {/if}

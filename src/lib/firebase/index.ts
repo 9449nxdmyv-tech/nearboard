@@ -35,6 +35,7 @@ export {
 	enableBoardSummaries,
 	deleteBoard,
 	addContent,
+	appendOrCreateList,
 	subscribeToBoardContent,
 	subscribeToBoardPreview,
 	toggleListItem,
@@ -48,6 +49,7 @@ export {
 	unfollowBoard,
 	subscribeToLatestBriefing,
 	voteOnPoll,
+	removeVote,
 	subscribeToVotes,
 	lockTimeCapsule,
 	unlockTimeCapsule,
@@ -65,6 +67,7 @@ export {
 	updateMemberDigestMuted,
 	markBoardRead,
 	syncMemberProfile,
+	heartbeatPresence,
 	getLastReadAt,
 	getAllReadTimestamps,
 	loadMoreContent,
@@ -90,3 +93,4 @@ export { uploadBoardCover, uploadAvatar, uploadVoiceNote, uploadPhoto, uploadPho
 export { registerProductForTracking, refreshProductPrice, getPriceHistory, parsePrice } from './pricingService';
 export { setModerationStatus, getQuarantinedContent, isContentVisible } from './moderationService';
 export { parseAndClassify, importApprovedCards } from './whatsAppImportService';
+export { startCheckout, openCustomerPortal } from './checkoutService';

@@ -1,23 +1,56 @@
 <!--
   @file pricing/+page.svelte
-  @description Pricing page for Nearboard (Lever 6 — Monetization).
-               Shows transparent pricing with supporter and lifetime tiers.
-               Free tier: 3 boards. Supporter/Lifetime: unlimited boards + AI enrichment.
+  @description Two-tier pricing: Free (generous) and Plus ($5/mo or $40/yr).
+               Plus gates only real cost drivers (voice briefings, manual AI regen).
+               No nickel-and-diming on UX features.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
-	import { userStore } from '$lib/stores';
+	import { userStore, showToast } from '$lib/stores';
 	import { Page, Button } from 'konsta/svelte';
 	import Header from '$lib/components/ui/Header.svelte';
 	import type { UserDoc } from '$lib/types';
+	import { isPlus, PLUS_PRICING } from '$lib/utils/tier';
+	import { startCheckout, openCustomerPortal } from '$lib/firebase';
 
 	let user = $derived($userStore.user);
 	let loading = $state(true);
 	let userData = $state<UserDoc | null>(null);
+	let billingCycle = $state<'monthly' | 'yearly'>('yearly');
+	let busy = $state(false);
+
+	$effect(() => {
+		const params = $page.url.searchParams;
+		if (params.get('success') === '1') showToast('Welcome to Plus — thank you!', 'success');
+		if (params.get('canceled') === '1') showToast('Checkout canceled', 'info');
+	});
+
+	async function handleUpgrade() {
+		if (busy) return;
+		busy = true;
+		try {
+			await startCheckout(billingCycle);
+		} catch (err) {
+			console.error('Checkout failed:', err);
+			showToast('Could not start checkout. Please try again.', 'error');
+			busy = false;
+		}
+	}
+
+	async function handleManage() {
+		if (busy) return;
+		busy = true;
+		try {
+			await openCustomerPortal();
+		} catch (err) {
+			console.error('Portal failed:', err);
+			showToast('Could not open billing portal.', 'error');
+			busy = false;
+		}
+	}
 
 	onMount(async () => {
 		if (!user) {
@@ -25,10 +58,9 @@
 			return;
 		}
 
-		// Fetch user data to check subscription tier
 		const { doc, getDoc } = await import('firebase/firestore');
 		const { db } = await import('$lib/firebase/app');
-		
+
 		try {
 			const userRef = doc(db(), 'users', user.uid);
 			const userSnap = await getDoc(userRef);
@@ -42,11 +74,8 @@
 		}
 	});
 
-	const currentTier = $derived(userData?.subscriptionTier || 'free');
-	const ownedBoardCount = $derived(userData?.ownedBoardCount || 0);
-	const isSupporter = $derived(currentTier === 'supporter' || currentTier === 'lifetime');
-
-	const FREE_TIER_LIMIT = 3;
+	const userIsPlus = $derived(isPlus(userData));
+	const yearlySavings = $derived(PLUS_PRICING.monthly * 12 - PLUS_PRICING.yearly);
 </script>
 
 <svelte:head>
@@ -54,207 +83,142 @@
 </svelte:head>
 
 <Page>
-	<Header title="Support Nearboard" backHref="/" />
+	<Header title="Pricing" backHref="/" />
 
-	<main class="flex-1 px-6 py-8">
-		<!-- Current status -->
-		{#if !loading}
-			<div class="bg-card rounded-[var(--radius-card)] shadow-card p-4 mb-8">
-				<div class="flex items-center gap-3 mb-2">
-					<Icon 
-						icon={isSupporter ? 'ph:star-fill' : 'ph:user-circle'} 
-						class="text-2xl {isSupporter ? 'text-warning' : 'text-on-surface/60'}"
-					/>
-					<div>
-						<p class="text-sm font-medium text-primary">
-							{isSupporter ? 'Supporter' : 'Free Tier'}
-						</p>
-						<p class="text-xs text-muted">
-							{ownedBoardCount} / {isSupporter ? '∞' : FREE_TIER_LIMIT} boards owned
-						</p>
-					</div>
-				</div>
-				{#if !isSupporter && ownedBoardCount >= FREE_TIER_LIMIT}
-					<div class="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg">
-						<p class="text-xs text-warning font-medium">
-							<Icon icon="ph:warning" class="inline mr-1" />
-							You've reached the free tier limit. Upgrade to create more boards.
-						</p>
-					</div>
-				{/if}
-			</div>
-		{/if}
-
-		<!-- Value proposition -->
+	<main class="flex-1 px-6 py-8 max-w-2xl mx-auto w-full">
+		<!-- Header -->
 		<div class="text-center mb-8">
-			<h1 class="text-[22px] font-semibold text-on-surface tracking-tight mb-2">
-				Transparent Pricing
+			<h1 class="text-[24px] font-semibold text-on-surface tracking-tight mb-2">
+				Simple, honest pricing
 			</h1>
-			<p class="text-[13px] text-muted max-w-md mx-auto leading-relaxed">
-				Free to join and contribute. Pay only when you need more boards
-				or want AI-powered features.
+			<p class="text-[14px] text-muted leading-relaxed max-w-md mx-auto">
+				Nearboard is generously free. Plus is for people who want to
+				support the project and unlock on-demand AI.
 			</p>
 		</div>
 
-		<!-- Pricing tiers -->
-		<div class="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-			<!-- Free Tier -->
-			<div class="bg-card rounded-[var(--radius-card)] shadow-card p-6">
-				<div class="flex items-center gap-3 mb-4">
-					<div class="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-						<Icon icon="ph:user-circle" class="text-2xl text-on-surface/60" />
-					</div>
-					<div>
-						<h2 class="text-lg font-semibold text-primary">Free</h2>
-						<p class="text-xs text-muted">Forever free</p>
-					</div>
+		{#if !loading && userIsPlus}
+			<div class="bg-accent/10 border border-accent/20 rounded-[var(--radius-card)] p-4 mb-6 flex items-center gap-3">
+				<Icon icon="ph:star-fill" class="text-2xl text-accent" />
+				<div class="flex-1">
+					<p class="text-sm font-semibold text-on-surface">You're on Plus</p>
+					<p class="text-xs text-muted">Thank you for supporting Nearboard.</p>
 				</div>
-				
-				<ul class="space-y-3 mb-6">
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Join unlimited boards</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Create up to 3 boards</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">AI living summaries</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Daily email digest</span>
-					</li>
-					<li class="flex items-start gap-2 opacity-50">
-						<Icon icon="ph:x-circle-fill" class="text-muted text-lg shrink-0" />
-						<span class="text-sm text-muted">Unlimited board creation</span>
-					</li>
-					<li class="flex items-start gap-2 opacity-50">
-						<Icon icon="ph:x-circle-fill" class="text-muted text-lg shrink-0" />
-						<span class="text-sm text-muted">AI enrichment (auto-captions, categorization)</span>
-					</li>
-				</ul>
-
-				<Button large rounded outline disabled class="w-full">
-					{currentTier === 'free' ? 'Current Plan' : 'Downgrade'}
-				</Button>
+				<button
+					onclick={handleManage}
+					disabled={busy}
+					class="text-xs text-accent font-medium underline disabled:opacity-50"
+				>
+					Manage billing
+				</button>
 			</div>
+		{/if}
 
-			<!-- Supporter Tier -->
-			<div class="bg-card rounded-[var(--radius-card)] shadow-md border-2 border-accent p-6 relative">
-				<div class="absolute -top-3 right-4 px-3 py-1 bg-accent text-white text-xs font-bold rounded-full">
-					RECOMMENDED
-				</div>
-				
-				<div class="flex items-center gap-3 mb-4">
-					<div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-						<Icon icon="ph:star-fill" class="text-2xl text-accent" />
-					</div>
-					<div>
-						<h2 class="text-lg font-semibold text-primary">Supporter</h2>
-						<p class="text-xs text-muted">$5/month or $50/year</p>
-					</div>
-				</div>
-				
-				<ul class="space-y-3 mb-6">
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Everything in Free, plus:</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Unlimited board creation</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">AI enrichment on your boards</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Supporter badge on profile</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-						<span class="text-sm text-primary">Priority feature requests</span>
-					</li>
-				</ul>
-
-				<Button large rounded class="w-full">
-					{currentTier === 'supporter' ? 'Current Plan' : 'Become a Supporter'}
-				</Button>
-				
-				<p class="text-xs text-muted text-center mt-3">
-					Where your money goes: Server costs, AI API usage, and development
-				</p>
+		<!-- Free tier -->
+		<div class="bg-card rounded-[var(--radius-card)] shadow-card p-6 mb-4">
+			<div class="flex items-baseline justify-between mb-4">
+				<h2 class="text-lg font-semibold text-on-surface">Free</h2>
+				<p class="text-sm text-muted">$0 forever</p>
 			</div>
+			<ul class="space-y-2.5">
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-success text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Unlimited boards and members</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-success text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">All capture types — notes, photos, video, voice, links, lists, polls, location</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-success text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Daily AI living summary on every board</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-success text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Comments, reactions, sharing, daily email digest</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-success text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Browser extension and mobile share sheet</span>
+				</li>
+			</ul>
 		</div>
 
-		<!-- Lifetime tier -->
-		<div class="max-w-4xl mx-auto mt-6">
-			<div class="bg-card rounded-[var(--radius-card)] shadow-card p-6">
-				<div class="flex items-center justify-between mb-4">
-					<div class="flex items-center gap-3">
-						<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-							<Icon icon="ph:crown" class="text-2xl text-on-surface" />
-						</div>
-						<div>
-							<h2 class="text-lg font-semibold text-primary">Lifetime</h2>
-							<p class="text-xs text-muted">One-time payment</p>
-						</div>
-					</div>
-					<div class="text-right">
-						<p class="text-2xl font-bold text-primary">$150</p>
-						<p class="text-xs text-muted">one-time</p>
-					</div>
-				</div>
-				
-				<div class="flex items-center justify-between">
-					<ul class="space-y-2">
-						<li class="flex items-start gap-2">
-							<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-							<span class="text-sm text-primary">All Supporter benefits</span>
-						</li>
-						<li class="flex items-start gap-2">
-							<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-							<span class="text-sm text-primary">Pay once, use forever</span>
-						</li>
-						<li class="flex items-start gap-2">
-							<Icon icon="ph:check-circle-fill" class="text-success text-lg shrink-0" />
-							<span class="text-sm text-primary">Early access to new features</span>
-						</li>
-					</ul>
-					
-					<Button large rounded>
-						{currentTier === 'lifetime' ? 'Current Plan' : 'Go Lifetime'}
-					</Button>
+		<!-- Plus tier -->
+		<div class="bg-card rounded-[var(--radius-card)] shadow-md border-2 border-accent p-6 mb-6">
+			<div class="flex items-baseline justify-between mb-1">
+				<h2 class="text-lg font-semibold text-on-surface flex items-center gap-2">
+					<Icon icon="ph:star-fill" class="text-accent" />
+					Plus
+				</h2>
+				<div class="text-right">
+					<p class="text-2xl font-bold text-on-surface">
+						${billingCycle === 'monthly' ? PLUS_PRICING.monthly : (PLUS_PRICING.yearly / 12).toFixed(2)}
+						<span class="text-sm font-normal text-muted">/mo</span>
+					</p>
+					{#if billingCycle === 'yearly'}
+						<p class="text-[11px] text-muted">${PLUS_PRICING.yearly} billed yearly</p>
+					{/if}
 				</div>
 			</div>
+
+			<!-- Billing toggle -->
+			<div class="flex gap-1 p-1 bg-surface rounded-full mb-4 mt-3 w-fit">
+				<button
+					class="px-3 py-1 text-[12px] rounded-full transition-colors {billingCycle === 'monthly' ? 'bg-card shadow-sm text-on-surface font-medium' : 'text-muted'}"
+					onclick={() => (billingCycle = 'monthly')}
+				>
+					Monthly
+				</button>
+				<button
+					class="px-3 py-1 text-[12px] rounded-full transition-colors {billingCycle === 'yearly' ? 'bg-card shadow-sm text-on-surface font-medium' : 'text-muted'}"
+					onclick={() => (billingCycle = 'yearly')}
+				>
+					Yearly
+					<span class="ml-1 text-success font-semibold">save ${yearlySavings}</span>
+				</button>
+			</div>
+
+			<ul class="space-y-2.5 mb-5">
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-accent text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Everything in Free</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-accent text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">On-demand AI summary regeneration on any board you own</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-accent text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Higher rate limits for AI agents and the MCP server</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-accent text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">Supporter badge on your profile</span>
+				</li>
+				<li class="flex items-start gap-2.5">
+					<Icon icon="ph:check" class="text-accent text-lg shrink-0 mt-0.5" />
+					<span class="text-[14px] text-on-surface">You're keeping the lights on — thank you</span>
+				</li>
+			</ul>
+
+			<Button large rounded disabled={userIsPlus || busy} onclick={handleUpgrade} class="w-full">
+				{#if userIsPlus}
+					You're on Plus
+				{:else if busy}
+					Starting checkout…
+				{:else}
+					Upgrade to Plus
+				{/if}
+			</Button>
 		</div>
 
-		<!-- Transparency section -->
-		<div class="max-w-4xl mx-auto mt-8">
-			<div class="bg-accent/5 rounded-[var(--radius-card)] border border-accent/20 p-6">
-				<h3 class="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
-					<Icon icon="ph:info" class="text-on-surface" />
-					Where Your Money Goes
-				</h3>
-				<div class="grid sm:grid-cols-3 gap-4">
-					<div class="text-center">
-						<p class="text-2xl font-bold text-accent">40%</p>
-						<p class="text-xs text-muted">Server & hosting costs</p>
-					</div>
-					<div class="text-center">
-						<p class="text-2xl font-bold text-accent">35%</p>
-						<p class="text-xs text-muted">AI API usage (Gemini, Groq)</p>
-					</div>
-					<div class="text-center">
-						<p class="text-2xl font-bold text-accent">25%</p>
-						<p class="text-xs text-muted">Development & support</p>
-					</div>
-				</div>
-			</div>
+		<!-- Honesty footer -->
+		<div class="text-center px-4">
+			<p class="text-[12px] text-muted leading-relaxed">
+				Plus only gates features whose cost scales with usage (on-demand AI calls).
+				Everything else stays free — no artificial limits, no upsell prompts, no dark patterns.
+			</p>
 		</div>
 	</main>
 </Page>

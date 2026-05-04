@@ -14,11 +14,14 @@
 	import { signOut, uploadAvatar, updateDisplayName, updatePhotoURL, updateUserFields, deleteAccount } from '$lib/firebase';
 	import { EXPERIENCE_PRESETS } from '$lib/config/constants';
 	import { applyPreset, detectPreset } from '$lib/utils/experienceResolver';
-	import type { ScrollBehavior, VideoPlayback, FeedOrder, ConversationMode, LayoutStyle, ExperiencePreset, UserExperiencePreferences } from '$lib/types/firestore';
+	import type { ScrollBehavior, VideoPlayback, FeedOrder, CommentLayout, LayoutStyle, ExperiencePreset, UserExperiencePreferences } from '$lib/types/firestore';
 	import { shareContent } from '$lib/native';
 	import { getFunctions, httpsCallable } from 'firebase/functions';
 	import { app } from '$lib/firebase/app';
 	import Header from '$lib/components/ui/Header.svelte';
+	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import PlusBadge from '$lib/components/ui/PlusBadge.svelte';
+	import { isPlus, PLUS_PRICING } from '$lib/utils/tier';
 
 
 	const user = $derived($userStore.user);
@@ -53,7 +56,7 @@
 			scrollBehavior: merged.scrollBehavior ?? experience.scrollBehavior,
 			videoPlayback: merged.videoPlayback ?? experience.videoPlayback,
 			feedOrder: merged.feedOrder ?? experience.feedOrder,
-			conversationMode: merged.conversationMode ?? experience.conversationMode,
+			commentLayout: merged.commentLayout ?? experience.commentLayout,
 			layoutStyle: merged.layoutStyle ?? experience.layoutStyle
 		};
 		full.preset = detectPreset(full);
@@ -167,20 +170,9 @@
 				class="relative shrink-0 group"
 				aria-label="Change profile photo"
 			>
-				{#if user?.photoURL}
-					<img
-						src={user.photoURL}
-						alt={user.displayName}
-						class="w-16 h-16 rounded-full object-cover
-							{uploadingAvatar ? 'opacity-50' : 'group-hover:opacity-80'} transition-opacity"
-						onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'}
-					/>
-				{:else}
-					<div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center
-						{uploadingAvatar ? 'opacity-50' : 'group-hover:bg-primary/30'} transition-colors">
-						<Icon icon="ph:user" class="text-2xl text-on-surface" />
-					</div>
-				{/if}
+				<div class="{uploadingAvatar ? 'opacity-50' : 'group-hover:opacity-80'} transition-opacity">
+					<Avatar name={user?.displayName} photoURL={user?.photoURL} size="xl" />
+				</div>
 				<div class="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-primary text-white
 					flex items-center justify-center shadow-sm">
 					{#if uploadingAvatar}
@@ -198,7 +190,12 @@
 				/>
 			</button>
 			<div>
-				<p class="text-on-surface font-medium">{user?.displayName || 'User'}</p>
+				<p class="text-on-surface font-medium flex items-center gap-1.5">
+					{user?.displayName || 'User'}
+					{#if isPlus(user)}
+						<PlusBadge size="md" />
+					{/if}
+				</p>
 				<p class="text-xs text-muted">{user?.email}</p>
 				{#if user?.createdAt}
 					<p class="text-[11px] text-muted">
@@ -206,6 +203,41 @@
 					</p>
 				{/if}
 			</div>
+		</Block>
+
+		<!-- Plus tier card -->
+		<Block class="!mt-1">
+			{#if isPlus(user)}
+				<a
+					href="/pricing"
+					class="flex items-center gap-3 px-4 py-3 rounded-card bg-gradient-to-r from-accent/10 to-accent/5
+						border border-accent/20 hover:border-accent/40 active:scale-[0.99] transition-all"
+				>
+					<div class="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
+						<Icon icon="ph:star-fill" class="text-base text-accent" />
+					</div>
+					<div class="flex-1 min-w-0">
+						<p class="text-[14px] font-semibold text-on-surface flex items-center gap-1.5">Plus supporter</p>
+						<p class="text-[12px] text-muted truncate">Manage subscription or invoices</p>
+					</div>
+					<Icon icon="ph:caret-right" class="text-base text-muted shrink-0" />
+				</a>
+			{:else}
+				<a
+					href="/pricing"
+					class="flex items-center gap-3 px-4 py-3 rounded-card bg-gradient-to-r from-accent/10 via-accent/8 to-accent/5
+						border border-accent/20 hover:border-accent/40 active:scale-[0.99] transition-all"
+				>
+					<div class="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
+						<Icon icon="ph:sparkle-fill" class="text-base text-accent" />
+					</div>
+					<div class="flex-1 min-w-0">
+						<p class="text-[14px] font-semibold text-on-surface">Upgrade to Plus</p>
+						<p class="text-[12px] text-muted">${PLUS_PRICING.monthly}/mo · unlock on-demand AI summaries</p>
+					</div>
+					<Icon icon="ph:caret-right" class="text-base text-muted shrink-0" />
+				</a>
+			{/if}
 		</Block>
 
 		<!-- Display name -->
@@ -290,7 +322,7 @@
 					onInput={(e) => { quietStart = e.target.value === '' ? undefined : Number(e.target.value); saveQuietHours(); }}
 				>
 					<option value="">Off</option>
-					{#each Array.from({ length: 24 }, (_, i) => i) as h}
+					{#each Array.from({ length: 24 }, (_, i) => i) as h (h)}
 						<option value={h}>{h.toString().padStart(2, '0')}:00</option>
 					{/each}
 				</ListInput>
@@ -302,7 +334,7 @@
 					onInput={(e) => { quietEnd = e.target.value === '' ? undefined : Number(e.target.value); saveQuietHours(); }}
 				>
 					<option value="">Off</option>
-					{#each Array.from({ length: 24 }, (_, i) => i) as h}
+					{#each Array.from({ length: 24 }, (_, i) => i) as h (h)}
 						<option value={h}>{h.toString().padStart(2, '0')}:00</option>
 					{/each}
 				</ListInput>
@@ -397,7 +429,7 @@
 
 			<!-- Preset picker -->
 			<Segmented strong rounded>
-				{#each ['calm', 'balanced', 'lively'] as preset}
+				{#each ['calm', 'balanced', 'lively'] as preset (preset)}
 					<SegmentedButton
 						active={experience.preset === preset}
 						onClick={() => selectPreset(preset as 'calm' | 'balanced' | 'lively')}
@@ -457,18 +489,17 @@
 				<option value="curated">Board curated</option>
 			</ListInput>
 
-			<!-- Conversation mode -->
+			<!-- Comment layout -->
 			<ListInput
 				outline
-				label="Board vs Chat"
+				label="Comments"
 				type="select"
-				value={experience.conversationMode}
-				onInput={(e) => saveExperience({ conversationMode: e.target.value as ConversationMode })}
+				value={experience.commentLayout}
+				onInput={(e) => saveExperience({ commentLayout: e.target.value as CommentLayout })}
 				disabled={savingExperience}
 			>
-				<option value="board">Board mode</option>
-				<option value="hybrid">Hybrid mode</option>
-				<option value="chat">Chat mode</option>
+				<option value="inline">Inline under each card</option>
+				<option value="chat">Open chat thread</option>
 			</ListInput>
 
 			<!-- Layout style -->

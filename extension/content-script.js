@@ -12,6 +12,13 @@
 		return null;
 	}
 
+	function isProductType(t) {
+		if (!t) return false;
+		if (Array.isArray(t)) return t.some(isProductType);
+		if (typeof t !== 'string') return false;
+		return t === 'Product' || t.endsWith('/Product');
+	}
+
 	function extractJsonLd() {
 		const scripts = document.querySelectorAll('script[type="application/ld+json"]');
 		for (const script of scripts) {
@@ -19,7 +26,7 @@
 				const data = JSON.parse(script.textContent);
 				const items = Array.isArray(data) ? data : [data];
 				for (const item of items) {
-					if (item['@type'] === 'Product' || item['@type'] === 'http://schema.org/Product') {
+					if (isProductType(item['@type'])) {
 						let price = null;
 						if (item.offers) {
 							const offers = Array.isArray(item.offers) ? item.offers : [item.offers];

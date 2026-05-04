@@ -22,7 +22,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	const MAX_PHOTOS = 5;
@@ -97,11 +97,11 @@
 		// Clear local refs so onDestroy doesn't revoke the URLs the upload still needs
 		photoPreviews = [];
 		photoFiles = [];
-		onClose();
+		onClose(true);
 	}
 
 	function handleClose() {
-		onClose();
+		onClose(false);
 	}
 </script>
 

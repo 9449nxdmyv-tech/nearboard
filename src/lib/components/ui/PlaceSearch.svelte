@@ -6,6 +6,7 @@
 <script lang="ts">
 	import Icon from '@iconify/svelte';
 	import { fly, fade } from 'svelte/transition';
+	import { onDestroy } from 'svelte';
 	import { Searchbar, List, ListItem } from 'konsta/svelte';
 
 	export interface PlaceResult {
@@ -32,6 +33,12 @@
 	let loading = $state(false);
 	let showDropdown = $state(false);
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	let searchAbort: AbortController | null = null;
+
+	onDestroy(() => {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		searchAbort?.abort();
+	});
 
 	function formatPhotonFeature(feature: {
 		properties: Record<string, string | undefined>;
@@ -62,6 +69,9 @@
 			return;
 		}
 
+		searchAbort?.abort();
+		const controller = new AbortController();
+		searchAbort = controller;
 		loading = true;
 		try {
 			const params = new URLSearchParams({ q, limit: '6', lang: 'en' });
@@ -69,16 +79,18 @@
 				params.set('lat', String(userLat));
 				params.set('lon', String(userLng));
 			}
-			const res = await fetch(`https://photon.komoot.io/api/?${params}`);
+			const res = await fetch(`https://photon.komoot.io/api/?${params}`, { signal: controller.signal });
 			if (!res.ok) throw new Error();
 			const data = await res.json();
+			if (controller.signal.aborted) return;
 			results = (data.features ?? []).map(formatPhotonFeature);
 			showDropdown = results.length > 0;
 		} catch {
+			if (controller.signal.aborted) return;
 			results = [];
 			showDropdown = false;
 		} finally {
-			loading = false;
+			if (!controller.signal.aborted) loading = false;
 		}
 	}
 

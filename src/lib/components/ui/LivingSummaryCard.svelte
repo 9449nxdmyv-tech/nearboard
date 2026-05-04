@@ -14,15 +14,20 @@
 	import { showToast } from '$lib/stores';
 	import { Button, List, ListInput } from 'konsta/svelte';
 	import type { BoardDoc } from '$lib/types';
+	import { onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
 
 	let {
 		board,
 		isAdmin = false,
+		isPlus = false,
 		briefingAudioUrl = null,
 		contentCount = undefined
 	}: {
 		board: BoardDoc;
 		isAdmin: boolean;
+		/** Whether the current user is on the Plus tier. Gates manual AI regeneration. */
+		isPlus?: boolean;
 		briefingAudioUrl?: string | null;
 		/** Visible item count (drives the empty-state messaging). */
 		contentCount?: number;
@@ -223,6 +228,11 @@
 
 	async function regenerate() {
 		if (isRegenerating) return;
+		if (!isPlus) {
+			showToast('On-demand regeneration is a Plus feature', 'info');
+			goto('/pricing');
+			return;
+		}
 		isRegenerating = true;
 		try {
 			await requestSummaryRegeneration(board.id);
@@ -236,9 +246,17 @@
 
 	function togglePlay() {
 		if (!audioEl) return;
-		if (playing) { audioEl.pause(); } else { audioEl.play(); }
-		playing = !playing;
+		if (playing) {
+			audioEl.pause();
+			playing = false;
+		} else {
+			audioEl.play().then(() => { playing = true; }).catch(() => { playing = false; });
+		}
 	}
+
+	onDestroy(() => {
+		if (audioEl && !audioEl.paused) audioEl.pause();
+	});
 </script>
 
 <div
@@ -462,6 +480,7 @@
 								class="p-1.5 rounded-full text-muted hover:text-accent hover:bg-accent/8
 									disabled:opacity-40 transition-colors"
 								aria-label="Regenerate summary"
+								title="Regenerate summary"
 							>
 								<Icon icon="ph:arrows-clockwise" class="text-sm {isRegenerating ? 'animate-spin' : ''}" />
 							</button>

@@ -24,8 +24,23 @@
 	} = $props();
 
 	const user = $derived($userStore.user);
-	const hasFaved = $derived(user ? !!acknowledgments[user.uid] : false);
-	const faveCount = $derived(Object.keys(acknowledgments).length);
+	// Optimistic state lets the burst animation fire on the very first tap,
+	// before the Firestore write has roundtripped back to update `acknowledgments`.
+	let optimisticFaved = $state<boolean | null>(null);
+	const serverFaved = $derived(user ? !!acknowledgments[user.uid] : false);
+	const hasFaved = $derived(optimisticFaved ?? serverFaved);
+	const faveCount = $derived(
+		Object.keys(acknowledgments).length +
+		(optimisticFaved === true && !serverFaved ? 1 : 0) +
+		(optimisticFaved === false && serverFaved ? -1 : 0)
+	);
+
+	// Clear optimistic override once the server-side state catches up.
+	$effect(() => {
+		if (optimisticFaved !== null && optimisticFaved === serverFaved) {
+			optimisticFaved = null;
+		}
+	});
 
 	let justTapped = $state(false);
 	let toggling = $state(false);
@@ -34,12 +49,15 @@
 		if (!user || toggling) return;
 		toggling = true;
 		hapticLight();
+		const next = !hasFaved;
+		optimisticFaved = next;
 		justTapped = true;
 		setTimeout(() => (justTapped = false), 400);
 		try {
-			await toggleAcknowledgment(boardId, contentId, user.uid, !hasFaved);
+			await toggleAcknowledgment(boardId, contentId, user.uid, next);
 		} catch (e) {
 			console.error('Failed to toggle fave:', e);
+			optimisticFaved = null; // revert
 		} finally {
 			toggling = false;
 		}
@@ -56,7 +74,7 @@
 	<!-- Burst particles -->
 	{#if justTapped && hasFaved}
 		<div class="heart-burst">
-			{#each Array(6) as _, i}
+			{#each Array(6) as _, i (i)}
 				<span class="heart-particle" style="--angle: {i * 60}deg; --delay: {i * 30}ms"></span>
 			{/each}
 		</div>

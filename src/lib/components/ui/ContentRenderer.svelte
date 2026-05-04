@@ -21,6 +21,7 @@
 		isBoardOwner = false,
 		allowComments = true,
 		expandComments = false,
+		layout,
 		onEdit,
 		onDelete,
 		onToggleListItem,
@@ -33,6 +34,7 @@
 		isBoardOwner?: boolean;
 		allowComments?: boolean;
 		expandComments?: boolean;
+		layout?: import('$lib/types').LayoutStyle;
 		onEdit?: (item: ContentDoc) => void;
 		onDelete?: (item: ContentDoc) => void;
 		onToggleListItem?: (contentItem: ListContentDoc, itemId: string) => void;
@@ -58,6 +60,7 @@
 		expandComments,
 		commentCount: item.commentCount,
 		acknowledgments: item.acknowledgments,
+		layout,
 		onDelete: onDelete ? () => onDelete(item) : undefined,
 		onShare: onShare ? () => onShare(item) : undefined,
 		onCommentClick
@@ -119,6 +122,7 @@
 		caption={item.caption}
 		width={item.width}
 		height={item.height}
+		{layout}
 	/>
 {:else if item.type === 'video'}
 	<VideoCard

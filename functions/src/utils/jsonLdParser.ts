@@ -263,10 +263,13 @@ export function parseMusic(data: Record<string, unknown>): MusicEnrichment | nul
 		}
 	}
 
+	const musicTypes = Array.isArray(data['@type']) ? data['@type'] : [data['@type']];
+	const isRecording = hasType(musicTypes, 'MusicRecording');
+
 	return {
 		kind: 'music',
 		artist,
-		album: hasType(data['@type'] ? [data['@type']] : [], 'MusicRecording')
+		album: isRecording
 			? str(data.inAlbum ? (data.inAlbum as Record<string, unknown>).name : null)
 			: str(data.name),
 		duration: formatIsoDuration(data.duration),

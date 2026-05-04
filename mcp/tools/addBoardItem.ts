@@ -29,6 +29,7 @@ export async function addBoardItem(userId: string, params: AddBoardItemParams) {
 		authorName: userName,
 		authorPhotoURL: userPhoto,
 		moderationStatus: 'approved',
+		userIntent: 'Added via MCP',
 		createdAt: FieldValue.serverTimestamp(),
 		type
 	};

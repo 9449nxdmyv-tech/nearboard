@@ -39,9 +39,12 @@ export const onUserDelete = onDocumentDeleted({ document: 'users/{userId}' }, as
 		await boardDoc.ref.delete();
 	}
 
-	// 2. Remove member doc from boards the user joined (but didn't own)
+	// 2. Remove member doc from boards the user joined (but didn't own).
+	// Skip owned boards — they were deleted in step 1 and the cascade trigger
+	// handles their members; trying to update them here would race with deletion.
 	const allBoards = await db.collection('boards').where('memberIds', 'array-contains', userId).get();
 	for (const boardDoc of allBoards.docs) {
+		if (boardDoc.data().ownerId === userId) continue;
 		const memberRef = db.doc(`boards/${boardDoc.id}/members/${userId}`);
 		const memberSnap = await memberRef.get();
 		if (memberSnap.exists) {
@@ -56,12 +59,14 @@ export const onUserDelete = onDocumentDeleted({ document: 'users/{userId}' }, as
 	// 3. Delete user subcollections
 	await deleteCollection(db, `users/${userId}/tokens`);
 	await deleteCollection(db, `users/${userId}/readState`);
+	await deleteCollection(db, `users/${userId}/memories`);
 
-	// 4. Delete templates created by this user
+	// 4. Delete templates created by this user (chunked to stay under the
+	// 500-op write batch limit if a creator made many templates).
 	const templates = await db.collection('templates').where('creatorId', '==', userId).get();
-	if (!templates.empty) {
+	for (let i = 0; i < templates.docs.length; i += BATCH_SIZE) {
 		const batch = db.batch();
-		for (const tmpl of templates.docs) {
+		for (const tmpl of templates.docs.slice(i, i + BATCH_SIZE)) {
 			batch.delete(tmpl.ref);
 		}
 		await batch.commit();

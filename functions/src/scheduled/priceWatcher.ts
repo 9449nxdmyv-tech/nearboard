@@ -7,7 +7,7 @@
  */
 
 import '../utils/admin.js';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { notifyBoardMembers } from '../utils/fcmService.js';
 import { processInBatches } from '../utils/boardEligibility.js';
@@ -279,8 +279,10 @@ export const priceWatcher = onSchedule('every day 06:00', async () => {
 			const trimmedEntries = currentEntries.length >= MAX_PRICE_ENTRIES
 				? currentEntries.slice(-MAX_PRICE_ENTRIES + 1)
 				: currentEntries;
+			// FieldValue.serverTimestamp() is not permitted inside array elements;
+			// Timestamp.now() is the standard substitute for in-array timestamps.
 			await priceDoc.ref.update({
-				entries: [...trimmedEntries, { price: newPrice, checkedAt: FieldValue.serverTimestamp() }]
+				entries: [...trimmedEntries, { price: newPrice, checkedAt: Timestamp.now() }]
 			});
 
 			const isPriceDrop = !isNaN(newPriceNum) && !isNaN(lastPriceNum) && newPriceNum < lastPriceNum;

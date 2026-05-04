@@ -14,6 +14,7 @@
 	import { relativeTime } from '$lib/utils/dateFormatter';
 	import { formatDurationMs } from '$lib/utils/dateFormatter';
 	import { avatarInitial } from '$lib/utils/textFormatter';
+	import Avatar from './Avatar.svelte';
 	import { userStore } from '$lib/stores';
 	import { subscribeToComments } from '$lib/firebase/boardService';
 	import { hapticLight } from '$lib/utils/haptics';
@@ -62,15 +63,9 @@
 >
 	<!-- Avatar (other users only) -->
 	{#if !isOwn}
-		{#if item.authorPhotoURL}
-			<img src={item.authorPhotoURL} alt=""
-				width="28" height="28" loading="lazy"
-				class="w-7 h-7 rounded-full shrink-0 object-cover mt-0.5" />
-		{:else}
-			<div class="w-7 h-7 rounded-full bg-surface-2 flex items-center justify-center text-[10px] text-muted font-semibold shrink-0 mt-0.5">
-				{avatarInitial(item.authorName)}
-			</div>
-		{/if}
+		<div class="mt-0.5">
+			<Avatar name={item.authorName} photoURL={item.authorPhotoURL} size="sm" />
+		</div>
 	{/if}
 
 	<!-- Bubble content -->
@@ -183,7 +178,7 @@
 			<!-- List bubble -->
 			<button onclick={handleTap} class="block {isOwn ? ownBubbleColor : otherBubbleColor} px-3.5 py-2.5 text-left">
 				<p class="text-[13px] font-semibold mb-1">{item.title}</p>
-				{#each item.items.slice(0, 3) as listItem}
+				{#each item.items.slice(0, 3) as listItem (listItem.id ?? listItem.text)}
 					<div class="flex items-center gap-1.5 text-[12px]">
 						<Icon icon={listItem.completed ? 'ph:check-circle-fill' : 'ph:circle'} class="text-sm shrink-0 {listItem.completed ? 'opacity-50' : ''}" />
 						<span class="{listItem.completed ? 'line-through opacity-50' : ''} line-clamp-1">{listItem.text}</span>

@@ -26,10 +26,15 @@ export const onCommentWrite = onDocumentWritten(
 
 		if (!before && after) {
 			// Created
-			await contentRef.update({
-				commentCount: FieldValue.increment(1),
-				lastActivityAt: FieldValue.serverTimestamp()
-			});
+			try {
+				await contentRef.update({
+					commentCount: FieldValue.increment(1),
+					lastActivityAt: FieldValue.serverTimestamp()
+				});
+			} catch (err) {
+				// Parent content may have been deleted between comment write and trigger.
+				console.warn('Comment count increment skipped (parent missing):', err);
+			}
 
 			const data = event.data!.after!.data()!;
 			const commentAuthorId: string = data.authorId;
@@ -94,10 +99,14 @@ export const onCommentWrite = onDocumentWritten(
 				);
 			}
 		} else if (before && !after) {
-			// Deleted
-			await contentRef.update({
-				commentCount: FieldValue.increment(-1)
-			});
+			// Deleted — parent may also be gone (cascading delete from content removal)
+			try {
+				await contentRef.update({
+					commentCount: FieldValue.increment(-1)
+				});
+			} catch (err) {
+				console.warn('Comment count decrement skipped (parent missing):', err);
+			}
 		}
 	}
 );

@@ -12,6 +12,7 @@
 		id, boardId, imageUrl, images = [], caption, width, height,
 		authorId, authorName, authorPhotoURL, createdAt,
 		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments,
+		layout,
 		onEdit, onDelete, onShare, onCommentClick
 	}: PhotoCardProps & {
 		commentCount?: number;
@@ -25,6 +26,8 @@
 
 	let imageError = $state(false);
 	let currentIdx = $state(0);
+
+	const isCompact = $derived(layout === 'compact-grid');
 
 	// Swipe tracking
 	let pointerDown = $state(false);
@@ -96,7 +99,8 @@
 {#snippet photoHeader()}
 	{#if !imageError}
 		<div
-			class="relative bg-surface-1 overflow-hidden select-none touch-pan-y"
+			data-card-type="photo"
+			class="relative bg-surface-1 overflow-hidden select-none touch-pan-y h-full"
 			onpointerdown={isMulti ? onPointerDown : undefined}
 			onpointermove={isMulti ? onPointerMove : undefined}
 			onpointerup={isMulti ? onPointerUp : undefined}
@@ -152,9 +156,10 @@
 	{onDelete}
 	{onShare}
 	{onCommentClick}
+	{layout}
 	headerContent={!imageError ? photoHeader : undefined}
 >
-	{#if caption}
+	{#if caption && !isCompact}
 		<p class="text-[13px] text-muted leading-relaxed">{caption}</p>
 	{:else if imageError}
 		<div class="flex items-center justify-center py-8 text-muted">

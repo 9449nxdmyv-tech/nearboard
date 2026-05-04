@@ -122,8 +122,7 @@
 				{#if isRefreshing}
 					<Icon
 						icon="ph:circle-notch"
-						class="text-accent text-lg"
-						style="transform: rotate({spinnerRotation}deg) scale({spinnerScale});"
+						class="text-accent text-lg animate-spin"
 					/>
 					<span class="text-xs text-primary font-medium">Refreshing…</span>
 				{:else if thresholdReached}

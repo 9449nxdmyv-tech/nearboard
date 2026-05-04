@@ -45,6 +45,34 @@ function getShareUrl(item: ContentDoc, boardId: string): string {
 }
 
 /**
+ * Share a board invite via the OS share sheet (contacts, WhatsApp, etc.) with
+ * clipboard fallback. Used by the AvatarStack "+" tile so inviting a friend
+ * feels like a one-tap social action rather than copy-paste plumbing.
+ */
+export async function shareBoardInvite(boardName: string, inviteUrl: string): Promise<void> {
+	const title = boardName ? `Join "${boardName}" on Nearboard` : 'Join my board on Nearboard';
+	const text = boardName
+		? `I'm sharing "${boardName}" with you on Nearboard.`
+		: "I'm sharing a board with you on Nearboard.";
+
+	if (navigator.share) {
+		try {
+			await navigator.share({ title, text, url: inviteUrl });
+			return;
+		} catch (err) {
+			if ((err as DOMException)?.name === 'AbortError') return;
+		}
+	}
+
+	try {
+		await navigator.clipboard.writeText(inviteUrl);
+		showToast('Invite link copied — paste it to a friend', 'success');
+	} catch {
+		showToast('Could not share invite', 'error');
+	}
+}
+
+/**
  * Share a content item via Web Share API (native share sheet on mobile)
  * with clipboard copy as fallback.
  */

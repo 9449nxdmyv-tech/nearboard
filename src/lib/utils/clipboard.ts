@@ -15,7 +15,7 @@ export async function copyToClipboard(
 ): Promise<boolean> {
 	try {
 		await navigator.clipboard.writeText(text);
-		showToast(successMessage);
+		showToast(successMessage, 'success');
 		return true;
 	} catch {
 		showToast('Failed to copy', 'error');

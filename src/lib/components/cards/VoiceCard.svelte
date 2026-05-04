@@ -1,15 +1,21 @@
 <!--
   @file VoiceCard.svelte
   @description Voice note card with full-width waveform visualization and playback.
+               When the doc has a pre-computed waveform (set at upload time),
+               we render the real shape; otherwise we fall back to a deterministic
+               stand-in so legacy notes still look intentional.
 -->
 <script lang="ts">
 	import type { VoiceCardProps } from '$lib/types/ui';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Icon from '@iconify/svelte';
+	import { onDestroy } from 'svelte';
+	import { deterministicWaveform } from '$lib/utils/waveform';
 
 	let {
-		id, boardId, audioUrl, durationMs, authorId, authorName, authorPhotoURL, createdAt,
-		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick
+		id, boardId, audioUrl, durationMs, waveform,
+		authorId, authorName, authorPhotoURL, createdAt,
+		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick, layout
 	}: VoiceCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -25,12 +31,28 @@
 	let duration = $state(0);
 
 	let waveformWidth = $state(0);
-	const barCount = $derived(Math.max(16, Math.floor((waveformWidth - 16) / 6)));
+	const targetBarCount = $derived(Math.max(16, Math.floor((waveformWidth - 16) / 6)));
+
+	/** Resample the source peaks (or generate a fallback) to fit the rendered width. */
+	function resamplePeaks(source: number[] | undefined, count: number): number[] {
+		if (!source || source.length === 0) {
+			return deterministicWaveform(count);
+		}
+		const out = new Array(count);
+		for (let i = 0; i < count; i++) {
+			const t = (i / Math.max(1, count - 1)) * (source.length - 1);
+			const lo = Math.floor(t);
+			const hi = Math.min(source.length - 1, lo + 1);
+			const frac = t - lo;
+			out[i] = source[lo] * (1 - frac) + source[hi] * frac;
+		}
+		return out;
+	}
+
+	const MIN_BAR_PX = 4;
+	const MAX_BAR_PX = 32;
 	const barHeights = $derived(
-		Array.from({ length: barCount }, (_, i) => {
-			const x = Math.sin(i * 127.1 + barCount * 0.01) * 43758.5453;
-			return 12 + (x - Math.floor(x)) * 20;
-		})
+		resamplePeaks(waveform, targetBarCount).map((p) => MIN_BAR_PX + p * (MAX_BAR_PX - MIN_BAR_PX))
 	);
 
 	$effect(() => {
@@ -71,6 +93,14 @@
 		const percent = (e.clientX - rect.left) / rect.width;
 		audio.currentTime = percent * duration;
 	}
+
+	onDestroy(() => {
+		if (audio) {
+			audio.pause();
+			audio.src = '';
+			audio = undefined;
+		}
+	});
 </script>
 
 <Card
@@ -88,6 +118,7 @@
 	{onShare}
 	{onDelete}
 	{onCommentClick}
+	{layout}
 >
 	<!-- Full-width waveform with overlaid play button -->
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

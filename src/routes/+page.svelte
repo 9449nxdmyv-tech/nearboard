@@ -58,7 +58,7 @@
 
 		{#if $boardStore.loading}
 			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-				{#each Array(6) as _, i}
+				{#each Array(6) as _, i (i)}
 					<div class="stagger-fade-in" style="--stagger-index: {i}">
 						<SkeletonCard variant={i % 2 === 0 ? 'default' : 'wide'} />
 					</div>
@@ -100,7 +100,7 @@
 									alt=""
 									class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
 									loading="lazy"
-									onerror={() => failedCovers.add(board.id)}
+									onerror={() => { failedCovers.add(board.id); failedCovers = new Set(failedCovers); }}
 								/>
 							{:else}
 								<BoardPreviewMosaic boardId={board.id} height="100%" />

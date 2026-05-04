@@ -144,17 +144,49 @@ export async function getPublicBoardsForUser(userId: string): Promise<BoardDoc[]
 }
 
 /**
- * Queries ALL boards where a given user is a member (public + private).
- * Requires the caller to be signed in (Firestore rules allow any authed read).
+ * Queries boards where a target user is a member that the *current* user is
+ * allowed to see: every public board the target is in, plus any private board
+ * both users share. Two safe queries combined — a single
+ * `array-contains target` query is rejected by rules whenever the target has
+ * a private board the caller isn't in.
  */
-export async function getAllBoardsForUser(userId: string): Promise<BoardDoc[]> {
-	if (!userId) return [];
-	const q = query(
+export async function getAllBoardsForUser(
+	targetUserId: string,
+	currentUserId?: string
+): Promise<BoardDoc[]> {
+	if (!targetUserId) return [];
+
+	const publicQ = query(
 		collection(db(), 'boards'),
-		where('memberIds', 'array-contains', userId)
+		where('memberIds', 'array-contains', targetUserId),
+		where('isPublic', '==', true)
 	);
-	const snap = await getDocs(q);
-	return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BoardDoc);
+
+	const sharedQ = currentUserId
+		? query(
+				collection(db(), 'boards'),
+				where('memberIds', 'array-contains', currentUserId)
+			)
+		: null;
+
+	const [publicSnap, sharedSnap] = await Promise.all([
+		getDocs(publicQ),
+		sharedQ ? getDocs(sharedQ) : Promise.resolve(null)
+	]);
+
+	const byId = new Map<string, BoardDoc>();
+	for (const d of publicSnap.docs) {
+		byId.set(d.id, { id: d.id, ...d.data() } as BoardDoc);
+	}
+	if (sharedSnap) {
+		for (const d of sharedSnap.docs) {
+			const data = d.data();
+			if ((data.memberIds as string[] | undefined)?.includes(targetUserId)) {
+				byId.set(d.id, { id: d.id, ...data } as BoardDoc);
+			}
+		}
+	}
+	return Array.from(byId.values());
 }
 
 /**
@@ -171,15 +203,18 @@ export type PublicUserProfile = {
 export async function getPublicUserProfile(
 	userId: string
 ): Promise<PublicUserProfile | null> {
-	if (!userId) return null;
+	if (!userId || userId === 'undefined') return null;
 	const snap = await getDoc(doc(db(), 'users', userId));
 	if (!snap.exists()) return null;
 	const data = snap.data() as UserDoc;
 	if (data.ageGroup === 'teen') return null;
+	// Fall back to doc id and email handle so legacy docs missing
+	// uid/displayName still render a usable profile.
+	const fallbackName = (data.email?.split('@')[0] ?? 'New friend').trim();
 	return {
-		uid: data.uid,
-		displayName: data.displayName,
-		photoURL: data.photoURL,
+		uid: data.uid ?? snap.id,
+		displayName: (data.displayName ?? '').trim() || fallbackName,
+		photoURL: data.photoURL ?? null,
 		createdAt: data.createdAt
 	};
 }

@@ -10,7 +10,7 @@
 	import { todayStore, userStore } from '$lib/stores';
 	import { boardStore, invalidateUnreadState } from '$lib/stores/boardStore';
 	import { relativeTime } from '$lib/utils/dateFormatter';
-	import { summaryPreview, renderSummaryHtml } from '$lib/utils/textFormatter';
+	import { renderSummaryHtml } from '$lib/utils/textFormatter';
 	import { markBoardRead } from '$lib/firebase/boardService';
 	import FinishLine from './FinishLine.svelte';
 	import { updateLastSeen } from '$lib/firebase';
@@ -71,8 +71,8 @@
 		if (unreadBoards.length > 0) {
 			parts.push(`${unreadBoards.length} board${unreadBoards.length === 1 ? '' : 's'} need${unreadBoards.length === 1 ? 's' : ''} attention`);
 		}
-		if ($todayStore.unplayedVoiceNotes.length > 0) {
-			parts.push(`${$todayStore.unplayedVoiceNotes.length} voice note${$todayStore.unplayedVoiceNotes.length === 1 ? '' : 's'}`);
+		if ($todayStore.recentVoiceNotes.length > 0) {
+			parts.push(`${$todayStore.recentVoiceNotes.length} voice note${$todayStore.recentVoiceNotes.length === 1 ? '' : 's'}`);
 		}
 		if ($todayStore.reminders.length > 0) {
 			parts.push(`${$todayStore.reminders.length} reminder${$todayStore.reminders.length === 1 ? '' : 's'}`);
@@ -179,7 +179,7 @@
 	const isEmpty = $derived(
 		$todayStore.briefings.length === 0 &&
 		$todayStore.streaks.length === 0 &&
-		$todayStore.unplayedVoiceNotes.length === 0 &&
+		$todayStore.recentVoiceNotes.length === 0 &&
 		$todayStore.reminders.length === 0 &&
 		$todayStore.memories.length === 0 &&
 		visibleUnreadBoards.length === 0
@@ -199,14 +199,14 @@
 		</div>
 		<!-- Skeleton streaks strip -->
 		<div class="flex gap-2 animate-pulse">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="bg-border/60 rounded-full h-8 w-24"></div>
 			{/each}
 		</div>
 		<!-- Skeleton digest cards -->
 		<div class="flex flex-col gap-3 animate-pulse">
 			<div class="bg-border/60 rounded h-3 w-28 mb-1"></div>
-			{#each Array(2) as _}
+			{#each Array(2) as _, i (i)}
 				<div class="bg-card rounded-card shadow-sm border border-border p-3">
 					<div class="flex items-start gap-3">
 						<div class="w-2 h-2 rounded-full bg-border/60 mt-1.5"></div>
@@ -310,7 +310,7 @@
 			<section in:fly={{ y: 8, duration: 300, delay: 100 }}>
 				<h3 class="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Reminders</h3>
 				<div class="flex flex-col gap-2">
-					{#each $todayStore.reminders as r}
+					{#each $todayStore.reminders as r (r.boardId + r.text)}
 						<a
 							href="/board/{r.boardId}"
 							class="flex items-start gap-3 bg-reminder-bg border border-reminder-border rounded-card p-3
@@ -413,11 +413,11 @@
 		{/if}
 
 		<!-- Voice Notes with inline playback -->
-		{#if $todayStore.unplayedVoiceNotes.length > 0}
+		{#if $todayStore.recentVoiceNotes.length > 0}
 			<section in:fly={{ y: 8, duration: 300, delay: 200 }}>
 				<h3 class="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">Voice Notes</h3>
 				<div class="flex flex-col gap-2">
-					{#each $todayStore.unplayedVoiceNotes as v (v.contentId)}
+					{#each $todayStore.recentVoiceNotes as v (v.contentId)}
 						{@const isPlaying = playingVoiceId === v.contentId}
 						<div class="bg-card rounded-card shadow-sm border border-border overflow-hidden">
 							<div class="flex items-center gap-3 p-3">

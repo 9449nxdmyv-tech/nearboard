@@ -64,6 +64,8 @@
 				return;
 			}
 
+			if (destroyed) { map.remove(); map = null; return; }
+
 			// Main location marker
 			marker = new maplibregl.Marker({ color: markerColor })
 				.setLngLat([longitude, latitude])
@@ -73,7 +75,7 @@
 			if (showUserLocation && navigator.geolocation) {
 				navigator.geolocation.getCurrentPosition(
 					(pos) => {
-						if (!map) return;
+						if (destroyed || !map) return;
 						const userMarkerEl = document.createElement('div');
 						userMarkerEl.className = 'mapview-user-dot';
 						userMarker = new maplibregl.Marker({ element: userMarkerEl })

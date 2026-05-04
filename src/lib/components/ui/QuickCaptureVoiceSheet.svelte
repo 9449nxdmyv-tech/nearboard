@@ -25,7 +25,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	// ─── Phase management ────────────────────────────────────────────────
@@ -71,9 +71,11 @@
 		}
 	}
 
+	let destroyed = false;
 	onDestroy(cleanup);
 
 	function cleanup() {
+		destroyed = true;
 		clearTimers();
 		if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
 		if (recorder && recorder.state !== 'inactive') recorder.stop();
@@ -112,13 +114,23 @@
 			source.connect(an);
 			analyser = an;
 
-			// Start MediaRecorder
+			// Start MediaRecorder — negotiate a supported MIME type
+			// (iOS Safari does not support webm; falls back to mp4/aac)
+			const candidates = [
+				'audio/webm;codecs=opus',
+				'audio/webm',
+				'audio/mp4;codecs=mp4a.40.2',
+				'audio/mp4'
+			];
+			const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t));
 			const chunks: Blob[] = [];
-			const mr = new MediaRecorder(s, { mimeType: 'audio/webm' });
+			const mr = mimeType ? new MediaRecorder(s, { mimeType }) : new MediaRecorder(s);
+			const recordedType = mr.mimeType || mimeType || 'audio/webm';
 			mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 			mr.onstop = () => {
 				s.getTracks().forEach((t) => t.stop());
-				audioBlob = new Blob(chunks, { type: 'audio/webm' });
+				if (destroyed) return;
+				audioBlob = new Blob(chunks, { type: recordedType });
 				audioUrl = URL.createObjectURL(audioBlob);
 				phase = 'review';
 			};
@@ -217,10 +229,17 @@
 		if (!user || !audioBlob) return;
 		busy = true;
 		try {
-			const { uploadVoiceNote } = await import('$lib/firebase/storageService');
-			const uploadedUrl = await uploadVoiceNote(boardId, user.uid, audioBlob);
+			const [{ uploadVoiceNote }, { computeWaveformPeaks }] = await Promise.all([
+				import('$lib/firebase/storageService'),
+				import('$lib/utils/waveform')
+			]);
+			// Compute peaks in parallel with upload so save isn't blocked on decode.
+			const [uploadedUrl, peaks] = await Promise.all([
+				uploadVoiceNote(boardId, user.uid, audioBlob),
+				computeWaveformPeaks(audioBlob).catch(() => [] as number[])
+			]);
 			const durationMs = Math.round(elapsed * 1000);
-			await addContent(boardId, {
+			const doc: Omit<VoiceContentDoc, 'id' | 'createdAt' | 'moderationStatus'> = {
 				type: 'voice',
 				audioUrl: uploadedUrl,
 				durationMs,
@@ -228,10 +247,12 @@
 				authorId: user.uid,
 				authorName: user.displayName || user.email,
 				authorPhotoURL: user.photoURL
-			} as Omit<VoiceContentDoc, 'id' | 'createdAt'>);
+			};
+			if (peaks.length > 0) doc.waveform = peaks;
+			await addContent(boardId, doc);
 			hapticSuccess();
-			showToast('Voice note saved!');
-			onClose();
+			showToast('Voice note saved!', 'success');
+			onClose(true);
 		} catch (err) {
 			console.error('Failed to save voice note:', err);
 			showToast('Failed to save voice note');
@@ -243,7 +264,7 @@
 	function handleClose() {
 		if (phase === 'recording') stopRecording();
 		cleanup();
-		onClose();
+		onClose(false);
 	}
 </script>
 

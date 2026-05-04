@@ -24,12 +24,15 @@
 	import CardAcknowledgmentButton from './CardAcknowledgmentButton.svelte';
 	import CardComments from './CardComments.svelte';
 	import MapView from './MapView.svelte';
-	import { userStore } from '$lib/stores';
-	import { voteOnPoll, subscribeToVotes, subscribeToComments } from '$lib/firebase/boardService';
-	import { hapticLight } from '$lib/utils/haptics';
+	import { userStore, showToast } from '$lib/stores';
+	import { voteOnPoll, removeVote, subscribeToVotes, subscribeToComments, addContent, appendOrCreateList } from '$lib/firebase/boardService';
+	import { hapticLight, hapticSuccess } from '$lib/utils/haptics';
 	import { avatarInitial } from '$lib/utils/textFormatter';
 	import { relativeTime } from '$lib/utils/dateFormatter';
+	import DOMPurify from 'isomorphic-dompurify';
 	import type { VoteDoc } from '$lib/types';
+	import { deterministicWaveform } from '$lib/utils/waveform';
+	import { pickNoteTone } from '$lib/utils/noteTone';
 
 	// ── Swipe back to close modal (iOS-like edge swipe) ──
 	let swipeStartX = $state(0);
@@ -134,6 +137,21 @@
 	);
 
 	const createdAt = $derived(item.createdAt?.toDate?.() ?? new Date());
+
+	/** User-supplied title for the detail-modal heading. Empty when the user
+	 *  didn't provide one — in that case we render no heading at all rather
+	 *  than fall back to the type name. */
+	const titleText = $derived(
+		item.type === 'link' ? (item as LinkContentDoc).title?.trim() ?? '' :
+		item.type === 'product' ? (item as ProductContentDoc).title?.trim() ?? '' :
+		item.type === 'list' ? (item as ListContentDoc).title?.trim() ?? '' :
+		item.type === 'poll' ? (item as PollContentDoc).question?.trim() ?? '' :
+		item.type === 'location' ? (item as LocationContentDoc).name?.trim() ?? '' :
+		item.type === 'photo' ? (item as PhotoContentDoc).caption?.trim() ?? '' :
+		item.type === 'video' ? (item as VideoContentDoc).caption?.trim() ?? '' :
+		''
+	);
+
 	let authorImageError = $state(false);
 	let commentImageError = $state(false);
 
@@ -148,6 +166,44 @@
 	let photoDragX = $state(0);
 	let photoSwiping = $state(false);
 
+	// ── Photo zoom state (double-tap to toggle 1x ↔ 2.5x) ──
+	let photoZoom = $state(1);
+	let photoZoomOriginX = $state(50);
+	let photoZoomOriginY = $state(50);
+	let lastPhotoTapTime = $state(0);
+	const ZOOM_LEVEL = 2.5;
+	const DOUBLE_TAP_MS = 280;
+
+	function handlePhotoTap(e: MouseEvent) {
+		const now = Date.now();
+		const sinceLast = now - lastPhotoTapTime;
+		if (sinceLast > 0 && sinceLast < DOUBLE_TAP_MS) {
+			e.preventDefault();
+			e.stopPropagation();
+			if (photoZoom > 1) {
+				photoZoom = 1;
+				photoZoomOriginX = 50;
+				photoZoomOriginY = 50;
+			} else {
+				const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+				photoZoomOriginX = ((e.clientX - rect.left) / rect.width) * 100;
+				photoZoomOriginY = ((e.clientY - rect.top) / rect.height) * 100;
+				photoZoom = ZOOM_LEVEL;
+			}
+			lastPhotoTapTime = 0;
+		} else {
+			lastPhotoTapTime = now;
+		}
+	}
+
+	$effect(() => {
+		// Reset zoom when switching between photos
+		photoZoom = 1;
+		photoZoomOriginX = 50;
+		photoZoomOriginY = 50;
+		void currentPhotoIdx;
+	});
+
 	// ── Video state ──
 	let videoPlaying = $state(false);
 	let videoEl = $state<HTMLVideoElement | undefined>();
@@ -160,14 +216,30 @@
 	let voiceWaveformWidth = $state(0);
 	const voiceProgress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
 
-	// Generate bar count based on container width (~4px per bar + 2px gap)
+	// Bar count adapts to container width (~4px bar + 2px gap = 6px slot).
 	const voiceBarCount = $derived(Math.max(20, Math.floor((voiceWaveformWidth - 16) / 6)));
-	const voiceBarSeed = $derived(voiceBarCount);
+
+	/** Resample stored peaks (or generate a fallback) to fit the rendered width. */
+	function resampleVoicePeaks(source: number[] | undefined, count: number): number[] {
+		if (!source || source.length === 0) return deterministicWaveform(count);
+		const out = new Array(count);
+		for (let i = 0; i < count; i++) {
+			const t = (i / Math.max(1, count - 1)) * (source.length - 1);
+			const lo = Math.floor(t);
+			const hi = Math.min(source.length - 1, lo + 1);
+			const frac = t - lo;
+			out[i] = source[lo] * (1 - frac) + source[hi] * frac;
+		}
+		return out;
+	}
+
+	const VOICE_MIN_BAR_PX = 6;
+	const VOICE_MAX_BAR_PX = 40;
 	const voiceBarHeights = $derived(
-		Array.from({ length: voiceBarCount }, (_, i) => {
-			const x = Math.sin(i * 127.1 + voiceBarSeed * 0.01) * 43758.5453;
-			return 12 + (x - Math.floor(x)) * 28;
-		})
+		resampleVoicePeaks(
+			item.type === 'voice' ? (item as VoiceContentDoc).waveform : undefined,
+			voiceBarCount
+		).map((p) => VOICE_MIN_BAR_PX + p * (VOICE_MAX_BAR_PX - VOICE_MIN_BAR_PX))
 	);
 
 	// ── Poll state ──
@@ -190,6 +262,93 @@
 	let ingredientsOpen = $state(false);
 	let instructionsOpen = $state(false);
 
+	// ── Pro Digest extraction ──
+	// Lets the reader pull structured data out of an enriched link card and
+	// re-materialise it as a richer board card (recipe → list, place → location, …).
+	let savingExtraction = $state(false);
+
+	function currentAuthor() {
+		const user = $userStore.user!;
+		return {
+			uid: user.uid,
+			displayName: user.displayName || user.email || '',
+			photoURL: user.photoURL ?? null
+		};
+	}
+
+	async function saveIngredientsAsList(recipeTitle: string, ingredients: string[]) {
+		const user = $userStore.user;
+		if (!user || ingredients.length === 0 || savingExtraction) return;
+		savingExtraction = true;
+		try {
+			hapticLight();
+			const listTitle = recipeTitle ? `${recipeTitle} — Shopping list` : 'Shopping list';
+			await appendOrCreateList(
+				boardId,
+				listTitle,
+				ingredients.map((text) => ({ text })),
+				currentAuthor()
+			);
+			hapticSuccess();
+			showToast('Saved to shopping list', 'success');
+		} catch (err) {
+			console.error('Failed to save ingredients as list:', err);
+			showToast('Could not save list');
+		} finally {
+			savingExtraction = false;
+		}
+	}
+
+	async function addToWatchOrReadList(kind: 'watchlist' | 'readlist', title: string) {
+		const user = $userStore.user;
+		if (!user || savingExtraction) return;
+		const listLabel = kind === 'watchlist' ? 'Watchlist' : 'Reading list';
+		savingExtraction = true;
+		try {
+			hapticLight();
+			await appendOrCreateList(
+				boardId,
+				listLabel,
+				[{ text: (title || 'Untitled').trim() }],
+				currentAuthor()
+			);
+			hapticSuccess();
+			showToast(`Added to ${listLabel.toLowerCase()}`, 'success');
+		} catch (err) {
+			console.error(`Failed to save ${kind}:`, err);
+			showToast(`Could not add to ${listLabel.toLowerCase()}`);
+		} finally {
+			savingExtraction = false;
+		}
+	}
+
+	async function savePlaceAsLocation(name: string, lat: number, lon: number, address: string) {
+		const user = $userStore.user;
+		if (!user || savingExtraction) return;
+		savingExtraction = true;
+		try {
+			hapticLight();
+			await addContent(boardId, {
+				type: 'location',
+				name: name || null,
+				latitude: lat,
+				longitude: lon,
+				address: address || '',
+				boardId,
+				authorId: user.uid,
+				authorName: user.displayName || user.email || '',
+				authorPhotoURL: user.photoURL ?? null
+			} as Omit<LocationContentDoc, 'id' | 'createdAt' | 'moderationStatus'>);
+			hapticSuccess();
+			showToast('Saved as place card', 'success');
+		} catch (err) {
+			console.error('Failed to save place as location:', err);
+			showToast('Could not save place');
+		} finally {
+			savingExtraction = false;
+		}
+	}
+
 	$effect(() => {
 		if (item.id) {
 			return subscribeToComments(boardId, item.id, (v) => {
@@ -208,10 +367,38 @@
 		}
 	});
 
+	async function handlePollVote(contentId: string, optionId: string, isSelected: boolean) {
+		if (!$userStore.user) return;
+		hapticLight();
+		try {
+			if (isSelected) {
+				await removeVote(boardId, contentId, $userStore.user.uid);
+			} else {
+				await voteOnPoll(boardId, contentId, $userStore.user.uid, optionId);
+			}
+		} catch (err) {
+			console.error('[CardDetailModal] vote failed', err);
+			showToast("Couldn't update your vote — try again", 'error');
+		}
+	}
+
 	$effect(() => {
 		if (item.type === 'voice') {
 			duration = (item as VoiceContentDoc).durationMs / 1000;
 		}
+	});
+
+	$effect(() => {
+		return () => {
+			if (audio) {
+				audio.pause();
+				audio.src = '';
+				audio = undefined;
+			}
+			if (videoEl && !videoEl.paused) {
+				videoEl.pause();
+			}
+		};
 	});
 
 	function formatTime(seconds: number): string {
@@ -324,19 +511,21 @@
 		{@const e = link.enrichment}
 		<div class="flex flex-wrap items-center gap-2 py-0.5 min-w-0">
 			{#if isRecipeEnrichment(e)}
-				{#if e.totalTime}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 whitespace-nowrap">{e.totalTime}</span>{/if}
+				{#if e.totalTime}<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600 whitespace-nowrap">{e.totalTime}</span>{/if}
 				{#if e.servings}<span class="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-[10px] font-bold text-emerald-700 whitespace-nowrap">{e.servings} Ser.</span>{/if}
 				{#if e.calories}<span class="px-2 py-0.5 rounded-lg bg-red-500/10 text-[10px] font-bold text-red-700 whitespace-nowrap">{e.calories}</span>{/if}
 				{#if e.cuisine}<span class="px-2 py-0.5 rounded-lg bg-violet-500/10 text-[10px] font-bold text-violet-700 whitespace-nowrap">{e.cuisine}</span>{/if}
 			{:else if isMovieEnrichment(e)}
-				{#if e.rating}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-[8px]" />{e.rating}</span>{/if}
+				{#if e.rating}<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-amber-500 text-[8px]" />{e.rating}</span>{/if}
 				{#if e.year}<span class="text-[11px] text-muted font-medium whitespace-nowrap">{e.year}</span>{/if}
+				{#if e.runtime}<span class="text-[11px] text-muted font-medium whitespace-nowrap">· {e.runtime}</span>{/if}
+				{#if e.genre}<span class="text-[11px] text-muted font-medium whitespace-nowrap">· {e.genre}</span>{/if}
 			{:else if isBookEnrichment(e)}
 				{#if e.author}<span class="text-[11px] text-primary font-bold truncate max-w-[80px] whitespace-nowrap">{e.author}</span>{/if}
-				{#if e.averageRating}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-[8px]" />{e.averageRating}</span>{/if}
+				{#if e.averageRating}<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-amber-500 text-[8px]" />{e.averageRating}</span>{/if}
 			{:else if isPlaceEnrichment(e)}
 				{#if e.category}<span class="text-[11px] text-primary font-bold truncate max-w-[80px] whitespace-nowrap">{e.category}</span>{/if}
-				{#if e.rating}<span class="px-2 py-0.5 rounded-lg bg-amber-500/10 text-[10px] font-bold text-amber-700 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-[8px]" />{e.rating}</span>{/if}
+				{#if e.rating}<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-[10px] font-bold text-slate-600 flex items-center gap-0.5 whitespace-nowrap"><Icon icon="ph:star-fill" class="text-amber-500 text-[8px]" />{e.rating}</span>{/if}
 			{:else if isMusicEnrichment(e)}
 				{#if e.artist}<span class="text-[11px] text-primary font-bold truncate max-w-[100px] whitespace-nowrap">{e.artist}</span>{/if}
 				{#if e.album}<span class="text-[11px] text-muted truncate max-w-[80px] whitespace-nowrap">{e.album}</span>{/if}
@@ -416,14 +605,19 @@
 					onpointercancel={isMulti ? onPhotoPointerUp : undefined}
 				>
 					{#if !photoError}
+						<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 						<img
 							src={allImages[currentPhotoIdx]?.url || photo.imageUrl}
 							alt={photo.caption || 'Photo'}
-							class="max-w-full max-h-[70vh] object-contain transition-transform duration-200 ease-out"
-							style={photoSwiping ? `transform: translateX(${photoDragX}px); transition: none;` : ''}
+							class="max-w-full max-h-[70vh] object-contain transition-transform duration-200 ease-out cursor-zoom-in"
+							class:cursor-zoom-out={photoZoom > 1}
+							style={photoSwiping
+								? `transform: translateX(${photoDragX}px); transition: none;`
+								: `transform: scale(${photoZoom}); transform-origin: ${photoZoomOriginX}% ${photoZoomOriginY}%;`}
 							loading="lazy"
 							draggable="false"
 							onerror={() => { photoError = true; }}
+							onclick={handlePhotoTap}
 						/>
 
 					{:else}
@@ -570,27 +764,11 @@
 					? 'calc(env(safe-area-inset-top, 0px) + 4rem)'
 					: '1rem'};"
 			>
-				<!-- Title -->
-				{#if item.type !== 'note'}
-				<h1 class="text-[19px] font-bold text-on-surface leading-tight">
-					{#if item.type === 'link'}
-						{(item as LinkContentDoc).title}
-					{:else if item.type === 'product'}
-						{(item as ProductContentDoc).title}
-					{:else if item.type === 'list'}
-						{(item as ListContentDoc).title}
-					{:else if item.type === 'poll'}
-						{(item as PollContentDoc).question}
-					{:else if item.type === 'location'}
-						{(item as LocationContentDoc).name || 'Location'}
-					{:else if item.type === 'photo'}
-						{(item as PhotoContentDoc).caption || 'Photo'}
-					{:else if item.type === 'video'}
-						{(item as VideoContentDoc).caption || 'Video'}
-					{:else if item.type === 'voice'}
-						Voice Memo
-					{/if}
-				</h1>
+				<!-- Title — only rendered when the user actually gave one. We never
+				     fall back to the type name ("Photo", "Voice Memo") because the
+				     media itself is the content; a generic label adds nothing. -->
+				{#if titleText}
+					<h1 class="text-[19px] font-bold text-on-surface leading-tight">{titleText}</h1>
 				{/if}
 
 				<!-- Link description sits directly under the title for every
@@ -614,7 +792,7 @@
 							{@const percent = totalVotes > 0 ? ((voteCounts.get(opt.id) ?? 0) / totalVotes) * 100 : 0}
 							{@const isSelected = userVote?.optionId === opt.id}
 							<button
-								onclick={() => { if ($userStore.user) { hapticLight(); voteOnPoll(boardId, item.id, $userStore.user.uid, opt.id); } }}
+								onclick={() => handlePollVote(item.id, opt.id, isSelected)}
 								class="relative w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all overflow-hidden
 									{isSelected ? 'border-accent bg-accent/5' : 'border-border bg-surface-1 hover:border-accent/20'}"
 							>
@@ -724,11 +902,31 @@
 								<p class="text-sm leading-relaxed"><span class="font-bold text-muted uppercase text-[10px] tracking-wider mr-2">Cast</span> {movie.cast.slice(0, 6).join(', ')}</p>
 							{/if}
 						</div>
+						<button
+							onclick={() => addToWatchOrReadList('watchlist', link.title)}
+							disabled={savingExtraction}
+							class="mt-4 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+								bg-primary/8 text-primary text-[13px] font-bold press-scale
+								disabled:opacity-50 disabled:pointer-events-none transition-colors hover:bg-primary/12"
+						>
+							<Icon icon="ph:bookmark-simple" class="text-base" />
+							{savingExtraction ? 'Saving…' : 'Add to watchlist'}
+						</button>
 					{:else if link.enrichment && isBookEnrichment(link.enrichment)}
 						{@const book = link.enrichment}
 						{#if book.publisher}
 							<p class="text-xs text-muted mt-2">Published by {book.publisher} {book.publishDate ? `· ${book.publishDate}` : ''}</p>
 						{/if}
+						<button
+							onclick={() => addToWatchOrReadList('readlist', link.title)}
+							disabled={savingExtraction}
+							class="mt-4 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+								bg-primary/8 text-primary text-[13px] font-bold press-scale
+								disabled:opacity-50 disabled:pointer-events-none transition-colors hover:bg-primary/12"
+						>
+							<Icon icon="ph:book-bookmark" class="text-base" />
+							{savingExtraction ? 'Saving…' : 'Add to reading list'}
+						</button>
 					{:else if link.enrichment && isPlaceEnrichment(link.enrichment)}
 						{@const place = link.enrichment}
 						<div class="space-y-3 mt-3">
@@ -758,6 +956,16 @@
 									Open in Maps
 								</Button>
 							</a>
+							<button
+								onclick={() => savePlaceAsLocation(link.title || '', place.latitude!, place.longitude!, place.address || '')}
+								disabled={savingExtraction}
+								class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+									bg-primary/8 text-primary text-[13px] font-bold press-scale
+									disabled:opacity-50 disabled:pointer-events-none transition-colors hover:bg-primary/12"
+							>
+								<Icon icon="ph:map-pin-plus" class="text-base" />
+								{savingExtraction ? 'Saving…' : 'Save as place card'}
+							</button>
 						{/if}
 					{:else if link.enrichment && isMusicEnrichment(link.enrichment)}
 						<a href={link.url} target="_blank" rel="noopener noreferrer" class="mt-4 block">
@@ -779,10 +987,20 @@
 					{@const noteText = note.text.trim()}
 					{@const isNoteShort = noteText.length <= 80 && !noteText.includes('\n')}
 					{#if isNoteShort}
-						<div class="text-center py-6 px-4 relative mt-3">
-							<span class="absolute left-2 top-2 text-5xl text-primary/20 font-serif leading-none select-none">"</span>
-							<p class="text-3xl font-medium text-on-surface leading-snug px-6">{noteText}</p>
-							<span class="absolute right-2 bottom-2 text-5xl text-primary/20 font-serif leading-none select-none">"</span>
+						{@const noteTone = pickNoteTone(noteText)}
+						<div
+							class="relative mt-4 px-6 py-10 rounded-2xl overflow-hidden flex items-center min-h-[40vh]"
+							style="background-color: {noteTone.bg}; box-shadow: inset 0 0 0 1px {noteTone.ring}, 0 1px 3px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.08);"
+						>
+							<span
+								aria-hidden="true"
+								class="absolute -top-4 -left-1 text-[110px] leading-none font-serif select-none pointer-events-none"
+								style="color: {noteTone.mark};"
+							>“</span>
+							<p
+								class="relative text-3xl font-semibold tracking-[-0.01em] leading-snug pl-8 pr-2"
+								style="color: {noteTone.body};"
+							>{noteText}</p>
 						</div>
 					{:else}
 						{@const noteTextSize = (() => {
@@ -889,34 +1107,13 @@
 						{#if link.enrichment && isRecipeEnrichment(link.enrichment)}
 							{@const recipe = link.enrichment}
 
-							<!-- Recipe metadata pills -->
-							<div class="flex flex-wrap items-center gap-1.5 mb-4">
-								{#if recipe.totalTime}
-									<MetadataPill icon="ph:timer" text={recipe.totalTime} variant="surface" />
-								{/if}
-								{#if recipe.servings}
-									<MetadataPill icon="ph:users" text={recipe.servings} variant="surface" />
-								{/if}
-								{#if recipe.calories}
-									<MetadataPill icon="ph:fire" text={recipe.calories} variant="surface" />
-								{/if}
-								{#if recipe.cuisine}
-									<MetadataPill text={recipe.cuisine} variant="surface" />
-								{/if}
-								{#if recipe.ingredients.length > 0}
-									<span class="px-2 py-0.5 rounded-lg bg-surface-1 text-[10px] font-bold text-muted flex items-center gap-1 whitespace-nowrap">
-										<Icon icon="ph:list-bullets" class="text-[10px]" />{recipe.ingredients.length} ingredients
-									</span>
-								{/if}
-							</div>
-
 							{#if recipe.ingredients.length > 0}
 								<button onclick={() => ingredientsOpen = !ingredientsOpen} class="flex items-center justify-between w-full mb-2">
-									<h3 class="text-[15px] font-bold">Ingredients</h3>
+									<h3 class="text-[15px] font-bold">Ingredients <span class="text-muted font-medium">· {recipe.ingredients.length}</span></h3>
 									<Icon icon={ingredientsOpen ? 'ph:caret-up' : 'ph:caret-down'} class="text-base text-muted" />
 								</button>
 								{#if ingredientsOpen}
-									<ul class="space-y-1.5 mb-4">
+									<ul class="space-y-1.5 mb-3">
 										{#each recipe.ingredients as ing}
 											<li class="text-[14px] text-on-surface/80 flex items-start gap-2">
 												<span class="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0"></span>
@@ -924,6 +1121,16 @@
 											</li>
 										{/each}
 									</ul>
+									<button
+										onclick={() => saveIngredientsAsList(link.title, recipe.ingredients)}
+										disabled={savingExtraction}
+										class="w-full mb-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
+											bg-primary/8 text-primary text-[13px] font-bold press-scale
+											disabled:opacity-50 disabled:pointer-events-none transition-colors hover:bg-primary/12"
+									>
+										<Icon icon="ph:list-checks" class="text-base" />
+										{savingExtraction ? 'Saving…' : 'Save as shopping list'}
+									</button>
 								{/if}
 							{/if}
 							{#if recipe.instructions.length > 0}
@@ -947,8 +1154,12 @@
 						{:else if link.enrichment && isArticleEnrichment(link.enrichment)}
 							{@const article = link.enrichment}
 							{#if article.contentHtml}
+								{@const safeHtml = DOMPurify.sanitize(article.contentHtml, {
+									ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'strong', 'em', 'b', 'i'],
+									ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel']
+								}).replace(/<a\s+(?![^>]*\btarget=)/gi, '<a target="_blank" rel="noopener noreferrer" ')}
 								<div class="article-content text-[16px] leading-relaxed">
-									{@html article.contentHtml}
+									{@html safeHtml}
 								</div>
 							{:else if link.description}
 								<p class="text-[15px] text-on-surface/80 leading-relaxed mb-4">{link.description}</p>

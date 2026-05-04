@@ -12,7 +12,7 @@
 	let {
 		id, boardId, latitude, longitude, address, name,
 		authorId, authorName, authorPhotoURL, createdAt,
-		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick
+		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments, onDelete, onShare, onCommentClick, layout
 	}: LocationCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -78,6 +78,7 @@
 	{onShare}
 	{onDelete}
 	{onCommentClick}
+	{layout}
 	headerContent={mapHeader}
 >
 	<div class="flex flex-col gap-2">

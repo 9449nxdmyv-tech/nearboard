@@ -246,10 +246,12 @@
 		showCaptureSheet = false;
 	}
 
-	function handleCaptureSheetClose() {
+	function handleCaptureSheetClose(posted: boolean = false) {
 		const bid = captureTargetBoardId;
 		captureSheetType = null;
-		if (bid && !currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
+		// Only navigate to the target board when the user actually posted —
+		// cancelling shouldn't teleport them away from the page they were on.
+		if (posted && bid && !currentPath.startsWith(`/board/${bid}`)) goto(`/board/${bid}`);
 	}
 
 	// ─── Auth & lifecycle ────────────────────────────────────────
@@ -353,7 +355,7 @@
 		<div class="flex items-center justify-center min-h-screen">
 			<h1 class="text-2xl font-semibold">Nearboard</h1>
 		</div>
-	{:else if $userStore.user || $page.url.pathname.startsWith('/onboarding') || $page.url.pathname.startsWith('/b/') || $page.url.pathname.startsWith('/join/') || $page.url.pathname.startsWith('/refer/') || $page.url.pathname.startsWith('/u/')}
+	{:else if $userStore.user || $page.url.pathname.startsWith('/onboarding') || $page.url.pathname.startsWith('/b/') || $page.url.pathname.startsWith('/join/') || $page.url.pathname.startsWith('/refer/') || $page.url.pathname.startsWith('/u/') || $page.url.pathname.startsWith('/share-target')}
 		<div class="flex-1" style={bottomPaddingStyle}>
 			{@render children()}
 		</div>

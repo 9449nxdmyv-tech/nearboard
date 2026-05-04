@@ -18,6 +18,10 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/boards/$(boardId)).data.get('memberIds', []);
     }
 
+    function isPublicBoard(boardId) {
+      return get(/databases/$(database)/documents/boards/$(boardId)).data.get('isPublic', false) == true;
+    }
+
     function getUserDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -37,9 +41,17 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.email is string;
 
-      // Update: cannot change uid; validate optional digest fields
+      // Update: cannot change uid; validate optional digest fields.
+      // subscriptionTier, stripeCustomerId, subscriptionStartedAt are server-only
+      // (written by stripeWebhook Cloud Function). Clients cannot self-promote.
       allow update: if isSignedIn() && request.auth.uid == userId
         && request.resource.data.get('uid', resource.data.uid) == resource.data.uid
+        && request.resource.data.get('subscriptionTier', resource.data.get('subscriptionTier', 'free'))
+            == resource.data.get('subscriptionTier', 'free')
+        && request.resource.data.get('stripeCustomerId', resource.data.get('stripeCustomerId', null))
+            == resource.data.get('stripeCustomerId', null)
+        && request.resource.data.get('subscriptionStartedAt', resource.data.get('subscriptionStartedAt', null))
+            == resource.data.get('subscriptionStartedAt', null)
         && (request.resource.data.get('digestEnabled', true) is bool)
         && (request.resource.data.get('digestTime', '07:30') is string)
         && (request.resource.data.get('digestTimezone', 'UTC') is string);
@@ -65,12 +77,15 @@ service cloud.firestore {
 
     // ─── Boards ────────────────────────────────────────────────────────
     match /boards/{boardId} {
-      // Only members can read boards (private-only social graph — Lever 1)
+      // Members can always read; anyone signed-in can read if the board is public
       allow read: if isSignedIn()
-        && request.auth.uid in resource.data.get('memberIds', []);
+        && (
+          request.auth.uid in resource.data.get('memberIds', [])
+          || resource.data.get('isPublic', false) == true
+        );
 
-      // Anyone authed can create, but must set themselves as owner
-      // Field-level type validation for BoardDoc shape (isPublic must be false)
+      // Anyone authed can create, but must set themselves as owner.
+      // Boards default to private — switching to public requires an explicit owner update.
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid
         && request.auth.uid in request.resource.data.memberIds
@@ -81,9 +96,8 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && request.resource.data.isPublic == false;
 
-      // Members can update, but only owner can change ownerId or memberIds
-      // Exception: a signed-in user with a valid pending invite can add themselves to memberIds
-      // isPublic must always remain false (private-only social graph)
+      // Members can update, but only owner can change ownerId or memberIds.
+      // isPublic can only be flipped by the board owner (teen-owned boards stay private).
       allow update: if isSignedIn()
         && (request.resource.data.ownerId == resource.data.ownerId)
         && (
@@ -98,7 +112,10 @@ service cloud.firestore {
               && request.auth.uid in request.resource.data.memberIds
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'pendingInviteCount']))
         )
-        && request.resource.data.isPublic == false;
+        && (
+          request.resource.data.isPublic == resource.data.isPublic
+          || (request.auth.uid == resource.data.ownerId && !isTeenUser())
+        );
 
       // Only owner can delete
       allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
@@ -117,8 +134,8 @@ service cloud.firestore {
 
       // ─── Content ───────────────────────────────────────────────────
       match /content/{contentId} {
-        // Only members can read content (private-only social graph)
-        allow read: if isMember(boardId);
+        // Members read always; anyone signed-in can read if the parent board is public
+        allow read: if isMember(boardId) || (isSignedIn() && isPublicBoard(boardId));
         // Field-level type validation for ContentDoc shape
         // Lever 7 (Agent guardrails): Requires userIntent field for all content creation
         allow create: if isMember(boardId)
@@ -160,8 +177,8 @@ service cloud.firestore {
           allow read: if isMember(boardId);
           // One vote per user — voteId must equal auth uid
           allow create: if isSignedIn() && request.auth.uid == voteId && isMember(boardId);
-          // Cannot change or delete votes
-          allow update, delete: if false;
+          // Owner may change their vote (re-tap a different option) or unvote (delete).
+          allow update, delete: if isSignedIn() && request.auth.uid == voteId && isMember(boardId);
         }
 
         match /comments/{commentId} {

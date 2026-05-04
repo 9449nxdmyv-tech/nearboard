@@ -21,7 +21,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -152,8 +152,8 @@
 				boardId, authorId: user.uid, authorName: user.displayName || user.email, authorPhotoURL: user.photoURL
 			} as Omit<LocationContentDoc, 'id' | 'createdAt'>);
 			hapticSuccess();
-			showToast('Location saved!');
-			onClose();
+			showToast('Location saved!', 'success');
+			onClose(true);
 		} catch { showToast('Failed to save location'); }
 		finally { busy = false; }
 	}

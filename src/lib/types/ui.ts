@@ -19,6 +19,7 @@ export interface BaseCardProps {
 	isBoardOwner?: boolean;
 	allowComments?: boolean;
 	onShare?: () => void;
+	layout?: import('./firestore').LayoutStyle;
 }
 
 export interface NoteCardProps extends BaseCardProps {
@@ -34,6 +35,8 @@ export interface ListCardProps extends BaseCardProps {
 export interface VoiceCardProps extends BaseCardProps {
 	audioUrl: string;
 	durationMs: number;
+	/** Pre-computed waveform peaks (0–1). Optional — legacy notes fall back to a deterministic shape. */
+	waveform?: number[];
 }
 
 export interface PhotoCardProps extends BaseCardProps {

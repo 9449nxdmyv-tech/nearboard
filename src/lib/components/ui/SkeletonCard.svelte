@@ -7,6 +7,10 @@
 	import Skeleton from './Skeleton.svelte';
 
 	let { variant = 'default' }: { variant?: 'default' | 'wide' | 'small' | 'photo' | 'voice' } = $props();
+
+	// Deterministic bar heights for the voice waveform skeleton — using Math.random()
+	// in markup causes SSR/CSR hydration mismatches and re-rolls on every render.
+	const VOICE_BAR_HEIGHTS = [10, 18, 14, 26, 12, 22, 30, 16, 24, 14, 28, 12, 20, 32, 14, 22, 18, 26, 10, 16];
 </script>
 
 <div class="bg-card rounded-card shadow-card border border-border/50 overflow-hidden p-4">
@@ -23,8 +27,8 @@
 		<!-- Voice card skeleton -->
 		<div class="h-20 bg-gradient-to-br from-purple-500/20 via-accent/20 to-indigo-500/20 rounded-xl mb-3 flex items-center justify-center">
 			<div class="flex items-center gap-1">
-				{#each Array(20) as _}
-					<div class="w-1 bg-accent/30 rounded-full" style="height: {Math.random() * 24 + 8}px;"></div>
+				{#each VOICE_BAR_HEIGHTS as h, i (i)}
+					<div class="w-1 bg-accent/30 rounded-full" style="height: {h}px;"></div>
 				{/each}
 			</div>
 		</div>

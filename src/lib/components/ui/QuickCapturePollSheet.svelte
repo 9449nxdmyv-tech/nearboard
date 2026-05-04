@@ -18,7 +18,7 @@
 		onClose
 	}: {
 		boardId: string;
-		onClose: () => void;
+		onClose: (posted?: boolean) => void;
 	} = $props();
 
 	let busy = $state(false);
@@ -47,8 +47,8 @@
 				boardId, authorId: user.uid, authorName: user.displayName || user.email, authorPhotoURL: user.photoURL
 			} as Omit<PollContentDoc, 'id' | 'createdAt'>);
 			hapticSuccess();
-			showToast('Poll saved!');
-			onClose();
+			showToast('Poll saved!', 'success');
+			onClose(true);
 		} catch { showToast('Failed to save poll'); }
 		finally { busy = false; }
 	}

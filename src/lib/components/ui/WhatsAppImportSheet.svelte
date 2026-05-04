@@ -9,6 +9,7 @@
 <script lang="ts">
 	import BottomSheet from './BottomSheet.svelte';
 	import Icon from '@iconify/svelte';
+	import { onDestroy } from 'svelte';
 	import { parseAndClassify, importApprovedCards } from '$lib/firebase/whatsAppImportService';
 	import { showToast, userStore } from '$lib/stores';
 	import { WHATSAPP_IMPORT_MAX_TXT_BYTES } from '$lib/config/constants';
@@ -35,6 +36,7 @@
 	let importError = $state<string | null>(null);
 	let statusText = $state('Reading your chat...');
 	let importing = $state(false);
+	let statusInterval: ReturnType<typeof setInterval> | undefined;
 
 	const selectedCount = $derived(selected.size);
 	const title = $derived(
@@ -59,8 +61,13 @@
 		'Almost ready...'
 	];
 
+	onDestroy(() => {
+		if (statusInterval) clearInterval(statusInterval);
+	});
+
 	function handleClose() {
 		// Reset state on close
+		if (statusInterval) { clearInterval(statusInterval); statusInterval = undefined; }
 		step = 1;
 		cards = [];
 		selected = new Set();
@@ -97,14 +104,14 @@
 
 		// Cycle status text
 		let statusIdx = 0;
-		const interval = setInterval(() => {
+		if (statusInterval) clearInterval(statusInterval);
+		statusInterval = setInterval(() => {
 			statusIdx = (statusIdx + 1) % STATUS_MESSAGES.length;
 			statusText = STATUS_MESSAGES[statusIdx];
 		}, 2500);
 
 		try {
 			const classified = await parseAndClassify(file);
-			clearInterval(interval);
 
 			if (classified.length === 0) {
 				error = 'No cards could be created from this chat. Try a different conversation.';
@@ -117,8 +124,9 @@
 			selected = new Set(classified.map((_, i) => i));
 			step = 3;
 		} catch (err) {
-			clearInterval(interval);
 			error = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+		} finally {
+			if (statusInterval) { clearInterval(statusInterval); statusInterval = undefined; }
 		}
 
 		// Reset file input

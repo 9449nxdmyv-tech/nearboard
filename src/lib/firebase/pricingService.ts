@@ -4,7 +4,7 @@
  *              registers product for price watching. All price logic lives here.
  */
 
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 import { db } from './app';
 import { extractMetadata } from '$lib/api';
 import { updateContent } from './boardService';
@@ -44,8 +44,10 @@ export async function registerProductForTracking(
 		productUrl,
 		boardId,
 		contentId,
+		// `serverTimestamp()` is a sentinel and Firestore rejects it inside array
+		// values — use a client Timestamp for entries[].checkedAt instead.
 		entries: currentPrice
-			? [{ price: currentPrice, checkedAt: serverTimestamp() }]
+			? [{ price: currentPrice, checkedAt: Timestamp.now() }]
 			: [],
 		priceDrop: false,
 		lastCheckedAt: serverTimestamp()
@@ -103,7 +105,7 @@ export async function refreshProductPrice(
 		await updateDoc(doc(db(), 'prices', docId), {
 			entries: arrayUnion({
 				price: newPrice,
-				checkedAt: serverTimestamp()
+				checkedAt: Timestamp.now()
 			})
 		});
 

@@ -8,11 +8,11 @@
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import { CARD_ENTRANCE } from '$lib/config/animations';
-	import { avatarInitial, summaryPreview } from '$lib/utils/textFormatter';
-	import { relativeTime } from '$lib/utils/dateFormatter';
+	import { summaryPreview } from '$lib/utils/textFormatter';
 	import BoardPreviewMosaic from '$lib/components/ui/BoardPreviewMosaic.svelte';
 	import StreakBadge from '$lib/components/ui/StreakBadge.svelte';
 	import AvatarStack from '$lib/components/ui/AvatarStack.svelte';
+	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import { userStore, showToast } from '$lib/stores';
 	import { shareContent } from '$lib/native';
 	import {
@@ -70,7 +70,18 @@
 				notFound = true;
 				return;
 			}
-			const b = await getAllBoardsForUser(targetUserId);
+		} catch (err) {
+			if (reqId !== requestId) return;
+			console.error('[u/userId] profile load failed', err);
+			notFound = true;
+			return;
+		} finally {
+			if (reqId === requestId && !profile) loading = false;
+		}
+
+		// Boards load is independent — failure here should still show the profile.
+		try {
+			const b = await getAllBoardsForUser(targetUserId, currentUser?.uid);
 			if (reqId !== requestId) return;
 			boards = b;
 
@@ -91,8 +102,8 @@
 			}
 		} catch (err) {
 			if (reqId !== requestId) return;
-			console.error('Failed to load profile:', err);
-			notFound = true;
+			console.error('[u/userId] boards load failed', err);
+			boards = [];
 		} finally {
 			if (reqId === requestId) loading = false;
 		}
@@ -200,17 +211,9 @@
 				<div class="absolute inset-0 bg-gradient-to-b from-accent/5 via-transparent to-transparent pointer-events-none"></div>
 
 				<div class="relative flex flex-col items-center text-center">
-					{#if profile.photoURL}
-						<img
-							src={profile.photoURL}
-							alt={profile.displayName}
-							class="w-22 h-22 rounded-full object-cover ring-4 ring-card shadow-lg mb-4"
-						/>
-					{:else}
-						<div class="w-22 h-22 rounded-full bg-accent/10 flex items-center justify-center text-3xl text-accent font-bold ring-4 ring-card shadow-lg mb-4">
-							{avatarInitial(profile.displayName)}
-						</div>
-					{/if}
+					<div class="mb-4 ring-4 ring-card rounded-full shadow-lg">
+						<Avatar name={profile.displayName} photoURL={profile.photoURL} size="2xl" />
+					</div>
 
 					<h1 class="font-display text-xl font-bold text-primary">{profile.displayName}</h1>
 					<p class="text-[13px] text-muted mt-1">Member since {formatMemberSince(profile.createdAt)}</p>
@@ -263,31 +266,11 @@
 							<div
 								in:fly={{ y: CARD_ENTRANCE.y, duration: CARD_ENTRANCE.duration, delay: Math.min(i * 50, 400) }}
 							>
-								{#if isPrivate && !canAccess}
-									<!-- Private board — blurred lock card -->
-									<div class="profile-board-card group relative rounded-2xl overflow-hidden aspect-[3/4]">
-										<div class="absolute inset-0 bg-surface-1">
-											<div class="blur-lg scale-110 w-full h-full">
-												<BoardPreviewMosaic boardId={board.id} height="100%" />
-											</div>
-										</div>
-										<div class="absolute inset-0 bg-card/50 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
-											<div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
-												<Icon icon="ph:lock-simple" class="text-xl text-white/70" />
-											</div>
-											<span class="text-[12px] font-semibold text-white/60">Private</span>
-											<span class="text-[10px] text-white/40">
-												{board.memberIds.length} {board.memberIds.length === 1 ? 'member' : 'members'}
-											</span>
-										</div>
-										<div class="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none"></div>
-									</div>
-								{:else}
-									<!-- Accessible board — home-page style card -->
-									<a
-										href={canAccess ? `/board/${board.id}` : undefined}
-										class="profile-board-card group relative block rounded-2xl overflow-hidden aspect-[3/4]"
-									>
+								<!-- Member view for shared boards, public view for everything else. -->
+								<a
+									href={canAccess ? `/board/${board.id}` : `/b/${board.id}`}
+									class="profile-board-card group relative block rounded-2xl overflow-hidden aspect-[3/4]"
+								>
 										<!-- Background mosaic -->
 										<div class="absolute inset-0 bg-surface-1">
 											<BoardPreviewMosaic boardId={board.id} height="100%" />
@@ -351,7 +334,6 @@
 											</div>
 										</div>
 									</a>
-								{/if}
 							</div>
 						{/each}
 					</div>
@@ -362,9 +344,6 @@
 </Page>
 
 <style>
-	.w-22 { width: 5.5rem; }
-	.h-22 { height: 5.5rem; }
-
 	.profile-board-grid {
 		perspective: 800px;
 	}

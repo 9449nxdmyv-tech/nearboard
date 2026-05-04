@@ -175,17 +175,14 @@ export const optimisticContent = writable<ContentDoc[]>([]);
 
 /**
  * Merges real Firestore content with optimistic items.
- * Optimistic items whose temp IDs have been superseded by real docs are dropped
- * automatically when the Firestore subscription fires, because we clear them
- * once the write resolves or the snapshot arrives.
+ * Optimistic entries are removed by addContentOptimistic's cleanup() once the
+ * write resolves or the 10s safety timer fires — we just stack what's left on
+ * top of the real list here.
  */
 export function mergeWithOptimistic(realContent: ContentDoc[]): ContentDoc[] {
 	const optimistic = get(optimisticContent);
 	if (optimistic.length === 0) return realContent;
-	// Filter out optimistic items that have been replaced by real ones (matching authorId + type + createdAt proximity)
-	const realIds = new Set(realContent.map((c) => c.id));
-	const remaining = optimistic.filter((o) => !realIds.has(o.id));
-	return [...remaining, ...realContent];
+	return [...optimistic, ...realContent];
 }
 
 /**

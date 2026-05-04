@@ -105,10 +105,10 @@ export function hapticSoft(): void {
 
 /** Double tap — use for like/favorite actions */
 export function hapticDoubleTap(): void {
-	if (typeof navigator !== 'undefined' && navigator.vibrate) {
+	if (HapticsPlugin && ImpactStyle) {
+		HapticsPlugin.impact({ style: ImpactStyle.Light }).catch(() => {});
+		setTimeout(() => HapticsPlugin?.impact({ style: ImpactStyle!.Light }).catch(() => {}), 100);
+	} else if (typeof navigator !== 'undefined' && navigator.vibrate) {
 		navigator.vibrate([15, 30, 15]);
-	} else if (HapticsPlugin && ImpactStyle) {
-		HapticsPlugin.impact({ style: ImpactStyle.Light });
-		setTimeout(() => HapticsPlugin?.impact({ style: ImpactStyle!.Light }), 100);
 	}
 }

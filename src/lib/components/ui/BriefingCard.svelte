@@ -7,6 +7,7 @@
 <script lang="ts">
 	import Icon from '@iconify/svelte';
 	import { slide } from 'svelte/transition';
+	import { onDestroy } from 'svelte';
 	import { relativeTime } from '$lib/utils/dateFormatter';
 	import { renderSummaryHtml, stripMarkdown } from '$lib/utils/textFormatter';
 
@@ -27,26 +28,27 @@
 	const TRUNCATE_LIMIT = 120;
 	const plainText = $derived(stripMarkdown(text));
 	const isLong = $derived(plainText.length > TRUNCATE_LIMIT);
-	const displayHtml = $derived(
-		isLong && !expanded
-			? renderSummaryHtml(text).slice(0, TRUNCATE_LIMIT * 2) + '…'
-			: renderSummaryHtml(text)
-	);
+	const truncatedText = $derived(plainText.slice(0, TRUNCATE_LIMIT) + '…');
+	const fullHtml = $derived(renderSummaryHtml(text));
 	const isLoading = $derived(text === '');
 
 	function togglePlay() {
 		if (!audioEl) return;
 		if (playing) {
 			audioEl.pause();
+			playing = false;
 		} else {
-			audioEl.play();
+			audioEl.play().then(() => { playing = true; }).catch(() => { playing = false; });
 		}
-		playing = !playing;
 	}
 
 	function handleEnded() {
 		playing = false;
 	}
+
+	onDestroy(() => {
+		if (audioEl && !audioEl.paused) audioEl.pause();
+	});
 </script>
 
 <div class="border border-accent/20 bg-accent/5 rounded-card p-4">
@@ -64,7 +66,11 @@
 			<Icon icon="ph:sparkle-fill" class="text-accent text-lg shrink-0" aria-hidden="true" />
 			<div class="flex-1 min-w-0">
 				<div transition:slide={{ duration: 200 }}>
-					<p class="summary-prose text-sm text-primary leading-relaxed">{@html displayHtml}</p>
+					{#if isLong && !expanded}
+						<p class="summary-prose text-sm text-primary leading-relaxed">{truncatedText}</p>
+					{:else}
+						<p class="summary-prose text-sm text-primary leading-relaxed">{@html fullHtml}</p>
+					{/if}
 				</div>
 				{#if isLong}
 					<button

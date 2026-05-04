@@ -14,21 +14,23 @@
 	--color-primary-shade: #5a52d5;
 	--color-primary-tint: #918bff;
 
-	/* ─── Accent ────────────────────────────────────── */
-	--color-accent: #ff9500;
-	--color-accent-shade: #cc7700;
+	/* ─── Accent — coral rose, complements the indigo primary ─ */
+	--color-accent: #ec4899; /* pink-500 */
+	--color-accent-shade: #be185d; /* pink-700 */
 
 	/* ─── Semantic ──────────────────────────────────── */
 	--color-success: #34c759;
-	--color-warning: #ff9f0a;
+	--color-warning: #f43f5e; /* rose-500 — softer than amber, still distinct from error */
 	--color-error: #ff3b30;
 	--color-info: #5ac8fa;
 	--color-youtube-red: #ff0000;
+	/* Star icons stay amber — universally read as "rating" — but the surrounding
+	   pill is neutral so we don't get a yellow block. */
 	--color-rating-star: #eab308;
-	--color-rating-pill-bg: #fffbeb; /* amber-50 */
-	--color-rating-pill-text: #b45309; /* amber-700 */
-	--color-rating-pill-border: #fde68a; /* amber-200 */
-	--color-rating-pill-shadow: #fef3c7; /* amber-100 */
+	--color-rating-pill-bg: #f8fafc; /* slate-50 */
+	--color-rating-pill-text: #475569; /* slate-600 */
+	--color-rating-pill-border: #e2e8f0; /* slate-200 */
+	--color-rating-pill-shadow: #f1f5f9; /* slate-100 */
 
 
 	/* ─── Surfaces ──────────────────────────────────── */
@@ -65,22 +67,22 @@
 	--shadow-xl: 0 16px 48px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.06);
 
 	/* ─── Card-type accent colors ───────────────────── */
-	--color-type-note: #f59e0b;
+	--color-type-note: #0ea5e9; /* sky-500 — was amber */
 	--color-type-link: #3b82f6;
 	--color-type-photo: #06b6d4;
 	--color-type-video: #8b5cf6;
 	--color-type-voice: #ec4899;
 	--color-type-list: #10b981;
-	--color-type-poll: #f97316;
+	--color-type-poll: #d946ef; /* fuchsia-500 — was orange */
 	--color-type-location: #14b8a6;
 	--color-type-product: #059669;
 	--color-template-household: #3b82f6; /* blue-500 */
 	--color-template-family: #e11d48; /* rose-500 */
-	--color-template-trip: #f59e0b; /* amber-500 */
+	--color-template-trip: #0ea5e9; /* sky-500 — was amber */
 	--color-template-team: #6366f1; /* indigo-500 */
 	--color-template-creative: #a855f7; /* purple-500 */
 	--color-template-wishlist: #10b981; /* emerald-500 */
-	--color-template-renovation: #f97316; /* orange-500 */
+	--color-template-renovation: #0d9488; /* teal-600 — was orange */
 	--color-template-blank: #64748b; /* slate-500 */
 
 	/* ─── Brand Specific ────────────────────────────── */
@@ -90,19 +92,19 @@
 	/* ─── Delete Actions ────────────────────────────── */
 	--color-delete-action: #ef4444; /* red-500 */
 
-	/* ─── Streak Badges ─────────────────────────────── */
-	--color-streak-low-text: #fb923c; /* orange-400 */
-	--color-streak-mid-text: #f97316; /* orange-500 */
-	--color-streak-high-text: #ea580c; /* orange-600 */
+	/* ─── Streak Badges — pink → red gradient (still "fire") ── */
+	--color-streak-low-text: #f472b6; /* pink-400 */
+	--color-streak-mid-text: #ec4899; /* pink-500 */
+	--color-streak-high-text: #db2777; /* pink-600 */
 	--color-streak-extreme-text: #dc2626; /* red-600 */
 
-	--color-streak-low-bg: #fff7ed; /* orange-50 */
-	--color-streak-mid-bg: #fff7ed; /* orange-50 */
-	--color-streak-high-bg: #fff7ed; /* orange-50 */
+	--color-streak-low-bg: #fdf2f8; /* pink-50 */
+	--color-streak-mid-bg: #fdf2f8; /* pink-50 */
+	--color-streak-high-bg: #fdf2f8; /* pink-50 */
 	--color-streak-extreme-bg: #fef2f2; /* red-50 */
 
-	--shadow-streak-low: rgba(251, 146, 60, 0.3); /* orange-400 opacity 0.3 */
-	--shadow-streak-high: rgba(251, 146, 60, 0.6); /* orange-400 opacity 0.6 */
+	--shadow-streak-low: rgba(236, 72, 153, 0.3); /* pink-500 opacity 0.3 */
+	--shadow-streak-high: rgba(236, 72, 153, 0.6); /* pink-500 opacity 0.6 */
 
 	/* ─── Offline Banner Status ─────────────────────── */
 	--color-status-online-bg: #ecfdf5; /* green-50 */
@@ -110,10 +112,10 @@
 	--color-status-online-text: #047857; /* green-600 */
 	--color-status-online-pulse: #10b981; /* green-500 */
 
-	--color-status-offline-bg: #fffbeb; /* amber-50 */
-	--color-status-offline-border: #fde68a; /* amber-200 */
-	--color-status-offline-text: #b45309; /* amber-600 */
-	--color-status-offline-text-dim: #b45309; /* amber-600 with opacity handled by Tailwind */
+	--color-status-offline-bg: #fff1f2; /* rose-50 */
+	--color-status-offline-border: #fecdd3; /* rose-200 */
+	--color-status-offline-text: #be123c; /* rose-700 */
+	--color-status-offline-text-dim: #be123c; /* rose-700 with opacity handled by Tailwind */
 
 	--color-status-reconnecting-bg: #dcfce7; /* green-100 */
 	--color-status-reconnecting-text: #047857; /* green-600 */
@@ -122,7 +124,7 @@
 	--color-status-reconnecting-progress-bar: #10b981; /* green-500 */
 
 	/* ─── Toast Warning ─────────────────────────────── */
-	--color-toast-warning-bg: #fbbf24; /* amber-500 */
+	--color-toast-warning-bg: #f43f5e; /* rose-500 */
 	--color-toast-warning-text: #ffffff;
 
 	/* ─── Map View ──────────────────────────────────── */
@@ -141,19 +143,19 @@
 	/* ─── YouTube Embed ─────────────────────────────── */
 	--color-youtube-play-btn-shadow: 0 4px 20px rgba(220, 38, 38, 0.3); /* red-600 rgba */
 
-	/* ─── Reminder Cards (Today Dashboard) ──────────── */
-	--color-reminder-bg: #fffbeb; /* amber-50 */
-	--color-reminder-border: #fde68a; /* amber-200 */
-	--color-reminder-hover-border: #fcd34d; /* amber-300 */
-	--color-reminder-icon-bg: #fff3e0; /* amber-100 */
-	--color-reminder-icon-text: #b45309; /* amber-600 */
+	/* ─── Reminder Cards (Today Dashboard) — soft violet to match brand ─ */
+	--color-reminder-bg: #f5f3ff; /* violet-50 */
+	--color-reminder-border: #ddd6fe; /* violet-200 */
+	--color-reminder-hover-border: #c4b5fd; /* violet-300 */
+	--color-reminder-icon-bg: #ede9fe; /* violet-100 */
+	--color-reminder-icon-text: #6d28d9; /* violet-700 */
 
 	/* ─── Card Detail Modal - Type-specific Pills ───── */
 	--color-type-recipe-pill-bg: #dcfce7; /* emerald-500/10 */
 	--color-type-recipe-pill-text: #047857; /* emerald-700 */
 
-	--color-type-event-pill-bg: #ffedd5; /* orange-500/10 */
-	--color-type-event-pill-text: #c2410c; /* orange-700 */
+	--color-type-event-pill-bg: #e0e7ff; /* indigo-100 */
+	--color-type-event-pill-text: #3730a3; /* indigo-800 */
 
 	--color-type-movie-pill-bg: #fce7f3; /* pink-500/10 */
 	--color-type-movie-pill-text: #be185d; /* pink-700 */
@@ -179,7 +181,7 @@
 /* ─── Global base styles ────────────────────────────── */
 
 ::selection {
-	background: rgb(0 122 255 / 0.2);
+	background: rgb(236 72 153 / 0.22); /* accent pink */
 }
 
 /* Smooth scrolling everywhere */

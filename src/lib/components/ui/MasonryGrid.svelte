@@ -29,11 +29,24 @@
 	  Uniform square tiles. Each direct child is forced to aspect-square with
 	  overflow-hidden so every card renders as a consistent thumbnail; the
 	  inner article keeps its own styling but is clipped from the bottom.
+
+	  Photo cards (marked with [data-card-type="photo"]) get full-bleed
+	  treatment: the image fills the entire square and the body+footer
+	  (caption, author, interactions) are hidden for a true gallery look.
 	-->
 	<div
 		class="relative z-0 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3
 			[&>div]:aspect-square [&>div]:overflow-hidden [&>div]:rounded-[var(--radius-card)]
-			[&>div>article]:h-full [&>div>article]:shadow-none [&>div>article]:rounded-none
+			[&>div_div:has(article)]:h-full
+			[&>div_article]:h-full [&>div_article]:shadow-none [&>div_article]:rounded-none
+			[&>div_article:has([data-card-type=photo])]:relative
+			[&>div_article:has([data-card-type=photo])>*]:hidden
+			[&>div_article_[data-card-type=photo]]:!block
+			[&>div_article_[data-card-type=photo]]:absolute
+			[&>div_article_[data-card-type=photo]]:inset-0
+			[&>div_article_[data-card-type=photo]_img]:!h-full
+			[&>div_article_[data-card-type=photo]_img]:!w-full
+			[&>div_article_[data-card-type=photo]_img]:!object-cover
 			{extraClass}"
 	>
 		{@render children()}

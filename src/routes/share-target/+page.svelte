@@ -43,6 +43,7 @@
 	let detectionResult = $state<{ type: string; confidence: number } | null>(null);
 
 	const boards = $derived($boardStore.boards);
+	const boardsLoading = $derived($boardStore.loading);
 	const user = $derived($userStore.user);
 
 	/** Combine all shared params into a single display string */
@@ -77,6 +78,17 @@
 		if (!sharedTitle && !sharedText && !sharedUrl) {
 			goto('/');
 			return;
+		}
+
+		// Wait for the board list to settle — otherwise we may auto-create
+		// a board for someone who already has boards but whose store hasn't
+		// loaded yet, silently discarding their existing routing options.
+		if (boardsLoading) {
+			await new Promise<void>((resolve) => {
+				const unsub = boardStore.subscribe((s) => {
+					if (!s.loading) { unsub(); resolve(); }
+				});
+			});
 		}
 
 		// Path B: Auto-create board if user has none

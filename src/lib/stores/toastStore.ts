@@ -40,6 +40,20 @@ export interface ToastOptions {
 
 export const toastStore = writable<Toast[]>([]);
 
+// Per-toast dismiss timers, so updateToast can cancel a stale schedule before
+// queueing a new one (otherwise repeated updates stack timers and the toast
+// can vanish earlier than the latest duration).
+const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleDismiss(id: string, durationMs: number): void {
+	const existing = dismissTimers.get(id);
+	if (existing) clearTimeout(existing);
+	dismissTimers.set(id, setTimeout(() => {
+		dismissTimers.delete(id);
+		dismissToast(id);
+	}, durationMs));
+}
+
 const DURATION_MS: Record<ToastType, number> = {
 	success: 3000,
 	error: 5000,
@@ -81,15 +95,18 @@ function createToast(
 
 	// Auto-dismiss
 	if (toast.duration && toast.duration > 0) {
-		setTimeout(() => {
-			dismissToast(id);
-		}, toast.duration);
+		scheduleDismiss(id, toast.duration);
 	}
 
 	return id;
 }
 
 export function dismissToast(id: string): void {
+	const existing = dismissTimers.get(id);
+	if (existing) {
+		clearTimeout(existing);
+		dismissTimers.delete(id);
+	}
 	toastStore.update((toasts) => toasts.filter((t) => t.id !== id));
 }
 
@@ -98,11 +115,8 @@ export function updateToast(id: string, updates: Partial<Toast>): void {
 		toasts.map((t) => (t.id === id ? { ...t, ...updates } : t))
 	);
 
-	// Schedule auto-dismiss if duration was updated
 	if (updates.duration && updates.duration > 0) {
-		setTimeout(() => {
-			dismissToast(id);
-		}, updates.duration);
+		scheduleDismiss(id, updates.duration);
 	}
 }
 

@@ -17,26 +17,40 @@
 		// Initial check
 		isOnline = navigator.onLine;
 
+		let dismissTimeout: ReturnType<typeof setTimeout> | undefined;
+		let checking = false;
+
 		const handleOffline = () => {
 			isOnline = false;
 			showBanner = true;
+			isReconnecting = false;
+			if (dismissTimeout) { clearTimeout(dismissTimeout); dismissTimeout = undefined; }
 			hapticWarning();
 		};
 
 		const handleOnline = async () => {
-			// Show reconnecting state briefly
+			if (checking) return;
+			checking = true;
 			isReconnecting = true;
-			
-			// Verify connection with a quick fetch
+
 			try {
 				await fetch('/api/health', { method: 'HEAD', cache: 'no-cache' });
+				// If we went offline again while the fetch was in flight, bail out.
+				if (!navigator.onLine) {
+					isReconnecting = false;
+					return;
+				}
 				isOnline = true;
-				setTimeout(() => {
+				if (dismissTimeout) clearTimeout(dismissTimeout);
+				dismissTimeout = setTimeout(() => {
 					showBanner = false;
 					isReconnecting = false;
+					dismissTimeout = undefined;
 				}, 1500);
 			} catch {
 				isReconnecting = false;
+			} finally {
+				checking = false;
 			}
 		};
 
@@ -54,6 +68,7 @@
 			window.removeEventListener('offline', handleOffline);
 			window.removeEventListener('online', handleOnline);
 			clearInterval(checkInterval);
+			if (dismissTimeout) clearTimeout(dismissTimeout);
 		};
 	});
 </script>

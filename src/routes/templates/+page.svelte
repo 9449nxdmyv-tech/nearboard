@@ -139,7 +139,7 @@
 
 	<!-- Category filters -->
 	<Block class="!py-2 !flex !flex-wrap !gap-2">
-		{#each VISIBLE_CATEGORIES as cat}
+		{#each VISIBLE_CATEGORIES as cat (cat.value)}
 			<Chip
 				onClick={() => { selectedCategory = cat.value; }}
 				class="{selectedCategory === cat.value ? '!bg-primary !text-white' : ''}"
@@ -162,7 +162,7 @@
 					aria-label="More categories"
 					class="absolute top-full right-0 mt-1 bg-card rounded-xl shadow-xl border border-border/50 py-1 z-20 min-w-[140px]"
 					onclick={() => { showMoreMenu = false; }}>
-					{#each HIDDEN_CATEGORIES as cat}
+					{#each HIDDEN_CATEGORIES as cat (cat.value)}
 						<button
 							onclick={() => { selectedCategory = cat.value; showMoreMenu = false; }}
 							class="w-full text-left px-4 py-2 text-sm hover:bg-surface transition-colors
@@ -179,7 +179,7 @@
 	<div>
 		{#if loading}
 			<div class="px-4 mt-4 flex flex-col gap-3">
-				{#each Array(5) as _, i}
+				{#each Array(5) as _, i (i)}
 					<div class="flex items-center gap-3 p-4 bg-card rounded-[var(--radius-card)] shadow-card stagger-fade-in" style="--stagger-index: {i}">
 						<div class="w-10 h-10 rounded-xl skeleton-shimmer shrink-0"></div>
 						<div class="flex-1">
@@ -280,7 +280,7 @@
 
 		<BlockTitle>Sections</BlockTitle>
 		<List inset strong>
-			{#each previewTemplate.sections as section}
+			{#each previewTemplate.sections as section (section.title)}
 				{#snippet sectionMedia()}
 					<Icon icon={CATEGORY_ICON[section.contentType] ?? 'ph:note-pencil'} class="text-base text-on-surface/60" />
 				{/snippet}

@@ -29,7 +29,7 @@
 		id, boardId, url, title, description, image, domain, favicon, enrichment, price,
 		authorId, authorName, authorPhotoURL, createdAt,
 		isBoardOwner, allowComments, expandComments, commentCount, acknowledgments,
-		onDelete, onShare, onCommentClick
+		onDelete, onShare, onCommentClick, layout
 	}: LinkCardProps & {
 		commentCount?: number;
 		expandComments?: boolean;
@@ -136,7 +136,7 @@
 			<img
 				src={image}
 				alt={title}
-				class="w-full h-44 object-cover transition-transform duration-300 hover:scale-[1.02]"
+				class="w-full aspect-video object-cover transition-transform duration-300 hover:scale-[1.02]"
 				loading="lazy"
 				onerror={() => (imageError = true)}
 			/>
@@ -163,6 +163,7 @@
 	{onShare}
 	{onDelete}
 	{onCommentClick}
+	{layout}
 	headerContent={(youtubeId || (image && !imageError)) ? linkHeader : undefined}
 >
 	{#if !youtubeId && (!image || imageError)}
@@ -175,10 +176,13 @@
 		</div>
 	{/if}
 
-	<h3 class="font-semibold text-[15px] text-on-surface leading-snug">{title}</h3>
+	{#if title?.trim()}
+		<h3 class="font-semibold text-[15px] text-on-surface leading-snug">{title}</h3>
+	{/if}
 
-	{#if description && enrichment && (isRecipeEnrichment(enrichment) || isMovieEnrichment(enrichment) || isBookEnrichment(enrichment) || isPlaceEnrichment(enrichment) || isMusicEnrichment(enrichment) || isGithubEnrichment(enrichment))}
-		<!-- Description for enrichment types that show structured data instead of their own excerpt -->
+	{#if description && enrichment && (isRecipeEnrichment(enrichment) || isMovieEnrichment(enrichment) || isBookEnrichment(enrichment) || isPlaceEnrichment(enrichment) || isMusicEnrichment(enrichment))}
+		<!-- Description for enrichment types that show structured data instead of their own excerpt.
+		     GitHub is excluded because it surfaces its own enrichment.description (same string from the og scrape). -->
 		<p class="text-[13px] text-muted leading-relaxed line-clamp-3 mt-1">{description}</p>
 	{/if}
 

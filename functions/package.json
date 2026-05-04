@@ -20,7 +20,8 @@
     "groq-sdk": "^0.37.0",
     "jsdom": "^29.0.1",
     "open-graph-scraper": "^6.11.0",
-    "postmark": "^4.0.7"
+    "postmark": "^4.0.7",
+    "stripe": "^22.1.0"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.1",

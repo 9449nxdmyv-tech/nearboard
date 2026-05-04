@@ -165,6 +165,10 @@
 
 		setFeedLoading(true);
 
+		// Per-mount flag so deferred idle callbacks bail out if we unmount
+		// before they fire (otherwise they'd open subscriptions we never close).
+		let destroyed = false;
+
 		// Windowed subscriptions: only the N most-recently-active boards get
 		// real-time listeners; the rest get a one-shot fetch. Keeps the open
 		// Firestore socket count bounded regardless of how many boards a user
@@ -187,6 +191,7 @@
 		// every Firestore socket in the same microtask on mount.
 		function scheduleSubscribe(boardId: string) {
 			idle(() => {
+				if (destroyed) return;
 				if (unsubsByBoard.has(boardId)) return;
 				liveBoardIds.add(boardId);
 				const unsub = subscribeToBoardContentPaginated(boardId, (items) => {
@@ -204,6 +209,7 @@
 				// Low-activity boards: one-shot fetch, no listener
 				fetchLatestBoardContent(board.id)
 					.then((items) => {
+						if (destroyed) return;
 						boardContentMap.set(board.id, items);
 						rebuildFeed();
 					})
@@ -214,9 +220,10 @@
 		// Followed boards (non-member, typically few): always one-shot
 		for (const fId of followOnlyIds) {
 			getBoard(fId).then((b) => {
-				if (!b || !b.isPublic) return;
+				if (destroyed || !b || !b.isPublic) return;
 				followedBoardMeta.set(fId, { name: b.name, ownerId: b.ownerId, allowComments: false });
 				return fetchLatestBoardContent(fId).then((items) => {
+					if (destroyed) return;
 					boardContentMap.set(fId, items);
 					rebuildFeed();
 				});
@@ -227,6 +234,7 @@
 		const unsubBoardStore = boardStore.subscribe(() => rebuildFeed());
 
 		return () => {
+			destroyed = true;
 			clearTimeout(rebuildTimer);
 			for (const u of unsubsByBoard.values()) u();
 			unsubsByBoard.clear();
@@ -243,7 +251,7 @@
 	<main class="flex-1 px-4">
 		{#if $feedStore.loading}
 			<div class="flex flex-col gap-4 mt-4">
-				{#each Array(4) as _, i}
+				{#each Array(4) as _, i (i)}
 					<div class="rounded-[var(--radius-card)] bg-card shadow-card overflow-hidden stagger-fade-in" style="--stagger-index: {i}">
 						<div class="h-36 skeleton-shimmer"></div>
 						<div class="p-4">
@@ -363,6 +371,7 @@
 									boardId={feedItem.boardId}
 									isBoardOwner={feedItem.isOwner}
 									allowComments={feedItem.allowComments}
+									layout={feedLayout}
 									onShare={(item) => handleShareCard(item, feedItem.boardId)}
 									onCommentClick={() => { detailItemId = feedItem.content.id; detailBoardId = feedItem.boardId; }}
 								/>

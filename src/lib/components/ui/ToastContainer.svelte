@@ -26,9 +26,9 @@
 	};
 
 	const positionClasses: Record<string, string> = {
-		'top-center': 'top-4 inset-x-0 flex-col items-center',
+		'top-center': 'top-4 inset-x-0 items-center',
 		'top-right': 'top-4 right-4 items-end',
-		'bottom-center': 'bottom-4 inset-x-0 flex-col items-center',
+		'bottom-center': 'bottom-4 inset-x-0 items-center',
 		'bottom-right': 'bottom-4 right-4 items-end'
 	};
 
@@ -45,13 +45,9 @@
 </script>
 
 {#if $toastStore.length > 0}
-	{#each Object.entries(toastsByPosition) as [position, toasts]}
+	{#each Object.entries(toastsByPosition) as [position, toasts] (position)}
 		<div
-			class="fixed z-[100] flex flex-col gap-2 px-4 pointer-events-none md:max-w-sm"
-			class:items-center={position === 'top-center' || position === 'bottom-center'}
-			class:items-end={position === 'top-right' || position === 'bottom-right'}
-			style={position === 'top-center' || position === 'top-right' ? 'top: 1rem;' : 'bottom: 1rem;'}
-			style:right={position === 'top-right' || position === 'bottom-right' ? '1rem' : undefined}
+			class="fixed z-[100] flex flex-col gap-2 px-4 pointer-events-none md:max-w-sm {positionClasses[position] ?? positionClasses['top-center']}"
 		>
 			{#each toasts as toast (toast.id)}
 				<div
