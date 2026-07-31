@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "description": "BLE peripheral hub server for nearboard",
-  "main": "server.js",
+  "main": "mesh-server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node mesh-server.js",
+    "start:legacy": "node server.js"
   },
   "dependencies": {
     "@abandonware/bleno": "^0.6.2"
