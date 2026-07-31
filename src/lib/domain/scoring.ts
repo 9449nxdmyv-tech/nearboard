@@ -1,8 +1,9 @@
 import type { Post } from './types';
+import { count } from './engagement';
 
 /** Transparent scoring: reshares weigh most, likes add, deranks subtract heavily */
 export function score(post: Post): number {
-  return 3 * post.reshareCount + 1 * post.likeCount - 4 * post.derankCount;
+  return 3 * count(post.reshares) + 1 * count(post.likes) - 4 * count(post.deranks);
 }
 
 /** Is this post expired? (ephemeral + past expiresAt) */

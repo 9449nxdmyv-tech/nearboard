@@ -48,8 +48,22 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>nearboard uses Bluetooth to discover and connect to nearby hubs.</string>
+	<string>nearboard uses Bluetooth to find nearby boards and exchange posts directly with people around you. Nothing is sent to a server.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>nearboard uses Bluetooth to discover and connect to nearby hubs.</string>
+	<string>nearboard uses Bluetooth to share your board's posts with nearby devices. Nothing is sent to a server.</string>
+	<!--
+	  Both roles are required for a mesh: every device scans for peers
+	  (central) and is discoverable by them (peripheral) at the same time.
+
+	  Note that a backgrounded iOS app advertises its service UUID in the
+	  overflow area, where it is visible only to another iOS device explicitly
+	  scanning for that exact UUID — and not to Android at all. Background
+	  discovery is therefore degraded by design on iOS.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+	</array>
 </dict>
 </plist>

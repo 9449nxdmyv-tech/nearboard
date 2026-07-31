@@ -3,14 +3,41 @@ import type { Hub, Post } from '$lib/domain/types';
 import { MAX_POST_AGE_MS } from '$lib/domain/types';
 
 const DB_NAME = 'nearboard';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
+
+/**
+ * v1 → v2: scalar engagement counters become author-keyed CRDT sets.
+ *
+ * The original authors of existing likes were never recorded, so they cannot be
+ * recovered. Rather than discard the counts, synthesise one placeholder author
+ * per historical engagement: the visible count is preserved, and every future
+ * engagement is a real author key that merges correctly across the mesh.
+ */
+function migrateCounters(post: any): void {
+  const expand = (n: unknown, kind: string): Record<string, [number, 1]> => {
+    const out: Record<string, [number, 1]> = {};
+    const total = typeof n === 'number' && n > 0 ? Math.floor(n) : 0;
+    for (let i = 0; i < total; i++) {
+      out[`legacy:${post.postId}:${kind}:${i}`] = [post.lastInteractionAt ?? 0, 1];
+    }
+    return out;
+  };
+
+  post.likes = expand(post.likeCount, 'like');
+  post.reshares = expand(post.reshareCount, 'reshare');
+  post.deranks = expand(post.derankCount, 'derank');
+
+  delete post.likeCount;
+  delete post.reshareCount;
+  delete post.derankCount;
+}
 
 function getDb(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         // Hubs store
         if (!db.objectStoreNames.contains('hubs')) {
           db.createObjectStore('hubs', { keyPath: 'hubId' });
@@ -19,6 +46,17 @@ function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains('posts')) {
           const postStore = db.createObjectStore('posts', { keyPath: 'postId' });
           postStore.createIndex('hubId', 'hubId', { unique: false });
+        }
+
+        if (oldVersion > 0 && oldVersion < 2) {
+          const store = tx.objectStore('posts');
+          store.openCursor().then(function next(cursor): any {
+            if (!cursor) return;
+            const post = cursor.value;
+            migrateCounters(post);
+            cursor.update(post);
+            return cursor.continue().then(next);
+          });
         }
       }
     });

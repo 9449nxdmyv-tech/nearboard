@@ -5,24 +5,32 @@
   import { posts, loadPostsForHub, updatePost } from '$lib/stores/posts';
   import { getHub } from '$lib/db/localDb';
   import { sortedFeed, highlights } from '$lib/domain/scoring';
+  import { count, has, toggle, add } from '$lib/domain/engagement';
+  import { getDeviceIdSync } from '$lib/crypto/identity';
   import type { Hub, Post } from '$lib/domain/types';
 
   let hub = $state<Hub | null>(null);
+  let me = $state<string | null>(null);
   let feedPosts = $derived(sortedFeed($posts));
   let highlightPosts = $derived(highlights($posts, 3));
   let now = $state(Date.now());
   let ticker: ReturnType<typeof setInterval>;
   let viewingImage = $state<string | null>(null);
 
-  const hubId = $derived(page.params.hubId);
+  const hubId = $derived(page.params.hubId ?? '');
 
   onMount(async () => {
+    me = getDeviceIdSync();
     hub = (await getHub(hubId)) ?? null;
     await loadPostsForHub(hubId);
     ticker = setInterval(() => { now = Date.now(); }, 1000);
   });
 
-  onDestroy(() => { clearInterval(ticker); });
+  onDestroy(() => {
+    clearInterval(ticker);
+    for (const url of blobUrlCache.values()) URL.revokeObjectURL(url);
+    blobUrlCache.clear();
+  });
 
   function formatCountdown(expiresAt: number): string {
     const remaining = Math.max(0, expiresAt - now);
@@ -65,7 +73,7 @@
   }
 
   const blobUrlCache = new Map<string, string>();
-  function imageUrl(postId: string, blob: Uint8Array): string {
+  function imageUrl(postId: string, blob: Uint8Array<ArrayBuffer>): string {
     if (!blobUrlCache.has(postId)) {
       blobUrlCache.set(postId, URL.createObjectURL(new Blob([blob], { type: 'image/jpeg' })));
     }
@@ -73,15 +81,22 @@
   }
 
   async function likePost(post: Post) {
+    if (!me) return;
     await updatePost({
       ...post,
-      likeCount: post.likeCount + 1,
+      likes: toggle(post.likes, me),
       lastInteractionAt: Date.now()
     });
   }
 
   async function carryPost(post: Post) {
-    await updatePost({ ...post, isCarried: true, reshareCount: post.reshareCount + 1, lastInteractionAt: Date.now() });
+    if (!me) return;
+    await updatePost({
+      ...post,
+      isCarried: true,
+      reshares: add(post.reshares, me),
+      lastInteractionAt: Date.now()
+    });
   }
 
   async function hidePost(post: Post) {
@@ -186,17 +201,17 @@
         {/if}
 
         <div class="post-actions">
-          <button onclick={() => likePost(post)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <button onclick={() => likePost(post)} aria-label="Like" aria-pressed={me ? has(post.likes, me) : false}>
+            <svg viewBox="0 0 24 24" fill={me && has(post.likes, me) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
-            {#if post.likeCount > 0}<span>{post.likeCount}</span>{/if}
+            {#if count(post.likes) > 0}<span>{count(post.likes)}</span>{/if}
           </button>
-          <button onclick={() => carryPost(post)}>
+          <button onclick={() => carryPost(post)} aria-label="Pass it on">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 17 20 12 15 7"/><path d="M4 12h16"/>
             </svg>
-            {#if post.reshareCount > 0}<span>{post.reshareCount}</span>{/if}
+            {#if count(post.reshares) > 0}<span>{count(post.reshares)}</span>{/if}
           </button>
           <button onclick={() => hidePost(post)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

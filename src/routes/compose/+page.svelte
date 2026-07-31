@@ -16,7 +16,6 @@
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
   let detectedUrl = $state('');
   let linkPreview = $state<{ url: string; title?: string; description?: string; image?: string } | null>(null);
-  let linkFetching = $state(false);
 
   const MAX_CHARS = 280;
   let charsUsed = $derived(text.length);
@@ -39,18 +38,11 @@
 
   const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
-  let urlDebounceTimer: ReturnType<typeof setTimeout>;
   $effect(() => {
-    const urls = text.match(URL_REGEX);
-    const firstUrl = urls?.[0] ?? '';
+    const firstUrl = text.match(URL_REGEX)?.[0] ?? '';
     if (firstUrl !== detectedUrl) {
       detectedUrl = firstUrl;
-      clearTimeout(urlDebounceTimer);
-      if (firstUrl) {
-        urlDebounceTimer = setTimeout(() => fetchLinkPreview(firstUrl), 600);
-      } else {
-        linkPreview = null;
-      }
+      linkPreview = firstUrl ? buildLinkPreview(firstUrl) : null;
     }
   });
 
@@ -68,27 +60,25 @@
     textareaEl.style.height = Math.min(textareaEl.scrollHeight, window.innerHeight * 0.5) + 'px';
   }
 
-  async function fetchLinkPreview(url: string) {
-    linkFetching = true;
+  /**
+   * Build the preview locally from the URL alone.
+   *
+   * This deliberately makes no network request. Fetching Open Graph tags meant
+   * routing every URL the user typed — keystroke-debounced, before they had
+   * decided to post — through a third-party CORS proxy, which is exactly the
+   * "no cloud" promise on the home screen being quietly broken. A domain and
+   * path are enough to make the card recognisable, and cost nothing.
+   */
+  function buildLinkPreview(url: string) {
     try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
-      const html = await resp.text();
-
-      const getOg = (prop: string) => {
-        const m = html.match(new RegExp(`<meta[^>]*property=["']og:${prop}["'][^>]*content=["']([^"']*)["']`, 'i'))
-          || html.match(new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*property=["']og:${prop}["']`, 'i'));
-        return m?.[1] ?? '';
+      const parsed = new URL(url);
+      const path = parsed.pathname === '/' ? '' : decodeURIComponent(parsed.pathname);
+      return {
+        url,
+        title: path.replace(/[-_/]+/g, ' ').trim().slice(0, 120) || undefined
       };
-      const title = getOg('title') || html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || '';
-      const description = getOg('description');
-      const image = getOg('image');
-
-      linkPreview = { url, title: title.slice(0, 120), description: description.slice(0, 200), image };
     } catch {
-      linkPreview = { url };
-    } finally {
-      linkFetching = false;
+      return { url };
     }
   }
 
@@ -97,7 +87,7 @@
     catch { return url; }
   }
 
-  async function compressImage(file: File): Promise<Uint8Array> {
+  async function compressImage(file: File): Promise<Uint8Array<ArrayBuffer>> {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -147,7 +137,7 @@
     const { deviceId } = await getOrCreateIdentity();
     const now = Date.now();
 
-    let imageBlob: Uint8Array | undefined;
+    let imageBlob: Uint8Array<ArrayBuffer> | undefined;
     if (imageFile) {
       imageBlob = await compressImage(imageFile);
     }
@@ -161,9 +151,9 @@
       linkPreview: linkPreview ?? undefined,
       createdAt: now,
       lastInteractionAt: now,
-      likeCount: 0,
-      reshareCount: 0,
-      derankCount: 0,
+      likes: {},
+      reshares: {},
+      deranks: {},
       pinned: false,
       isFeatured: false,
       isEphemeral,
@@ -210,7 +200,7 @@
       oninput={autoResize}
     ></textarea>
 
-    {#if imagePreviewUrl || linkPreview || linkFetching}
+    {#if imagePreviewUrl || linkPreview}
       <div class="compose-attachments">
         {#if imagePreviewUrl}
           <div class="compose-image-preview animate-in">
@@ -249,8 +239,6 @@
               </svg>
             </button>
           </div>
-        {:else if linkFetching}
-          <p class="text-xs text-tertiary pulse" style="padding: 8px 0;">loading preview...</p>
         {/if}
       </div>
     {/if}

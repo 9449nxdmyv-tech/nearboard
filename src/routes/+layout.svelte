@@ -8,8 +8,10 @@
 
   let { children } = $props();
 
-  onMount(async () => {
-    await getOrCreateIdentity();
+  onMount(() => {
+    // Fire-and-forget async setup; the teardown below must be returned
+    // synchronously or Svelte cannot use it (an async callback returns a Promise).
+    getOrCreateIdentity();
     initInstallPrompt();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js');

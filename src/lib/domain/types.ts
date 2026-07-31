@@ -1,3 +1,5 @@
+import type { EngagementSet } from './engagement';
+
 export interface Hub {
   hubId: string;
   name: string;
@@ -11,7 +13,7 @@ export interface Post {
   hubId: string;
   authorId: string; // deviceId of author
   text: string; // max 280 chars
-  imageBlob?: Uint8Array; // compressed, ≤150KB, max 720px longest side
+  imageBlob?: Uint8Array<ArrayBuffer>; // compressed, ≤150KB, max 720px longest side
   linkPreview?: {
     url: string;
     title?: string;
@@ -20,9 +22,13 @@ export interface Post {
   };
   createdAt: number;
   lastInteractionAt: number;
-  likeCount: number;
-  reshareCount: number;
-  derankCount: number;
+  /**
+   * Engagement keyed by author so it converges over a mesh — see
+   * $lib/domain/engagement. Read counts via `count()`, never `Object.keys().length`.
+   */
+  likes: EngagementSet;
+  reshares: EngagementSet;
+  deranks: EngagementSet;
   pinned: boolean;
   isFeatured: boolean; // future monetization hook
   isEphemeral: boolean;

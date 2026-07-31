@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { saveHub } from '$lib/db/localDb';
   import { loadHubs } from '$lib/stores/hubs';
+  import { deriveHubId, hubJoinUrl } from '$lib/domain/hubId';
   import type { Hub } from '$lib/domain/types';
 
   let name = $state('');
@@ -13,7 +14,9 @@
     if (!name.trim()) return;
 
     const hub: Hub = {
-      hubId: crypto.randomUUID(),
+      // Derived from the name, so anyone who knows the name reaches this
+      // same board rather than creating a parallel one.
+      hubId: await deriveHubId(name),
       name: name.trim(),
       description: description.trim() || undefined,
       createdAt: Date.now(),
@@ -26,11 +29,14 @@
 
     try {
       const QRCode = (await import('qrcode')).default;
-      qrDataUrl = await QRCode.toDataURL('https://nearboard.app', {
-        width: 200,
-        margin: 2,
-        color: { dark: '#ccc', light: '#0a0a0a' }
-      });
+      qrDataUrl = await QRCode.toDataURL(
+        hubJoinUrl(location.origin, hub.hubId, hub.name),
+        {
+          width: 200,
+          margin: 2,
+          color: { dark: '#ccc', light: '#0a0a0a' }
+        }
+      );
     } catch {
       // QR generation is optional
     }
@@ -78,7 +84,8 @@
     {/if}
 
     <p class="text-xs text-tertiary mb-6" style="max-width: 280px; margin-inline: auto; line-height: 1.6;">
-      v1 hubs are local to this device. BLE advertising coming in a future update.
+      Anyone who scans this — or types the same hub name — reaches this board.
+      Posts sync over Bluetooth when you are near each other.
     </p>
 
     <button class="primary w-full" onclick={() => goto(`/hub/${createdHub!.hubId}`)}>

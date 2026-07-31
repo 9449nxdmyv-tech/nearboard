@@ -43,4 +43,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
+    <!--
+      Required from API 31 to advertise as a peripheral. Without it the device
+      can only ever act as a central, which limits it to talking to a dedicated
+      hub rather than meshing with other phones.
+    -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- BLE is the entire transport; the app is not useful without it. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 </manifest>

@@ -61,14 +61,40 @@ const CHAR_ENGAGEMENT     = '0000dea500001000800000805f9b34fb';
 
 const MAX_CHUNK = 512;
 
-// ---- Shared state for chunked response ----
+// Reject an upload stream that declares or accumulates more than this.
+// Bounds memory against a malformed or hostile client.
+const MAX_UPLOAD_BYTES = 1024 * 1024; // 1 MiB
+
+// ---- Connection state ----
+//
+// bleno's peripheral role serves a single connected central at a time, and its
+// read/write callbacks carry no client identity — so this is per-connection
+// state, reset on every accept/disconnect rather than keyed by address.
+//
+// Both directions are length-prefixed: a 4-byte big-endian uint32 header
+// precedes the payload. That makes framing explicit instead of relying on
+// "keep parsing until JSON.parse happens to succeed", which cannot distinguish
+// a truncated stream from a complete one.
 
 let responseBuffer = Buffer.alloc(0);
 let responseOffset = 0;
 
-// ---- Shared state for chunked upload ----
-
 let uploadBuffer = Buffer.alloc(0);
+let uploadExpected = null; // total payload bytes declared by the header, or null
+
+function resetConnectionState() {
+  responseBuffer = Buffer.alloc(0);
+  responseOffset = 0;
+  uploadBuffer = Buffer.alloc(0);
+  uploadExpected = null;
+}
+
+/** Prefix a payload with its 4-byte big-endian length */
+function frame(payload) {
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(payload.length, 0);
+  return Buffer.concat([header, payload]);
+}
 
 // ---- Characteristics ----
 
@@ -100,7 +126,7 @@ const postRequestChar = new bleno.Characteristic({
 
     const filtered = posts.filter(p => p.createdAt > since && !p.isHidden);
     const json = JSON.stringify(filtered);
-    responseBuffer = Buffer.from(json, 'utf-8');
+    responseBuffer = frame(Buffer.from(json, 'utf-8'));
     responseOffset = 0;
 
     log('write', 'POST_REQUEST', `since=${since}, returning ${filtered.length} posts (${responseBuffer.length} bytes)`);
@@ -135,21 +161,55 @@ const postUploadChar = new bleno.Characteristic({
   onWriteRequest(data, offset, withoutResponse, callback) {
     uploadBuffer = Buffer.concat([uploadBuffer, data]);
 
-    try {
-      const json = uploadBuffer.toString('utf-8');
-      const post = JSON.parse(json);
+    // Read the length header once we have all 4 bytes of it
+    if (uploadExpected === null && uploadBuffer.length >= 4) {
+      uploadExpected = uploadBuffer.readUInt32BE(0);
+      uploadBuffer = uploadBuffer.subarray(4);
 
+      if (uploadExpected > MAX_UPLOAD_BYTES) {
+        log('write', 'POST_UPLOAD', `declared ${uploadExpected}B exceeds limit, dropping`);
+        uploadBuffer = Buffer.alloc(0);
+        uploadExpected = null;
+        callback(bleno.Characteristic.RESULT_UNLIKELY_ERROR);
+        return;
+      }
+    }
+
+    // Guard against a stream that never declares a header or overruns it
+    if (uploadBuffer.length > MAX_UPLOAD_BYTES) {
+      log('write', 'POST_UPLOAD', `buffer overflow at ${uploadBuffer.length}B, dropping`);
+      uploadBuffer = Buffer.alloc(0);
+      uploadExpected = null;
+      callback(bleno.Characteristic.RESULT_UNLIKELY_ERROR);
+      return;
+    }
+
+    // Still accumulating
+    if (uploadExpected === null || uploadBuffer.length < uploadExpected) {
+      log('write', 'POST_UPLOAD', `chunk ${data.length}B, ${uploadBuffer.length}/${uploadExpected ?? '?'}B`);
+      callback(bleno.Characteristic.RESULT_SUCCESS);
+      return;
+    }
+
+    // Complete frame — consume exactly the declared length
+    const payload = uploadBuffer.subarray(0, uploadExpected);
+    const rest = uploadBuffer.subarray(uploadExpected);
+    uploadBuffer = Buffer.from(rest);
+    uploadExpected = null;
+
+    try {
+      const post = JSON.parse(payload.toString('utf-8'));
       const posts = loadPosts();
       posts.push(post);
       savePosts(posts);
-
       log('write', 'POST_UPLOAD', `stored post "${post.text?.slice(0, 40)}..." by ${post.authorId?.slice(0, 8)}`);
-      uploadBuffer = Buffer.alloc(0);
-    } catch {
-      log('write', 'POST_UPLOAD', `chunk ${data.length}B, accumulated ${uploadBuffer.length}B`);
+      callback(bleno.Characteristic.RESULT_SUCCESS);
+    } catch (e) {
+      // A bad frame is discarded on its own; the buffer is already advanced
+      // past it, so it cannot poison subsequent uploads.
+      log('write', 'POST_UPLOAD', `malformed frame discarded: ${e.message}`);
+      callback(bleno.Characteristic.RESULT_UNLIKELY_ERROR);
     }
-
-    callback(bleno.Characteristic.RESULT_SUCCESS);
   }
 });
 
@@ -157,25 +217,47 @@ const postUploadChar = new bleno.Characteristic({
 const engagementChar = new bleno.Characteristic({
   uuid: CHAR_ENGAGEMENT,
   properties: ['write', 'writeWithoutResponse'],
+  // Payload: "postId|authorId|kind|on"
+  //
+  // Engagement is keyed by author rather than sent as a delta. A delta is
+  // unbounded (any client could write +999999) and cannot be deduplicated, so
+  // the same like replayed over two mesh paths would be counted twice.
   onWriteRequest(data, offset, withoutResponse, callback) {
-    const str = data.toString('utf-8');
-    const parts = str.split('|');
-    const postId = parts[0];
-    const deltaLike = parseInt(parts[1] || '0', 10);
-    const deltaReshare = parseInt(parts[2] || '0', 10);
+    const [postId, authorId, kind, on] = data.toString('utf-8').split('|');
+
+    const FIELDS = { like: 'likes', reshare: 'reshares', derank: 'deranks' };
+    const field = FIELDS[kind];
+
+    if (!postId || !authorId || !field) {
+      log('write', 'ENGAGEMENT', `rejected malformed payload (kind=${kind})`);
+      callback(bleno.Characteristic.RESULT_UNLIKELY_ERROR);
+      return;
+    }
 
     const posts = loadPosts();
     const post = posts.find(p => p.postId === postId);
-    if (post) {
-      post.likeCount = (post.likeCount || 0) + deltaLike;
-      post.reshareCount = (post.reshareCount || 0) + deltaReshare;
-      post.lastInteractionAt = Date.now();
-      savePosts(posts);
-      log('write', 'ENGAGEMENT', `post ${postId.slice(0, 8)}... +${deltaLike} likes, +${deltaReshare} reshares`);
-    } else {
-      log('write', 'ENGAGEMENT', `post ${postId} not found`);
+    if (!post) {
+      log('write', 'ENGAGEMENT', `post ${postId.slice(0, 8)}... not found`);
+      callback(bleno.Characteristic.RESULT_SUCCESS);
+      return;
     }
 
+    const now = Date.now();
+    const set = post[field] && typeof post[field] === 'object' ? post[field] : {};
+    const existing = set[authorId];
+    const state = on === '0' ? 0 : 1;
+
+    // Last write wins per author; ties resolve to `on` so every device agrees.
+    if (!existing || now > existing[0] || (now === existing[0] && state === 1)) {
+      set[authorId] = [now, state];
+    }
+
+    post[field] = set;
+    post.lastInteractionAt = now;
+    savePosts(posts);
+
+    const total = Object.values(set).filter(e => e[1] === 1).length;
+    log('write', 'ENGAGEMENT', `post ${postId.slice(0, 8)}... ${kind}=${state} by ${authorId.slice(0, 8)} (${total} total)`);
     callback(bleno.Characteristic.RESULT_SUCCESS);
   }
 });
@@ -221,13 +303,12 @@ bleno.on('stateChange', (state) => {
 
 bleno.on('accept', (clientAddress) => {
   log('ble', 'connect', clientAddress);
-  responseBuffer = Buffer.alloc(0);
-  responseOffset = 0;
-  uploadBuffer = Buffer.alloc(0);
+  resetConnectionState();
 });
 
 bleno.on('disconnect', (clientAddress) => {
   log('ble', 'disconnect', clientAddress);
+  resetConnectionState();
   // Re-start advertising after disconnect so new clients can find us
   bleno.startAdvertising(hubName, [SERVICE_UUID], (err) => {
     if (err) {

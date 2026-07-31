@@ -9,6 +9,14 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    // Tests run through `node --test` type-stripping, which resolves imports
+    // literally and so requires the .ts extension.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    // Type-stripping runtimes cannot handle syntax that emits code (enum,
+    // parameter properties, namespaces). Fail at typecheck rather than at
+    // runtime under `node --test`.
+    "erasableSyntaxOnly": true
   }
 }

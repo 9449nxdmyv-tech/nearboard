@@ -1,4 +1,6 @@
 import type { Post } from '$lib/domain/types';
+import type { EngagementKind } from '$lib/domain/engagement';
+import { serializePost, deserializePosts } from '$lib/domain/wire';
 import {
   SERVICE_UUID,
   CHAR_HUB_META,
@@ -7,17 +9,21 @@ import {
   CHAR_POST_UPLOAD,
   CHAR_ENGAGEMENT
 } from './bluetooth';
+import { frameString, readFramed } from './framing';
 
 const MAX_CHUNK = 512; // BLE ATT MTU safe limit
 
-/** Encode string → Uint8Array (UTF-8) */
-function encode(s: string): Uint8Array {
-  return new TextEncoder().encode(s);
+/** Encode string → ArrayBuffer (UTF-8), ready for writeValue */
+function encode(s: string): ArrayBuffer {
+  const bytes = new TextEncoder().encode(s);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
-/** Decode DataView → string (UTF-8) */
+/** Decode DataView → string (UTF-8), honouring the view's window into its buffer */
 function decode(dv: DataView): string {
-  return new TextDecoder().decode(dv.buffer);
+  return new TextDecoder().decode(
+    new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)
+  );
 }
 
 /**
@@ -78,44 +84,32 @@ export class HubConnection {
     const reqChar = await this.service!.getCharacteristic(CHAR_POST_REQUEST);
     await reqChar.writeValue(buf);
 
-    // Read response (may be chunked — keep reading until empty or complete JSON)
+    // Read the length-prefixed response: 4-byte big-endian header, then payload.
     const resChar = await this.service!.getCharacteristic(CHAR_POST_RESPONSE);
-    let json = '';
-    // Simple chunked read: keep reading until we get valid JSON
-    for (let i = 0; i < 100; i++) {
-      const chunk = await resChar.readValue();
-      const text = decode(chunk);
-      if (!text) break;
-      json += text;
-      try {
-        return JSON.parse(json) as Post[];
-      } catch {
-        // Incomplete JSON, continue reading chunks
-      }
-    }
-
-    return json ? (JSON.parse(json) as Post[]) : [];
+    const framed = await readFramed(() => resChar.readValue());
+    return framed ? deserializePosts(framed) : [];
   }
 
   /** Upload a post to the hub (chunked write) */
   async uploadPost(post: Post): Promise<void> {
     const char = await this.service!.getCharacteristic(CHAR_POST_UPLOAD);
-    const data = encode(JSON.stringify(post));
+    const data = frameString(serializePost(post));
 
-    for (let offset = 0; offset < data.length; offset += MAX_CHUNK) {
+    for (let offset = 0; offset < data.byteLength; offset += MAX_CHUNK) {
       const chunk = data.slice(offset, offset + MAX_CHUNK);
       await char.writeValue(chunk);
     }
   }
 
-  /** Send engagement: "postId|deltaLike|deltaReshare" */
+  /** Send engagement: "postId|authorId|kind|on" */
   async sendEngagement(
     postId: string,
-    deltaLike: number,
-    deltaReshare: number = 0
+    authorId: string,
+    kind: EngagementKind,
+    on: boolean = true
   ): Promise<void> {
     const char = await this.service!.getCharacteristic(CHAR_ENGAGEMENT);
-    const payload = `${postId}|${deltaLike}|${deltaReshare}`;
+    const payload = `${postId}|${authorId}|${kind}|${on ? 1 : 0}`;
     await char.writeValue(encode(payload));
   }
 }

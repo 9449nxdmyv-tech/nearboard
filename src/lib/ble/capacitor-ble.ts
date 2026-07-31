@@ -5,6 +5,10 @@
 
 import { BleClient, numberToUUID } from '@capacitor-community/bluetooth-le';
 import { SERVICE_UUID, CHAR_HUB_META, CHAR_POST_REQUEST, CHAR_POST_RESPONSE, CHAR_POST_UPLOAD, CHAR_ENGAGEMENT } from './bluetooth';
+import { frameString, readFramed } from './framing';
+import type { EngagementKind } from '$lib/domain/engagement';
+import type { Post } from '$lib/domain/types';
+import { serializePost, deserializePosts } from '$lib/domain/wire';
 
 const MAX_CHUNK = 512;
 
@@ -31,12 +35,14 @@ export async function requestDevice(): Promise<string> {
 /** Encode string to DataView */
 function encodeToDataView(s: string): DataView {
   const encoded = new TextEncoder().encode(s);
-  return new DataView(encoded.buffer);
+  return new DataView(encoded.buffer, encoded.byteOffset, encoded.byteLength);
 }
 
-/** Decode DataView to string */
+/** Decode DataView to string, honouring the view's window into its buffer */
 function decodeFromDataView(dv: DataView): string {
-  return new TextDecoder().decode(dv.buffer);
+  return new TextDecoder().decode(
+    new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)
+  );
 }
 
 export class CapacitorHubConnection {
@@ -77,7 +83,7 @@ export class CapacitorHubConnection {
     };
   }
 
-  async getPosts(lastSeenTimestamp: number): Promise<any[]> {
+  async getPosts(lastSeenTimestamp: number): Promise<Post[]> {
     // Write 8-byte big-endian timestamp
     const buf = new ArrayBuffer(8);
     const dv = new DataView(buf);
@@ -85,35 +91,30 @@ export class CapacitorHubConnection {
 
     await BleClient.write(this.deviceId!, SERVICE_UUID, CHAR_POST_REQUEST, dv);
 
-    // Chunked read
-    let json = '';
-    for (let i = 0; i < 100; i++) {
-      const chunk = await BleClient.read(this.deviceId!, SERVICE_UUID, CHAR_POST_RESPONSE);
-      const text = decodeFromDataView(chunk);
-      if (!text) break;
-      json += text;
-      try {
-        return JSON.parse(json);
-      } catch {
-        // Incomplete, continue
-      }
-    }
-
-    return json ? JSON.parse(json) : [];
+    // Read the length-prefixed response: 4-byte big-endian header, then payload.
+    const framed = await readFramed(() =>
+      BleClient.read(this.deviceId!, SERVICE_UUID, CHAR_POST_RESPONSE)
+    );
+    return framed ? deserializePosts(framed) : [];
   }
 
-  async uploadPost(post: any): Promise<void> {
-    const data = new TextEncoder().encode(JSON.stringify(post));
+  async uploadPost(post: Post): Promise<void> {
+    const data = new Uint8Array(frameString(serializePost(post)));
 
-    for (let offset = 0; offset < data.length; offset += MAX_CHUNK) {
+    for (let offset = 0; offset < data.byteLength; offset += MAX_CHUNK) {
       const chunk = data.slice(offset, offset + MAX_CHUNK);
       const dv = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       await BleClient.write(this.deviceId!, SERVICE_UUID, CHAR_POST_UPLOAD, dv);
     }
   }
 
-  async sendEngagement(postId: string, deltaLike: number, deltaReshare: number = 0): Promise<void> {
-    const payload = `${postId}|${deltaLike}|${deltaReshare}`;
+  async sendEngagement(
+    postId: string,
+    authorId: string,
+    kind: EngagementKind,
+    on: boolean = true
+  ): Promise<void> {
+    const payload = `${postId}|${authorId}|${kind}|${on ? 1 : 0}`;
     await BleClient.write(this.deviceId!, SERVICE_UUID, CHAR_ENGAGEMENT, encodeToDataView(payload));
   }
 }
