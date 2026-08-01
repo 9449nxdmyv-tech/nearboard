@@ -27,29 +27,51 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/** Build assets carry a content hash, so their URL changes when they change. */
+const IMMUTABLE = new Set(build);
+
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+  if (url.origin !== location.origin) return;
+
+  const isNavigation = event.request.mode === 'navigate';
+  const isImmutable = IMMUTABLE.has(url.pathname);
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
 
-      return fetch(event.request).then((response) => {
-        // Don't cache non-ok or opaque responses
-        if (!response || response.status !== 200) return response;
-
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      });
-    }).catch(() => {
-      // Offline fallback: return the shell for navigation requests
-      if (event.request.mode === 'navigate') {
-        return caches.match('/index.html') as Promise<Response>;
+      // Hashed assets can be served from cache forever — a new build produces a
+      // new URL, so there is nothing stale to serve.
+      if (isImmutable) {
+        const hit = await cache.match(event.request);
+        if (hit) return hit;
       }
-      return new Response('Offline', { status: 503 });
-    })
+
+      // Everything else is network-first.
+      //
+      // Cache-first on the app shell means a rebuilt app keeps serving the old
+      // bundle until storage is cleared by hand — an update that silently does
+      // not apply. That was observed on device: a fresh install still rendered
+      // the previous build until `pm clear`.
+      try {
+        const response = await fetch(event.request);
+        if (response && response.status === 200) {
+          cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch {
+        const hit = await cache.match(event.request);
+        if (hit) return hit;
+        if (isNavigation) {
+          const shell = await cache.match('/index.html');
+          if (shell) return shell;
+        }
+        return new Response('Offline', { status: 503 });
+      }
+    })()
   );
 });
 

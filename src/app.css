@@ -576,3 +576,23 @@ label {
 .mesh-status.live .mesh-dot {
   background: var(--accent);
 }
+
+/* Blocker card — something needs fixing, with the fix attached */
+.mesh-blocker {
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 2px;
+  padding: 14px;
+}
+
+.mesh-blocker-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.mesh-blocker-detail {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, var(--text-tertiary));
+}

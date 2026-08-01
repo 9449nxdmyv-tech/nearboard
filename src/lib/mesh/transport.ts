@@ -39,9 +39,22 @@ import { PacketType } from './packet.ts';
  * old build and one running the mesh build do not discover each other and then
  * fail at the first read — they simply do not match.
  */
-export const MESH_SERVICE_UUID = '0000be50-0000-1000-8000-00805f9b34fb';
-export const CHAR_INBOUND = '0000be51-0000-1000-8000-00805f9b34fb';
-export const CHAR_OUTBOUND = '0000be52-0000-1000-8000-00805f9b34fb';
+/**
+ * Random 128-bit UUIDs, deliberately outside the Bluetooth SIG base range.
+ *
+ * The previous values were `0000be5x-0000-1000-8000-00805f9b34fb`, which look
+ * like ordinary UUIDs but sit inside the SIG base range. Anything in that range
+ * is transmitted over the air in compressed 16-bit form — a scanner sees
+ * `be50`, not the full UUID. A scan filter built from the 128-bit string then
+ * fails to match the 16-bit advertisement, so both devices work perfectly and
+ * never see each other.
+ *
+ * That range is also reserved for SIG-assigned values; borrowing from it risks
+ * colliding with a real assigned service. Custom services belong outside it.
+ */
+export const MESH_SERVICE_UUID = 'edbd67ef-dc53-41c2-a6ac-cd4d438831d3';
+export const CHAR_INBOUND = 'edbd0001-dc53-41c2-a6ac-cd4d438831d3';
+export const CHAR_OUTBOUND = 'edbd0002-dc53-41c2-a6ac-cd4d438831d3';
 
 /** What a platform BLE implementation must provide. */
 export interface PacketLink {

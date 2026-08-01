@@ -5,6 +5,7 @@
   import { hubs, loadHubs } from '$lib/stores/hubs';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
   import { mesh } from '$lib/mesh/service';
+  import type { FixAction } from '$lib/mesh/readiness';
   import { canInstall, triggerInstall } from '$lib/pwa/installPrompt';
 
   const isNative = Capacitor.isNativePlatform();
@@ -21,6 +22,30 @@
     // Native devices discover peers continuously; there is nothing to press.
     if (isNative) await ensureMeshStarted();
   });
+
+  // Ticks so "last seen 4m ago" stays truthful without a reload.
+  let now = $state(Date.now());
+  onMount(() => {
+    const t = setInterval(() => { now = Date.now(); }, 30_000);
+    return () => clearInterval(t);
+  });
+
+  const lastSeen = $derived.by(() => {
+    const at = $meshStatus.lastPeerAt;
+    if (!at) return '';
+    const mins = Math.floor((now - at) / 60_000);
+    if (mins < 1) return 'moments ago';
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.floor(mins / 60)}h ago`;
+  });
+
+  async function fixBlocker(action: FixAction) {
+    try {
+      await mesh.resolveBlocker(action);
+    } catch (e: any) {
+      error = e?.message ?? 'Could not open settings';
+    }
+  }
 
   /**
    * Web has no peripheral role and no background scan, so a browser can only
@@ -65,24 +90,45 @@
   </div>
 {/if}
 
-<!-- Mesh state. On native this is ambient: the device is always looking. -->
-<div class="mesh-status mt-6" class:live={$meshStatus.peerCount > 0}>
-  <span class="mesh-dot" class:pulse={$meshStatus.running && $meshStatus.peerCount === 0}></span>
-  {#if !$meshStatus.running}
-    <span class="text-sm text-tertiary">mesh off</span>
-  {:else if $meshStatus.peerCount === 0}
-    <span class="text-sm text-tertiary">looking for people nearby...</span>
-  {:else}
-    <span class="text-sm">
-      {$meshStatus.peerCount} {$meshStatus.peerCount === 1 ? 'person' : 'people'} nearby
-    </span>
-  {/if}
-</div>
+<!--
+  Mesh state. Each phase is distinguishable and, when something is wrong, comes
+  with the one tap that fixes it. A resting state that cannot be told apart from
+  a fault is the thing this replaced.
+-->
+{#if $meshStatus.phase === 'blocked' && $meshStatus.blocker}
+  {@const blocker = $meshStatus.blocker}
+  <div class="mesh-blocker mt-6">
+    <p class="mesh-blocker-title">{blocker.title}</p>
+    <p class="mesh-blocker-detail">{blocker.detail}</p>
+    {#if blocker.action && blocker.actionLabel}
+      <button class="primary w-full mt-3" onclick={() => fixBlocker(blocker.action!)}>
+        {blocker.actionLabel}
+      </button>
+    {/if}
+  </div>
+{:else}
+  <div class="mesh-status mt-6" class:live={$meshStatus.phase === 'connected'}>
+    <span class="mesh-dot" class:pulse={$meshStatus.phase === 'searching'}></span>
+    {#if $meshStatus.phase === 'idle'}
+      <span class="text-sm text-tertiary">mesh off</span>
+    {:else if $meshStatus.phase === 'checking'}
+      <span class="text-sm text-tertiary">checking bluetooth...</span>
+    {:else if $meshStatus.phase === 'searching'}
+      <span class="text-sm text-tertiary">
+        no one nearby yet{lastSeen ? ` · last seen ${lastSeen}` : ''}
+      </span>
+    {:else}
+      <span class="text-sm">
+        {$meshStatus.peerCount} {$meshStatus.peerCount === 1 ? 'person' : 'people'} nearby
+      </span>
+    {/if}
+  </div>
+{/if}
 
-{#if $meshStatus.running && !$meshStatus.advertising && isNative}
+{#if isNative && !$meshStatus.canAdvertise && $meshStatus.phase !== 'blocked'}
   <p class="text-xs text-tertiary mt-2" style="line-height: 1.5;">
-    This device can find others but cannot be found by them — its Bluetooth
-    chipset does not support advertising.
+    You can find others, but they can't find you — this device's Bluetooth
+    can't advertise. Posts still sync with anyone you connect to.
   </p>
 {/if}
 
@@ -99,8 +145,6 @@
 
 {#if error}
   <p class="text-sm text-accent mt-2">{error}</p>
-{:else if $meshStatus.error}
-  <p class="text-xs text-tertiary mt-2">{$meshStatus.error}</p>
 {/if}
 
 {#if $hubs.length > 0}

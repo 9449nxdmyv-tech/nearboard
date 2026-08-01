@@ -83,6 +83,26 @@
     return blobUrlCache.get(postId)!;
   }
 
+  let overInternet = $state(false);
+
+  /**
+   * Opt in or out of carrying this hub over the internet.
+   *
+   * Off by default. Local-first is the promise on the home screen, so reaching
+   * past Bluetooth is a deliberate choice — and posts are encrypted with a key
+   * derived from the hub name before they leave, so relays hold ciphertext.
+   */
+  async function toggleInternet() {
+    if (!hub) return;
+    if (overInternet) {
+      await mesh.leaveInternet(hub.hubId);
+      overInternet = false;
+    } else {
+      await mesh.joinOverInternet(hub.hubId, hub.name);
+      overInternet = mesh.isOnInternet(hub.hubId);
+    }
+  }
+
   /** Persist locally, then push the merged post onto the mesh. */
   async function saveAndPublish(updated: Post) {
     await updatePost(updated);
@@ -133,12 +153,23 @@
     {#if hub.description}
       <p class="text-xs text-tertiary text-center mt-1">{hub.description}</p>
     {/if}
+    <div class="text-center mt-2">
+      <button class="ghost text-xs" onclick={toggleInternet} style="padding: 4px 8px;">
+        {overInternet ? '🌐 reaching beyond Bluetooth' : '⌁ Bluetooth only'}
+      </button>
+    </div>
     <p class="text-xs text-tertiary text-center mt-1">
-      {#if $meshStatus.peerCount > 0}
+      {#if $meshStatus.phase === 'connected'}
         syncing with {$meshStatus.peerCount}
         {$meshStatus.peerCount === 1 ? 'person' : 'people'}
+      {:else if $meshStatus.phase === 'blocked'}
+        <span style="color: var(--accent);">
+          {$meshStatus.blocker?.title} — fix it on the home screen
+        </span>
+      {:else if $meshStatus.phase === 'searching'}
+        no one nearby — your posts will sync when someone is
       {:else}
-        no one nearby — posts will sync when someone is
+        posts are saved here until the mesh starts
       {/if}
     </p>
   </div>

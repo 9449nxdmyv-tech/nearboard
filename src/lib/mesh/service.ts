@@ -19,8 +19,10 @@ import { MeshNode } from './router.ts';
 import { PacketChannel, MESH_SERVICE_UUID, CHAR_INBOUND, CHAR_OUTBOUND } from './transport.ts';
 import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
+import { NostrLink } from './nostr.ts';
 import { makePacket, PacketType, type Packet } from './packet.ts';
 
+import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
 import { getOrCreateIdentity } from '$lib/crypto/identity';
 import { toWire, fromWire, type WirePost } from '$lib/domain/wire';
 import { mergePost } from '$lib/domain/mergePost';
@@ -33,12 +35,40 @@ const isNative = Capacitor.isNativePlatform();
 const SCAN_INTERVAL_MS = 15_000;
 /** How long each scan window stays open. */
 const SCAN_DURATION_MS = 6_000;
+/** Idle gap between stopping a scan and connecting, so the stack settles. */
+const SCAN_SETTLE_MS = 600;
+/** Attempts per peer before giving up until the next sweep. */
+const CONNECT_ATTEMPTS = 3;
+/** Base backoff between connect attempts; multiplied by attempt number. */
+const CONNECT_RETRY_MS = 800;
+
+/**
+ * What the mesh is doing, as one value the UI can switch on.
+ *
+ * `searching` and `connected` are deliberately separate from `blocked`: the
+ * first two mean everything works and the room is simply quiet, the third means
+ * something needs fixing. Collapsing them is what made every failure look like
+ * an empty room.
+ */
+export type MeshPhase =
+  | 'idle' // not started yet
+  | 'checking' // preflight running
+  | 'blocked' // a precondition failed; see `blocker`
+  | 'searching' // healthy, nobody in range
+  | 'connected'; // healthy, at least one peer
 
 export interface MeshStatus {
-  running: boolean;
-  advertising: boolean;
+  phase: MeshPhase;
   peerCount: number;
-  error: string | null;
+  advertising: boolean;
+  canAdvertise: boolean;
+  blocker: Blocker | null;
+  /**
+   * When a peer was last connected, and when a packet last arrived. Silence
+   * with a timestamp is honest; silence alone cannot be told from a fault.
+   */
+  lastPeerAt: number | null;
+  lastPacketAt: number | null;
 }
 
 export type StatusListener = (status: MeshStatus) => void;
@@ -54,6 +84,9 @@ export class MeshService {
   private advertiser: MeshAdvertiser | null = null;
   private senderId = '';
 
+  /** Hubs currently carried over the internet, keyed by hubId. */
+  private internetLinks = new Map<string, NostrLink>();
+
   /** Peers we have an open channel to, so we do not connect twice. */
   private connected = new Set<string>();
   private scanTimer: ReturnType<typeof setInterval> | null = null;
@@ -62,10 +95,13 @@ export class MeshService {
   private postListeners = new Set<PostListener>();
 
   private status: MeshStatus = {
-    running: false,
-    advertising: false,
+    phase: 'idle',
     peerCount: 0,
-    error: null
+    advertising: false,
+    canAdvertise: true,
+    blocker: null,
+    lastPeerAt: null,
+    lastPacketAt: null
   };
 
   onStatus(listener: StatusListener): () => void {
@@ -84,22 +120,42 @@ export class MeshService {
     return { ...this.status };
   }
 
+  /** Is the mesh past preflight and actually running? */
+  private get isRunning(): boolean {
+    return this.status.phase === 'searching' || this.status.phase === 'connected';
+  }
+
   async start(): Promise<void> {
-    if (this.status.running) return;
+    if (this.isRunning || this.status.phase === 'checking') return;
+
+    // Preflight before anything else, so a missing precondition is reported as
+    // itself rather than surfacing later as an unexplained absence of peers.
+    this.setStatus({ phase: 'checking', blocker: null });
+    const blocker = await preflight();
+    if (blocker) {
+      this.setStatus({ phase: 'blocked', blocker });
+      return;
+    }
 
     const { deviceId } = await getOrCreateIdentity();
     this.senderId = senderIdFrom(deviceId);
     this.node = new MeshNode(this.senderId, {
-      onError: (e) => this.setStatus({ error: e.message })
+      onError: (e) => this.setStatus({ blocker: this.toBlocker(e) })
     });
 
     this.node.onDelivery((packet) => {
+      this.setStatus({ lastPacketAt: Date.now() });
       void this.handlePacket(packet);
     });
 
-    this.setStatus({ running: true, error: null });
+    this.setStatus({ phase: 'searching', blocker: null });
 
     if (isNative) {
+      // Advertising first, then scanning. Never both plus a connect attempt at
+      // once: Android's stack rejects a connection issued while a scan is live
+      // with "LE Create Connection attempt failed, status=0x12", surfacing as
+      // the generic GATT 133. `diagnoseScan` is deliberately not called here —
+      // running a second scan concurrently reproduces exactly that.
       await this.startAdvertising();
       await this.startScanning();
     }
@@ -109,7 +165,7 @@ export class MeshService {
   }
 
   async stop(): Promise<void> {
-    if (!this.status.running) return;
+    if (!this.isRunning) return;
 
     if (this.scanTimer) {
       clearInterval(this.scanTimer);
@@ -129,7 +185,7 @@ export class MeshService {
 
     this.connected.clear();
     this.node = null;
-    this.setStatus({ running: false, advertising: false, peerCount: 0 });
+    this.setStatus({ phase: "idle", advertising: false, peerCount: 0, blocker: null });
   }
 
   // ---- Publishing ----
@@ -160,19 +216,19 @@ export class MeshService {
       onPeerConnected: (peerId, link) => {
         if (this.connected.has(peerId)) return;
         const channel = new PacketChannel(link, peerId, (e) =>
-          this.setStatus({ error: e.message })
+          this.setStatus({ blocker: this.toBlocker(e) })
         );
         channel.start();
         this.node?.addPeer(peerId, channel);
         this.connected.add(peerId);
-        this.setStatus({ peerCount: this.node?.peerCount ?? 0 });
+        this.notePeerChange();
       },
       onPeerDisconnected: (peerId) => {
         this.node?.removePeer(peerId);
         this.connected.delete(peerId);
-        this.setStatus({ peerCount: this.node?.peerCount ?? 0 });
+        this.notePeerChange();
       },
-      onError: (e) => this.setStatus({ error: e.message })
+      onError: (e) => this.setStatus({ blocker: this.toBlocker(e) })
     });
 
     try {
@@ -182,24 +238,57 @@ export class MeshService {
         outboundUuid: CHAR_OUTBOUND,
         localName: 'nearboard'
       });
-      this.setStatus({ advertising: true });
+      this.setStatus({ advertising: true, canAdvertise: true });
     } catch (e) {
-      // Not every chipset supports the peripheral role. The device is still a
-      // useful mesh member as a pure central — it just cannot be discovered.
+      // Not every chipset supports the peripheral role. This is a capability
+      // limit, not a blocker: the device still works as a pure central, it just
+      // cannot be discovered. Recording it as `canAdvertise: false` lets the UI
+      // say so plainly instead of leaving the user wondering why nobody finds
+      // them.
       this.advertiser = null;
       this.setStatus({
         advertising: false,
-        error: `Cannot advertise: ${(e as Error).message}`
+        canAdvertise: false
       });
+      console.warn('Peripheral role unavailable:', (e as Error).message);
     }
   }
 
   // ---- Central role ----
 
   private async startScanning(): Promise<void> {
-    await BleClient.initialize({ androidNeverForLocation: true });
+    await BleClient.initialize({ androidNeverForLocation: false });
     await this.sweep();
     this.scanTimer = setInterval(() => void this.sweep(), SCAN_INTERVAL_MS);
+  }
+
+  /**
+   * Scan without a service filter and log everything in range.
+   *
+   * A filtered scan that returns nothing is ambiguous — it cannot distinguish
+   * "no peers here" from "our advertising is invisible" from "the filter is
+   * wrong". This separates them: if other devices appear but ours does not,
+   * the problem is on the advertising side.
+   */
+  async diagnoseScan(windowMs = 6000): Promise<string[]> {
+    const seen: string[] = [];
+    await BleClient.initialize({ androidNeverForLocation: false });
+    await BleClient.requestLEScan({ allowDuplicates: false }, (result) => {
+      const services = result.device.uuids ?? result.uuids ?? [];
+      seen.push(
+        `${result.device.deviceId} name=${result.device.name ?? result.localName ?? '?'} ` +
+          `rssi=${result.rssi ?? '?'} services=[${services.join(',')}]`
+      );
+    });
+    await new Promise((r) => setTimeout(r, windowMs));
+    try {
+      await BleClient.stopLEScan();
+    } catch {
+      // Already stopped.
+    }
+    console.log(`[mesh-diag] unfiltered scan saw ${seen.length} advertisements`);
+    for (const line of seen) console.log(`[mesh-diag] ${line}`);
+    return seen;
   }
 
   /** One scan window: look for peers, connect to any we do not already have. */
@@ -209,10 +298,12 @@ export class MeshService {
     const found = new Set<string>();
     try {
       await BleClient.requestLEScan({ services: [MESH_SERVICE_UUID] }, (result) => {
+        console.log(`[mesh-diag] filtered hit: ${result.device.deviceId} ${result.device.name ?? ''}`);
         found.add(result.device.deviceId);
       });
     } catch (e) {
-      this.setStatus({ error: `Scan failed: ${(e as Error).message}` });
+      this.setStatus({ blocker: this.toBlocker(e as Error, "Scan failed") });
+      console.log(`[mesh-diag] filtered scan failed: ${(e as Error).message}`);
       return;
     }
 
@@ -223,31 +314,116 @@ export class MeshService {
       // Already stopped.
     }
 
+    // The stack needs a moment after a scan before it will accept a connection.
+    // Issuing one immediately is the single most common cause of GATT 133 on
+    // Android, and it fails in a way that looks like the peer is unreachable.
+    await new Promise((r) => setTimeout(r, SCAN_SETTLE_MS));
+
+    // Strictly one at a time. Parallel connects contend for the same limited
+    // pool of GATT client interfaces and fail each other.
     for (const deviceId of found) {
       if (this.connected.has(deviceId)) continue;
       await this.connectTo(deviceId);
     }
   }
 
+  /**
+   * Connect, retrying on the transient failures Android produces routinely.
+   *
+   * GATT 133 is a generic "something went wrong" that very often succeeds on a
+   * second attempt — treating the first failure as final is why a peer that is
+   * plainly in range appears unreachable.
+   */
   private async connectTo(deviceId: string): Promise<void> {
     if (!this.node || this.connected.has(deviceId)) return;
 
-    // Claim the slot before awaiting, or a scan sweep that overlaps the connect
-    // will start a second connection to the same device.
+    // Claim the slot before awaiting, or an overlapping sweep starts a second
+    // connection to the same device.
     this.connected.add(deviceId);
 
+    for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+      try {
+        const link = await CapacitorPacketLink.connect(deviceId);
+        const channel = new PacketChannel(link, deviceId, (e) =>
+          this.setStatus({ blocker: this.toBlocker(e) })
+        );
+        channel.start();
+        this.node.addPeer(deviceId, channel);
+        this.notePeerChange();
+        return;
+      } catch (e) {
+        const message = (e as Error)?.message ?? String(e);
+        console.log(`[mesh] connect to ${deviceId} attempt ${attempt} failed: ${message}`);
+
+        // Leave the radio idle briefly before retrying; back-to-back attempts
+        // reproduce the same failure.
+        if (attempt < CONNECT_ATTEMPTS) {
+          try {
+            await BleClient.disconnect(deviceId);
+          } catch {
+            // Nothing to tear down.
+          }
+          await new Promise((r) => setTimeout(r, CONNECT_RETRY_MS * attempt));
+        }
+      }
+    }
+
+    this.connected.delete(deviceId);
+    console.log(`[mesh] giving up on ${deviceId} after ${CONNECT_ATTEMPTS} attempts`);
+  }
+
+  // ---- Internet transport ----
+
+  /**
+   * Join a hub's traffic over Nostr as well as Bluetooth.
+   *
+   * Off by default and per hub: local-first stays the default and reaching the
+   * internet is the user's choice. Payloads are encrypted with a key derived
+   * from the hub name before they leave the device, so relays store opaque
+   * blobs rather than readable posts.
+   *
+   * The relay becomes an ordinary peer, so `MeshNode` bridges the two
+   * transports without knowing the difference — a post that arrives over
+   * Bluetooth is republished to Nostr and vice versa, letting a phone in the
+   * room carry the board to people who are not.
+   */
+  async joinOverInternet(hubId: string, hubName: string): Promise<void> {
+    if (!this.node || this.internetLinks.has(hubId)) return;
+
+    const link = new NostrLink({
+      hubId,
+      hubName,
+      onError: (e) => console.warn('[mesh] nostr:', e.message)
+    });
+
     try {
-      const link = await CapacitorPacketLink.connect(deviceId);
-      const channel = new PacketChannel(link, deviceId, (e) =>
-        this.setStatus({ error: e.message })
+      await link.start();
+      const peerId = `nostr:${hubId}`;
+      const channel = new PacketChannel(link, peerId, (e) =>
+        this.setStatus({ blocker: this.toBlocker(e) })
       );
       channel.start();
-      this.node.addPeer(deviceId, channel);
-      this.setStatus({ peerCount: this.node.peerCount, error: null });
+      this.node.addPeer(peerId, channel);
+      this.internetLinks.set(hubId, link);
+      this.notePeerChange();
     } catch (e) {
-      this.connected.delete(deviceId);
-      this.setStatus({ error: `Connect failed: ${(e as Error).message}` });
+      console.warn('[mesh] could not join over the internet:', (e as Error).message);
     }
+  }
+
+  /** Stop carrying a hub over the internet. Bluetooth is unaffected. */
+  async leaveInternet(hubId: string): Promise<void> {
+    const link = this.internetLinks.get(hubId);
+    if (!link) return;
+    this.node?.removePeer(`nostr:${hubId}`);
+    this.internetLinks.delete(hubId);
+    await link.stop();
+    this.notePeerChange();
+  }
+
+  /** Is this hub currently reachable over the internet? */
+  isOnInternet(hubId: string): boolean {
+    return this.internetLinks.has(hubId);
   }
 
   /**
@@ -266,11 +442,11 @@ export class MeshService {
     try {
       const link = await WebPacketLink.connect(device);
       const channel = new PacketChannel(link, device.id, (e) =>
-        this.setStatus({ error: e.message })
+        this.setStatus({ blocker: this.toBlocker(e) })
       );
       channel.start();
       this.node.addPeer(device.id, channel);
-      this.setStatus({ peerCount: this.node.peerCount, error: null });
+      this.notePeerChange();
     } catch (e) {
       this.connected.delete(device.id);
       throw e;
@@ -310,6 +486,62 @@ export class MeshService {
   }
 
   // ---- Status ----
+
+  /**
+   * Recompute peer count and phase together.
+   *
+   * Phase is derived from peer count rather than set by hand, so `connected`
+   * and `searching` cannot drift out of step with reality — which is precisely
+   * the sort of lie this refactor exists to prevent.
+   */
+  private notePeerChange(): void {
+    const peerCount = this.node?.peerCount ?? 0;
+    const patch: Partial<MeshStatus> = { peerCount };
+
+    if (this.isRunning) {
+      patch.phase = peerCount > 0 ? 'connected' : 'searching';
+    }
+    if (peerCount > 0) {
+      patch.lastPeerAt = Date.now();
+      // A working connection clears any earlier transient failure.
+      patch.blocker = null;
+    }
+
+    this.setStatus(patch);
+  }
+
+  /**
+   * Turn a runtime error into something a user can act on.
+   *
+   * Transient radio errors are not preconditions, so they do not move the phase
+   * to `blocked` — the mesh keeps running and retrying. They are surfaced so a
+   * quiet app is never quiet for an unexplained reason.
+   */
+  private toBlocker(error: Error, context?: string): Blocker {
+    const message = error?.message ?? String(error);
+    return {
+      kind: 'error',
+      title: context ?? 'Bluetooth problem',
+      detail: message,
+      actionLabel: 'Try again',
+      action: 'retry'
+    };
+  }
+
+  /** Run the fix a blocker offers, then re-check. */
+  async resolveBlocker(action: FixAction): Promise<void> {
+    const readyToRetry = await applyFix(action);
+    if (readyToRetry) {
+      this.setStatus({ phase: 'idle', blocker: null });
+      await this.start();
+    }
+  }
+
+  /** Re-run preflight and start, for a manual retry after changing settings. */
+  async retry(): Promise<void> {
+    this.setStatus({ phase: 'idle', blocker: null });
+    await this.start();
+  }
 
   private setStatus(patch: Partial<MeshStatus>): void {
     this.status = { ...this.status, ...patch };
