@@ -134,11 +134,17 @@
       <p class="text-xs text-tertiary text-center mt-1">{hub.description}</p>
     {/if}
     <p class="text-xs text-tertiary text-center mt-1">
-      {#if $meshStatus.peerCount > 0}
+      {#if $meshStatus.phase === 'connected'}
         syncing with {$meshStatus.peerCount}
         {$meshStatus.peerCount === 1 ? 'person' : 'people'}
+      {:else if $meshStatus.phase === 'blocked'}
+        <span style="color: var(--accent);">
+          {$meshStatus.blocker?.title} — fix it on the home screen
+        </span>
+      {:else if $meshStatus.phase === 'searching'}
+        no one nearby — your posts will sync when someone is
       {:else}
-        no one nearby — posts will sync when someone is
+        posts are saved here until the mesh starts
       {/if}
     </p>
   </div>

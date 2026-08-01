@@ -21,6 +21,7 @@ import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
 import { makePacket, PacketType, type Packet } from './packet.ts';
 
+import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
 import { getOrCreateIdentity } from '$lib/crypto/identity';
 import { toWire, fromWire, type WirePost } from '$lib/domain/wire';
 import { mergePost } from '$lib/domain/mergePost';
@@ -34,11 +35,33 @@ const SCAN_INTERVAL_MS = 15_000;
 /** How long each scan window stays open. */
 const SCAN_DURATION_MS = 6_000;
 
+/**
+ * What the mesh is doing, as one value the UI can switch on.
+ *
+ * `searching` and `connected` are deliberately separate from `blocked`: the
+ * first two mean everything works and the room is simply quiet, the third means
+ * something needs fixing. Collapsing them is what made every failure look like
+ * an empty room.
+ */
+export type MeshPhase =
+  | 'idle' // not started yet
+  | 'checking' // preflight running
+  | 'blocked' // a precondition failed; see `blocker`
+  | 'searching' // healthy, nobody in range
+  | 'connected'; // healthy, at least one peer
+
 export interface MeshStatus {
-  running: boolean;
-  advertising: boolean;
+  phase: MeshPhase;
   peerCount: number;
-  error: string | null;
+  advertising: boolean;
+  canAdvertise: boolean;
+  blocker: Blocker | null;
+  /**
+   * When a peer was last connected, and when a packet last arrived. Silence
+   * with a timestamp is honest; silence alone cannot be told from a fault.
+   */
+  lastPeerAt: number | null;
+  lastPacketAt: number | null;
 }
 
 export type StatusListener = (status: MeshStatus) => void;
@@ -62,10 +85,13 @@ export class MeshService {
   private postListeners = new Set<PostListener>();
 
   private status: MeshStatus = {
-    running: false,
-    advertising: false,
+    phase: 'idle',
     peerCount: 0,
-    error: null
+    advertising: false,
+    canAdvertise: true,
+    blocker: null,
+    lastPeerAt: null,
+    lastPacketAt: null
   };
 
   onStatus(listener: StatusListener): () => void {
@@ -84,22 +110,42 @@ export class MeshService {
     return { ...this.status };
   }
 
+  /** Is the mesh past preflight and actually running? */
+  private get isRunning(): boolean {
+    return this.status.phase === 'searching' || this.status.phase === 'connected';
+  }
+
   async start(): Promise<void> {
-    if (this.status.running) return;
+    if (this.isRunning || this.status.phase === 'checking') return;
+
+    // Preflight before anything else, so a missing precondition is reported as
+    // itself rather than surfacing later as an unexplained absence of peers.
+    this.setStatus({ phase: 'checking', blocker: null });
+    const blocker = await preflight();
+    if (blocker) {
+      this.setStatus({ phase: 'blocked', blocker });
+      return;
+    }
 
     const { deviceId } = await getOrCreateIdentity();
     this.senderId = senderIdFrom(deviceId);
     this.node = new MeshNode(this.senderId, {
-      onError: (e) => this.setStatus({ error: e.message })
+      onError: (e) => this.setStatus({ blocker: this.toBlocker(e) })
     });
 
     this.node.onDelivery((packet) => {
+      this.setStatus({ lastPacketAt: Date.now() });
       void this.handlePacket(packet);
     });
 
-    this.setStatus({ running: true, error: null });
+    this.setStatus({ phase: 'searching', blocker: null });
 
     if (isNative) {
+      // Runs once at startup; the output tells us whether the radio is working
+      // at all before any of our own filtering is involved.
+      void this.diagnoseScan().catch((e) =>
+        console.log(`[mesh-diag] diagnostic scan failed: ${(e as Error).message}`)
+      );
       await this.startAdvertising();
       await this.startScanning();
     }
@@ -109,7 +155,7 @@ export class MeshService {
   }
 
   async stop(): Promise<void> {
-    if (!this.status.running) return;
+    if (!this.isRunning) return;
 
     if (this.scanTimer) {
       clearInterval(this.scanTimer);
@@ -129,7 +175,7 @@ export class MeshService {
 
     this.connected.clear();
     this.node = null;
-    this.setStatus({ running: false, advertising: false, peerCount: 0 });
+    this.setStatus({ phase: "idle", advertising: false, peerCount: 0, blocker: null });
   }
 
   // ---- Publishing ----
@@ -160,19 +206,19 @@ export class MeshService {
       onPeerConnected: (peerId, link) => {
         if (this.connected.has(peerId)) return;
         const channel = new PacketChannel(link, peerId, (e) =>
-          this.setStatus({ error: e.message })
+          this.setStatus({ blocker: this.toBlocker(e) })
         );
         channel.start();
         this.node?.addPeer(peerId, channel);
         this.connected.add(peerId);
-        this.setStatus({ peerCount: this.node?.peerCount ?? 0 });
+        this.notePeerChange();
       },
       onPeerDisconnected: (peerId) => {
         this.node?.removePeer(peerId);
         this.connected.delete(peerId);
-        this.setStatus({ peerCount: this.node?.peerCount ?? 0 });
+        this.notePeerChange();
       },
-      onError: (e) => this.setStatus({ error: e.message })
+      onError: (e) => this.setStatus({ blocker: this.toBlocker(e) })
     });
 
     try {
@@ -182,24 +228,57 @@ export class MeshService {
         outboundUuid: CHAR_OUTBOUND,
         localName: 'nearboard'
       });
-      this.setStatus({ advertising: true });
+      this.setStatus({ advertising: true, canAdvertise: true });
     } catch (e) {
-      // Not every chipset supports the peripheral role. The device is still a
-      // useful mesh member as a pure central — it just cannot be discovered.
+      // Not every chipset supports the peripheral role. This is a capability
+      // limit, not a blocker: the device still works as a pure central, it just
+      // cannot be discovered. Recording it as `canAdvertise: false` lets the UI
+      // say so plainly instead of leaving the user wondering why nobody finds
+      // them.
       this.advertiser = null;
       this.setStatus({
         advertising: false,
-        error: `Cannot advertise: ${(e as Error).message}`
+        canAdvertise: false
       });
+      console.warn('Peripheral role unavailable:', (e as Error).message);
     }
   }
 
   // ---- Central role ----
 
   private async startScanning(): Promise<void> {
-    await BleClient.initialize({ androidNeverForLocation: true });
+    await BleClient.initialize({ androidNeverForLocation: false });
     await this.sweep();
     this.scanTimer = setInterval(() => void this.sweep(), SCAN_INTERVAL_MS);
+  }
+
+  /**
+   * Scan without a service filter and log everything in range.
+   *
+   * A filtered scan that returns nothing is ambiguous — it cannot distinguish
+   * "no peers here" from "our advertising is invisible" from "the filter is
+   * wrong". This separates them: if other devices appear but ours does not,
+   * the problem is on the advertising side.
+   */
+  async diagnoseScan(windowMs = 6000): Promise<string[]> {
+    const seen: string[] = [];
+    await BleClient.initialize({ androidNeverForLocation: false });
+    await BleClient.requestLEScan({ allowDuplicates: false }, (result) => {
+      const services = result.device.uuids ?? result.uuids ?? [];
+      seen.push(
+        `${result.device.deviceId} name=${result.device.name ?? result.localName ?? '?'} ` +
+          `rssi=${result.rssi ?? '?'} services=[${services.join(',')}]`
+      );
+    });
+    await new Promise((r) => setTimeout(r, windowMs));
+    try {
+      await BleClient.stopLEScan();
+    } catch {
+      // Already stopped.
+    }
+    console.log(`[mesh-diag] unfiltered scan saw ${seen.length} advertisements`);
+    for (const line of seen) console.log(`[mesh-diag] ${line}`);
+    return seen;
   }
 
   /** One scan window: look for peers, connect to any we do not already have. */
@@ -209,10 +288,12 @@ export class MeshService {
     const found = new Set<string>();
     try {
       await BleClient.requestLEScan({ services: [MESH_SERVICE_UUID] }, (result) => {
+        console.log(`[mesh-diag] filtered hit: ${result.device.deviceId} ${result.device.name ?? ''}`);
         found.add(result.device.deviceId);
       });
     } catch (e) {
-      this.setStatus({ error: `Scan failed: ${(e as Error).message}` });
+      this.setStatus({ blocker: this.toBlocker(e as Error, "Scan failed") });
+      console.log(`[mesh-diag] filtered scan failed: ${(e as Error).message}`);
       return;
     }
 
@@ -239,14 +320,14 @@ export class MeshService {
     try {
       const link = await CapacitorPacketLink.connect(deviceId);
       const channel = new PacketChannel(link, deviceId, (e) =>
-        this.setStatus({ error: e.message })
+        this.setStatus({ blocker: this.toBlocker(e) })
       );
       channel.start();
       this.node.addPeer(deviceId, channel);
-      this.setStatus({ peerCount: this.node.peerCount, error: null });
+      this.notePeerChange();
     } catch (e) {
       this.connected.delete(deviceId);
-      this.setStatus({ error: `Connect failed: ${(e as Error).message}` });
+      this.setStatus({ blocker: this.toBlocker(e as Error, "Connect failed") });
     }
   }
 
@@ -266,11 +347,11 @@ export class MeshService {
     try {
       const link = await WebPacketLink.connect(device);
       const channel = new PacketChannel(link, device.id, (e) =>
-        this.setStatus({ error: e.message })
+        this.setStatus({ blocker: this.toBlocker(e) })
       );
       channel.start();
       this.node.addPeer(device.id, channel);
-      this.setStatus({ peerCount: this.node.peerCount, error: null });
+      this.notePeerChange();
     } catch (e) {
       this.connected.delete(device.id);
       throw e;
@@ -310,6 +391,62 @@ export class MeshService {
   }
 
   // ---- Status ----
+
+  /**
+   * Recompute peer count and phase together.
+   *
+   * Phase is derived from peer count rather than set by hand, so `connected`
+   * and `searching` cannot drift out of step with reality — which is precisely
+   * the sort of lie this refactor exists to prevent.
+   */
+  private notePeerChange(): void {
+    const peerCount = this.node?.peerCount ?? 0;
+    const patch: Partial<MeshStatus> = { peerCount };
+
+    if (this.isRunning) {
+      patch.phase = peerCount > 0 ? 'connected' : 'searching';
+    }
+    if (peerCount > 0) {
+      patch.lastPeerAt = Date.now();
+      // A working connection clears any earlier transient failure.
+      patch.blocker = null;
+    }
+
+    this.setStatus(patch);
+  }
+
+  /**
+   * Turn a runtime error into something a user can act on.
+   *
+   * Transient radio errors are not preconditions, so they do not move the phase
+   * to `blocked` — the mesh keeps running and retrying. They are surfaced so a
+   * quiet app is never quiet for an unexplained reason.
+   */
+  private toBlocker(error: Error, context?: string): Blocker {
+    const message = error?.message ?? String(error);
+    return {
+      kind: 'error',
+      title: context ?? 'Bluetooth problem',
+      detail: message,
+      actionLabel: 'Try again',
+      action: 'retry'
+    };
+  }
+
+  /** Run the fix a blocker offers, then re-check. */
+  async resolveBlocker(action: FixAction): Promise<void> {
+    const readyToRetry = await applyFix(action);
+    if (readyToRetry) {
+      this.setStatus({ phase: 'idle', blocker: null });
+      await this.start();
+    }
+  }
+
+  /** Re-run preflight and start, for a manual retry after changing settings. */
+  async retry(): Promise<void> {
+    this.setStatus({ phase: 'idle', blocker: null });
+    await this.start();
+  }
 
   private setStatus(patch: Partial<MeshStatus>): void {
     this.status = { ...this.status, ...patch };
