@@ -85,9 +85,9 @@ function pruneExpired(posts) {
 
 // ---- Mesh service UUIDs (bleno wants them without dashes) ----
 
-const MESH_SERVICE_UUID = '0000be5000001000800000805f9b34fb';
-const CHAR_INBOUND = '0000be5100001000800000805f9b34fb';
-const CHAR_OUTBOUND = '0000be5200001000800000805f9b34fb';
+const MESH_SERVICE_UUID = 'edbd67efdc5341c2a6accd4d438831d3';
+const CHAR_INBOUND = 'edbd0001dc5341c2a6accd4d438831d3';
+const CHAR_OUTBOUND = 'edbd0002dc5341c2a6accd4d438831d3';
 
 // ---- Connection state ----
 

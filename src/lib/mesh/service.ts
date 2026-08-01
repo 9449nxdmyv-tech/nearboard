@@ -34,6 +34,12 @@ const isNative = Capacitor.isNativePlatform();
 const SCAN_INTERVAL_MS = 15_000;
 /** How long each scan window stays open. */
 const SCAN_DURATION_MS = 6_000;
+/** Idle gap between stopping a scan and connecting, so the stack settles. */
+const SCAN_SETTLE_MS = 600;
+/** Attempts per peer before giving up until the next sweep. */
+const CONNECT_ATTEMPTS = 3;
+/** Base backoff between connect attempts; multiplied by attempt number. */
+const CONNECT_RETRY_MS = 800;
 
 /**
  * What the mesh is doing, as one value the UI can switch on.
@@ -141,11 +147,11 @@ export class MeshService {
     this.setStatus({ phase: 'searching', blocker: null });
 
     if (isNative) {
-      // Runs once at startup; the output tells us whether the radio is working
-      // at all before any of our own filtering is involved.
-      void this.diagnoseScan().catch((e) =>
-        console.log(`[mesh-diag] diagnostic scan failed: ${(e as Error).message}`)
-      );
+      // Advertising first, then scanning. Never both plus a connect attempt at
+      // once: Android's stack rejects a connection issued while a scan is live
+      // with "LE Create Connection attempt failed, status=0x12", surfacing as
+      // the generic GATT 133. `diagnoseScan` is deliberately not called here —
+      // running a second scan concurrently reproduces exactly that.
       await this.startAdvertising();
       await this.startScanning();
     }
@@ -304,31 +310,62 @@ export class MeshService {
       // Already stopped.
     }
 
+    // The stack needs a moment after a scan before it will accept a connection.
+    // Issuing one immediately is the single most common cause of GATT 133 on
+    // Android, and it fails in a way that looks like the peer is unreachable.
+    await new Promise((r) => setTimeout(r, SCAN_SETTLE_MS));
+
+    // Strictly one at a time. Parallel connects contend for the same limited
+    // pool of GATT client interfaces and fail each other.
     for (const deviceId of found) {
       if (this.connected.has(deviceId)) continue;
       await this.connectTo(deviceId);
     }
   }
 
+  /**
+   * Connect, retrying on the transient failures Android produces routinely.
+   *
+   * GATT 133 is a generic "something went wrong" that very often succeeds on a
+   * second attempt — treating the first failure as final is why a peer that is
+   * plainly in range appears unreachable.
+   */
   private async connectTo(deviceId: string): Promise<void> {
     if (!this.node || this.connected.has(deviceId)) return;
 
-    // Claim the slot before awaiting, or a scan sweep that overlaps the connect
-    // will start a second connection to the same device.
+    // Claim the slot before awaiting, or an overlapping sweep starts a second
+    // connection to the same device.
     this.connected.add(deviceId);
 
-    try {
-      const link = await CapacitorPacketLink.connect(deviceId);
-      const channel = new PacketChannel(link, deviceId, (e) =>
-        this.setStatus({ blocker: this.toBlocker(e) })
-      );
-      channel.start();
-      this.node.addPeer(deviceId, channel);
-      this.notePeerChange();
-    } catch (e) {
-      this.connected.delete(deviceId);
-      this.setStatus({ blocker: this.toBlocker(e as Error, "Connect failed") });
+    for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+      try {
+        const link = await CapacitorPacketLink.connect(deviceId);
+        const channel = new PacketChannel(link, deviceId, (e) =>
+          this.setStatus({ blocker: this.toBlocker(e) })
+        );
+        channel.start();
+        this.node.addPeer(deviceId, channel);
+        this.notePeerChange();
+        return;
+      } catch (e) {
+        const message = (e as Error)?.message ?? String(e);
+        console.log(`[mesh] connect to ${deviceId} attempt ${attempt} failed: ${message}`);
+
+        // Leave the radio idle briefly before retrying; back-to-back attempts
+        // reproduce the same failure.
+        if (attempt < CONNECT_ATTEMPTS) {
+          try {
+            await BleClient.disconnect(deviceId);
+          } catch {
+            // Nothing to tear down.
+          }
+          await new Promise((r) => setTimeout(r, CONNECT_RETRY_MS * attempt));
+        }
+      }
     }
+
+    this.connected.delete(deviceId);
+    console.log(`[mesh] giving up on ${deviceId} after ${CONNECT_ATTEMPTS} attempts`);
   }
 
   /**
