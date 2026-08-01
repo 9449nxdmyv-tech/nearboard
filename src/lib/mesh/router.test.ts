@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MeshHarness } from './testing/harness.ts';
 import { DEFAULT_TTL } from './packet.ts';
+import { clampTtlForTopology, DENSE_TTL_CAP } from './router.ts';
 
 test('a packet reaches a directly connected peer', async () => {
   const h = new MeshHarness();
@@ -328,4 +329,51 @@ test('every node converges on the same set of messages', async () => {
       .map((p) => new TextDecoder().decode(p.payload));
     assert.deepEqual([...seen].sort(), expected.sort(), `${id} did not converge`);
   }
+});
+
+test('TTL is clamped where the network is dense', () => {
+  // Under the dense threshold nothing changes.
+  assert.equal(clampTtlForTopology(7, 0), 7);
+  assert.equal(clampTtlForTopology(7, 2), 7);
+  assert.equal(clampTtlForTopology(7, 5), 7);
+  // At and above it, hops are capped — a crowded room already reaches
+  // everyone in a hop or two, so spending seven multiplies traffic for nothing.
+  assert.equal(clampTtlForTopology(7, 6), DENSE_TTL_CAP);
+  assert.equal(clampTtlForTopology(7, 20), DENSE_TTL_CAP);
+});
+
+test('clamping never raises a TTL', () => {
+  // A packet near the end of its life must not be given more hops by arriving
+  // somewhere busy.
+  assert.equal(clampTtlForTopology(2, 10), 2);
+  assert.equal(clampTtlForTopology(1, 10), 1);
+});
+
+test('a dense mesh still reaches everyone despite the lower TTL', async () => {
+  const h = new MeshHarness();
+  const ids = Array.from({ length: 9 }, (_, i) => `n${i}`);
+  h.addAll(...ids);
+  h.mesh(...ids); // every node has 8 peers, well past the dense threshold
+
+  const packet = h.send('n0', 'dense');
+  await h.settle();
+
+  assert.equal(
+    h.reachedBy(packet.messageId).length,
+    8,
+    'clamping must not cost reachability in a network dense enough to clamp'
+  );
+});
+
+test('a sparse chain keeps its full reach', async () => {
+  const h = new MeshHarness();
+  const ids = Array.from({ length: 8 }, (_, i) => `n${i}`);
+  h.addAll(...ids);
+  h.chain(...ids); // every node has at most 2 peers
+
+  const packet = h.send('n0', 'sparse');
+  await h.settle();
+
+  // Unclamped: ttl 7 reaches 7 nodes.
+  assert.equal(h.reachedBy(packet.messageId).length, DEFAULT_TTL);
 });

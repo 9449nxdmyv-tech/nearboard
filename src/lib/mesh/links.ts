@@ -87,6 +87,18 @@ export class CapacitorPacketLink implements PacketLink {
   static async connect(deviceId: string): Promise<CapacitorPacketLink> {
     await BleClient.connect(deviceId);
 
+    // Ask for a larger MTU before reading it back.
+    //
+    // The default leaves ~180 usable bytes, which for a 150 KB image post means
+    // well over a thousand round trips. Android negotiates up to 517 and iOS
+    // settles near 185; asking costs one exchange and can cut the fragment
+    // count by roughly 3x where the peer agrees.
+    try {
+      await BleClient.requestConnectionPriority?.(deviceId, 1 /* high */);
+    } catch {
+      // Optional; not every platform implements it.
+    }
+
     // The reported MTU includes the 3-byte ATT header, which is not usable
     // payload. Subtract it rather than overshooting and having writes truncated.
     let mtu = DEFAULT_MTU;
@@ -97,8 +109,7 @@ export class CapacitorPacketLink implements PacketLink {
       // Not all platforms expose it; the conservative default still works.
     }
 
-    const link = new CapacitorPacketLink(deviceId, mtu);
-    return link;
+    return new CapacitorPacketLink(deviceId, mtu);
   }
 
   async sendFrame(frame: Uint8Array): Promise<void> {
