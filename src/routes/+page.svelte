@@ -1,70 +1,42 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { Capacitor } from '@capacitor/core';
   import { hubs, loadHubs } from '$lib/stores/hubs';
-  import { isBluetoothSupported, requestDevice, createHubConnection } from '$lib/ble/bleAdapter';
-  import { saveHub } from '$lib/db/localDb';
+  import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
+  import { mesh } from '$lib/mesh/service';
   import { canInstall, triggerInstall } from '$lib/pwa/installPrompt';
-  import type { Hub } from '$lib/domain/types';
 
-  let bleSupported = $state(false);
+  const isNative = Capacitor.isNativePlatform();
+
   let isIos = $state(false);
-  let scanning = $state(false);
+  let webBleSupported = $state(false);
+  let connecting = $state(false);
   let error = $state('');
 
   onMount(async () => {
-    bleSupported = isBluetoothSupported();
     isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    webBleSupported = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
     await loadHubs();
+    // Native devices discover peers continuously; there is nothing to press.
+    if (isNative) await ensureMeshStarted();
   });
 
-  async function scanForHub() {
-    scanning = true;
+  /**
+   * Web has no peripheral role and no background scan, so a browser can only
+   * join the mesh by the user picking a device from the chooser — which must
+   * happen inside a user gesture.
+   */
+  async function connectFromBrowser() {
+    connecting = true;
     error = '';
     try {
-      const device = await requestDevice();
-      error = 'connecting...';
-
-      // Retry GATT connect up to 3 times (BLE can be flaky)
-      let conn = createHubConnection();
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await conn.connect(device);
-          break;
-        } catch (e) {
-          if (attempt < 2) {
-            conn = createHubConnection();
-            error = `retrying connection (${attempt + 2}/3)...`;
-            await new Promise(r => setTimeout(r, 500));
-          } else {
-            throw e;
-          }
-        }
-      }
-
-      error = 'reading hub info...';
-      const meta = await conn!.getHubMeta();
-      await conn!.disconnect();
-
-      const hub: Hub = {
-        hubId: meta.hubId,
-        name: meta.name,
-        description: meta.description,
-        createdAt: Date.now(),
-        isOwned: false
-      };
-      await saveHub(hub);
-      await loadHubs();
-      error = '';
-      goto(`/hub/${meta.hubId}`);
+      await ensureMeshStarted();
+      await mesh.connectToChosenDevice();
     } catch (e: any) {
-      if (e.name !== 'NotFoundError') {
-        error = e.message || 'Failed to connect';
-      } else {
-        error = '';
-      }
+      if (e?.name !== 'NotFoundError') error = e?.message ?? 'Failed to connect';
     } finally {
-      scanning = false;
+      connecting = false;
     }
   }
 </script>
@@ -84,18 +56,40 @@
   </div>
 {/if}
 
-{#if isIos && !bleSupported}
+{#if !isNative && !webBleSupported}
   <div style="border: 1px solid rgba(212, 160, 64, 0.2); padding: 12px; margin-top: 12px; border-radius: 2px;">
     <p class="text-sm" style="color: var(--ephemeral);">
-      BLE requires Chrome on Android or Bluefy on iOS. You can still browse saved hubs.
+      This browser has no Bluetooth. Install the app to join the mesh — you can
+      still read hubs you have already joined.
     </p>
   </div>
 {/if}
 
-<div class="flex flex-col gap-3 mt-8 mb-8">
-  {#if bleSupported}
-    <button onclick={scanForHub} disabled={scanning} class="w-full">
-      {scanning ? 'scanning...' : 'scan for a hub'}
+<!-- Mesh state. On native this is ambient: the device is always looking. -->
+<div class="mesh-status mt-6" class:live={$meshStatus.peerCount > 0}>
+  <span class="mesh-dot" class:pulse={$meshStatus.running && $meshStatus.peerCount === 0}></span>
+  {#if !$meshStatus.running}
+    <span class="text-sm text-tertiary">mesh off</span>
+  {:else if $meshStatus.peerCount === 0}
+    <span class="text-sm text-tertiary">looking for people nearby...</span>
+  {:else}
+    <span class="text-sm">
+      {$meshStatus.peerCount} {$meshStatus.peerCount === 1 ? 'person' : 'people'} nearby
+    </span>
+  {/if}
+</div>
+
+{#if $meshStatus.running && !$meshStatus.advertising && isNative}
+  <p class="text-xs text-tertiary mt-2" style="line-height: 1.5;">
+    This device can find others but cannot be found by them — its Bluetooth
+    chipset does not support advertising.
+  </p>
+{/if}
+
+<div class="flex flex-col gap-3 mt-6 mb-8">
+  {#if !isNative && webBleSupported}
+    <button onclick={connectFromBrowser} disabled={connecting} class="w-full">
+      {connecting ? 'connecting...' : 'connect to someone nearby'}
     </button>
   {/if}
   <button class="w-full" onclick={() => goto('/create-hub')}>
@@ -105,6 +99,8 @@
 
 {#if error}
   <p class="text-sm text-accent mt-2">{error}</p>
+{:else if $meshStatus.error}
+  <p class="text-xs text-tertiary mt-2">{$meshStatus.error}</p>
 {/if}
 
 {#if $hubs.length > 0}

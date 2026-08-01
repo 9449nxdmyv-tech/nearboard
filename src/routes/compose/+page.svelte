@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { addPost } from '$lib/stores/posts';
   import { getOrCreateIdentity } from '$lib/crypto/identity';
+  import { mesh } from '$lib/mesh/service';
   import { EPHEMERAL_CYCLE } from '$lib/domain/types';
   import type { Post } from '$lib/domain/types';
 
@@ -163,6 +164,16 @@
     };
 
     await addPost(post);
+
+    // Onto the mesh. Failing to publish must not lose the post — it is already
+    // saved locally, and store-and-forward will carry it to the next peer that
+    // appears, so a send failure here is not worth blocking the user on.
+    try {
+      await mesh.publishPost(post);
+    } catch (e) {
+      console.warn('Post saved locally but not yet published:', e);
+    }
+
     goto(`/hub/${hubId}`);
   }
 </script>

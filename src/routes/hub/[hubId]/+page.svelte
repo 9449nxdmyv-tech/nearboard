@@ -7,6 +7,8 @@
   import { sortedFeed, highlights } from '$lib/domain/scoring';
   import { count, has, toggle, add } from '$lib/domain/engagement';
   import { getDeviceIdSync } from '$lib/crypto/identity';
+  import { mesh } from '$lib/mesh/service';
+  import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
   import type { Hub, Post } from '$lib/domain/types';
 
   let hub = $state<Hub | null>(null);
@@ -23,6 +25,7 @@
     me = getDeviceIdSync();
     hub = (await getHub(hubId)) ?? null;
     await loadPostsForHub(hubId);
+    void ensureMeshStarted();
     ticker = setInterval(() => { now = Date.now(); }, 1000);
   });
 
@@ -80,9 +83,19 @@
     return blobUrlCache.get(postId)!;
   }
 
+  /** Persist locally, then push the merged post onto the mesh. */
+  async function saveAndPublish(updated: Post) {
+    await updatePost(updated);
+    try {
+      await mesh.publishEngagement(updated);
+    } catch (e) {
+      console.warn('Engagement saved locally but not yet published:', e);
+    }
+  }
+
   async function likePost(post: Post) {
     if (!me) return;
-    await updatePost({
+    await saveAndPublish({
       ...post,
       likes: toggle(post.likes, me),
       lastInteractionAt: Date.now()
@@ -91,7 +104,7 @@
 
   async function carryPost(post: Post) {
     if (!me) return;
-    await updatePost({
+    await saveAndPublish({
       ...post,
       isCarried: true,
       reshares: add(post.reshares, me),
@@ -120,6 +133,14 @@
     {#if hub.description}
       <p class="text-xs text-tertiary text-center mt-1">{hub.description}</p>
     {/if}
+    <p class="text-xs text-tertiary text-center mt-1">
+      {#if $meshStatus.peerCount > 0}
+        syncing with {$meshStatus.peerCount}
+        {$meshStatus.peerCount === 1 ? 'person' : 'people'}
+      {:else}
+        no one nearby — posts will sync when someone is
+      {/if}
+    </p>
   </div>
 
   <!-- Highlights -->

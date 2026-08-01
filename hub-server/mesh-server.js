@@ -26,7 +26,7 @@ import {
   SENDER_ID_SIZE
 } from '../src/lib/mesh/packet.ts';
 import { fragmentPacket, Reassembler, DEFAULT_MTU } from '../src/lib/mesh/fragment.ts';
-import { merge as mergeEngagement } from '../src/lib/domain/engagement.ts';
+import { mergePost } from '../src/lib/domain/mergePost.ts';
 
 // ---- CLI args ----
 
@@ -79,29 +79,9 @@ function pruneExpired(posts) {
   });
 }
 
-/**
- * Merge an incoming post into the store.
- *
- * A post can arrive many times over a mesh, each copy carrying engagement the
- * others have not seen. Last-writer-wins on the whole record would silently
- * discard likes, so the CRDT sets are merged field by field.
- */
-function mergePost(existing, incoming) {
-  if (!existing) return incoming;
-  return {
-    ...existing,
-    ...incoming,
-    likes: mergeEngagement(existing.likes, incoming.likes),
-    reshares: mergeEngagement(existing.reshares, incoming.reshares),
-    deranks: mergeEngagement(existing.deranks, incoming.deranks),
-    lastInteractionAt: Math.max(
-      existing.lastInteractionAt ?? 0,
-      incoming.lastInteractionAt ?? 0
-    ),
-    // Hiding is a local moderation decision; a peer must not be able to unhide.
-    isHidden: existing.isHidden || incoming.isHidden
-  };
-}
+// mergePost is imported from the app rather than reimplemented — the anchor
+// node must resolve a duplicate post exactly the way a phone does, or the two
+// disagree about what a board contains.
 
 // ---- Mesh service UUIDs (bleno wants them without dashes) ----
 

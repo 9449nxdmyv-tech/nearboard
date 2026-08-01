@@ -88,6 +88,11 @@ export async function savePost(post: Post): Promise<void> {
   await db.put('posts', post);
 }
 
+export async function getPost(postId: string): Promise<Post | undefined> {
+  const db = await getDb();
+  return db.get('posts', postId);
+}
+
 export async function getPostsForHub(hubId: string): Promise<Post[]> {
   const db = await getDb();
   return db.getAllFromIndex('posts', 'hubId', hubId);

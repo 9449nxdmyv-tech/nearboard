@@ -550,3 +550,29 @@ label {
   justify-content: center;
   border-radius: 2px;
 }
+
+/* Mesh status indicator */
+.mesh-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.mesh-status.live {
+  border-color: rgba(233, 69, 96, 0.3);
+}
+
+.mesh-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.mesh-status.live .mesh-dot {
+  background: var(--accent);
+}
