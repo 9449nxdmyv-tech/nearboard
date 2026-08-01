@@ -19,6 +19,7 @@ import { MeshNode } from './router.ts';
 import { PacketChannel, MESH_SERVICE_UUID, CHAR_INBOUND, CHAR_OUTBOUND } from './transport.ts';
 import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
+import { NostrLink } from './nostr.ts';
 import { makePacket, PacketType, type Packet } from './packet.ts';
 
 import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
@@ -82,6 +83,9 @@ export class MeshService {
   private node: MeshNode | null = null;
   private advertiser: MeshAdvertiser | null = null;
   private senderId = '';
+
+  /** Hubs currently carried over the internet, keyed by hubId. */
+  private internetLinks = new Map<string, NostrLink>();
 
   /** Peers we have an open channel to, so we do not connect twice. */
   private connected = new Set<string>();
@@ -366,6 +370,60 @@ export class MeshService {
 
     this.connected.delete(deviceId);
     console.log(`[mesh] giving up on ${deviceId} after ${CONNECT_ATTEMPTS} attempts`);
+  }
+
+  // ---- Internet transport ----
+
+  /**
+   * Join a hub's traffic over Nostr as well as Bluetooth.
+   *
+   * Off by default and per hub: local-first stays the default and reaching the
+   * internet is the user's choice. Payloads are encrypted with a key derived
+   * from the hub name before they leave the device, so relays store opaque
+   * blobs rather than readable posts.
+   *
+   * The relay becomes an ordinary peer, so `MeshNode` bridges the two
+   * transports without knowing the difference — a post that arrives over
+   * Bluetooth is republished to Nostr and vice versa, letting a phone in the
+   * room carry the board to people who are not.
+   */
+  async joinOverInternet(hubId: string, hubName: string): Promise<void> {
+    if (!this.node || this.internetLinks.has(hubId)) return;
+
+    const link = new NostrLink({
+      hubId,
+      hubName,
+      onError: (e) => console.warn('[mesh] nostr:', e.message)
+    });
+
+    try {
+      await link.start();
+      const peerId = `nostr:${hubId}`;
+      const channel = new PacketChannel(link, peerId, (e) =>
+        this.setStatus({ blocker: this.toBlocker(e) })
+      );
+      channel.start();
+      this.node.addPeer(peerId, channel);
+      this.internetLinks.set(hubId, link);
+      this.notePeerChange();
+    } catch (e) {
+      console.warn('[mesh] could not join over the internet:', (e as Error).message);
+    }
+  }
+
+  /** Stop carrying a hub over the internet. Bluetooth is unaffected. */
+  async leaveInternet(hubId: string): Promise<void> {
+    const link = this.internetLinks.get(hubId);
+    if (!link) return;
+    this.node?.removePeer(`nostr:${hubId}`);
+    this.internetLinks.delete(hubId);
+    await link.stop();
+    this.notePeerChange();
+  }
+
+  /** Is this hub currently reachable over the internet? */
+  isOnInternet(hubId: string): boolean {
+    return this.internetLinks.has(hubId);
   }
 
   /**

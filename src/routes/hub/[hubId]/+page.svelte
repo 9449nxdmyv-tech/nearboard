@@ -83,6 +83,26 @@
     return blobUrlCache.get(postId)!;
   }
 
+  let overInternet = $state(false);
+
+  /**
+   * Opt in or out of carrying this hub over the internet.
+   *
+   * Off by default. Local-first is the promise on the home screen, so reaching
+   * past Bluetooth is a deliberate choice — and posts are encrypted with a key
+   * derived from the hub name before they leave, so relays hold ciphertext.
+   */
+  async function toggleInternet() {
+    if (!hub) return;
+    if (overInternet) {
+      await mesh.leaveInternet(hub.hubId);
+      overInternet = false;
+    } else {
+      await mesh.joinOverInternet(hub.hubId, hub.name);
+      overInternet = mesh.isOnInternet(hub.hubId);
+    }
+  }
+
   /** Persist locally, then push the merged post onto the mesh. */
   async function saveAndPublish(updated: Post) {
     await updatePost(updated);
@@ -133,6 +153,11 @@
     {#if hub.description}
       <p class="text-xs text-tertiary text-center mt-1">{hub.description}</p>
     {/if}
+    <div class="text-center mt-2">
+      <button class="ghost text-xs" onclick={toggleInternet} style="padding: 4px 8px;">
+        {overInternet ? '🌐 reaching beyond Bluetooth' : '⌁ Bluetooth only'}
+      </button>
+    </div>
     <p class="text-xs text-tertiary text-center mt-1">
       {#if $meshStatus.phase === 'connected'}
         syncing with {$meshStatus.peerCount}
