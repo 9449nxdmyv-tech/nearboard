@@ -31,8 +31,18 @@ import type { Post } from '$lib/domain/types';
 
 const isNative = Capacitor.isNativePlatform();
 
-/** How often to sweep for new peers, in ms. */
-const SCAN_INTERVAL_MS = 15_000;
+/**
+ * Sweep cadence, adapted to whether anyone has been found.
+ *
+ * A flat interval is wrong at both ends. Alone, it makes walking into a room
+ * feel slow — the mesh should be eager when it has nobody. Already connected,
+ * it burns battery scanning for peers that are mostly already known, so it
+ * should back off and jitter so a group of phones does not synchronise into
+ * simultaneous scan windows.
+ */
+const SCAN_INTERVAL_ISOLATED_MS = 4_000;
+const SCAN_INTERVAL_CONNECTED_MIN_MS = 15_000;
+const SCAN_INTERVAL_CONNECTED_MAX_MS = 30_000;
 /** How long each scan window stays open. */
 const SCAN_DURATION_MS = 6_000;
 /** Idle gap between stopping a scan and connecting, so the stack settles. */
@@ -89,7 +99,7 @@ export class MeshService {
 
   /** Peers we have an open channel to, so we do not connect twice. */
   private connected = new Set<string>();
-  private scanTimer: ReturnType<typeof setInterval> | null = null;
+  private scanTimer: ReturnType<typeof setTimeout> | null = null;
 
   private statusListeners = new Set<StatusListener>();
   private postListeners = new Set<PostListener>();
@@ -168,7 +178,7 @@ export class MeshService {
     if (!this.isRunning) return;
 
     if (this.scanTimer) {
-      clearInterval(this.scanTimer);
+      clearTimeout(this.scanTimer);
       this.scanTimer = null;
     }
 
@@ -258,8 +268,31 @@ export class MeshService {
 
   private async startScanning(): Promise<void> {
     await BleClient.initialize({ androidNeverForLocation: false });
-    await this.sweep();
-    this.scanTimer = setInterval(() => void this.sweep(), SCAN_INTERVAL_MS);
+    void this.sweepLoop();
+  }
+
+  /** How long to wait before the next sweep, given what we found last time. */
+  private nextSweepDelay(): number {
+    if ((this.node?.peerCount ?? 0) === 0) return SCAN_INTERVAL_ISOLATED_MS;
+    const span = SCAN_INTERVAL_CONNECTED_MAX_MS - SCAN_INTERVAL_CONNECTED_MIN_MS;
+    return SCAN_INTERVAL_CONNECTED_MIN_MS + Math.floor(Math.random() * span);
+  }
+
+  /**
+   * Sweep on a self-scheduling loop rather than a fixed interval.
+   *
+   * A fixed interval can overlap its own previous run once a sweep takes longer
+   * than the gap — connect retries make that routine — and two concurrent scans
+   * are exactly what produces GATT 133.
+   */
+  private async sweepLoop(): Promise<void> {
+    while (this.isRunning) {
+      await this.sweep();
+      if (!this.isRunning) break;
+      await new Promise((r) => {
+        this.scanTimer = setTimeout(r, this.nextSweepDelay());
+      });
+    }
   }
 
   /**

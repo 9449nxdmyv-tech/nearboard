@@ -31,6 +31,29 @@ import type { PacketChannel } from './transport.ts';
 export const MIN_RELAY_JITTER_MS = 50;
 export const MAX_RELAY_JITTER_MS = 500;
 
+/**
+ * TTL clamping by local topology.
+ *
+ * A flat TTL treats a crowded room and a sparse one identically, which is
+ * wrong in both directions. Where a node has many neighbours the packet is
+ * already reaching everyone within a hop or two, so spending the full seven
+ * multiplies traffic for nothing. Where a node has almost none, every hop
+ * counts and the packet needs its full depth to escape a thin chain.
+ *
+ * Thresholds follow bitchat, which arrived at them from deployment rather than
+ * theory.
+ */
+export const DENSE_PEER_THRESHOLD = 6;
+export const DENSE_TTL_CAP = 5;
+export const SPARSE_PEER_THRESHOLD = 2;
+
+/** Clamp a packet's outgoing TTL for the topology this node can see. */
+export function clampTtlForTopology(ttl: number, peerCount: number): number {
+  if (peerCount >= DENSE_PEER_THRESHOLD) return Math.min(ttl, DENSE_TTL_CAP);
+  // Sparse or middling: leave it alone. A thin network needs its full reach.
+  return ttl;
+}
+
 /** How long a packet stays available to replay to arriving peers. */
 export const DEFAULT_CACHE_TTL_MS = 10 * 60_000;
 export const DEFAULT_CACHE_MAX = 500;
@@ -164,11 +187,15 @@ export class MeshNode {
       }
     }
 
-    const next = decrementTtl(packet);
-    if (!next) {
+    const decremented = decrementTtl(packet);
+    if (!decremented) {
       this.stats.expired++;
       return;
     }
+
+    // Spend fewer hops where the network is dense enough not to need them.
+    const clamped = clampTtlForTopology(decremented.ttl, this.peers.size);
+    const next = clamped === decremented.ttl ? decremented : { ...decremented, ttl: clamped };
 
     this.schedule(() => {
       this.stats.relayed++;
