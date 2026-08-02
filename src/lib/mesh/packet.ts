@@ -64,7 +64,17 @@ export const PacketType = {
   /** A request for posts newer than a timestamp. */
   Sync: 4,
   /** A piece of a packet too large to send whole; see fragment.ts. */
-  Fragment: 5
+  Fragment: 5,
+  /**
+   * A reply to a post.
+   *
+   * Its own type rather than part of the post, so a reply relays independently
+   * — it can arrive before, after, or entirely without the post it answers,
+   * which is normal on a network where different things take different paths.
+   */
+  Reply: 6,
+  /** A board curator pinning or removing a post; see domain/curation.ts. */
+  Curation: 7
 } as const;
 
 export type PacketType = (typeof PacketType)[keyof typeof PacketType];

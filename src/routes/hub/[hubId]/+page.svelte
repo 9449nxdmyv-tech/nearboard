@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { posts, loadPostsForHub, updatePost } from '$lib/stores/posts';
-  import { getHub } from '$lib/db/localDb';
+  import { getHub, getRepliesForHub, saveReply, getCurationClaims, saveCurationClaim } from '$lib/db/localDb';
   import { sortedFeed, highlights } from '$lib/domain/scoring';
   import { count, has, toggle, add } from '$lib/domain/engagement';
   import { hiddenReason, hiddenLabel, withoutBlocked, type HiddenReason } from '$lib/domain/moderation';
@@ -11,7 +11,10 @@
   import { showToast } from '$lib/stores/toasts';
   import { delivery, deliveryFor, deliveryLabel, recordDelivery } from '$lib/stores/delivery';
   import { setVisibleHub } from '$lib/notify/posts';
-  import { authorLabel, fingerprint } from '$lib/crypto/profile';
+  import { authorLabel, fingerprint, getDisplayName } from '$lib/crypto/profile';
+  import { getOrCreateSigningIdentity, withReplySignature } from '$lib/crypto/signing';
+  import { MAX_REPLY_CHARS, type Reply } from '$lib/domain/types';
+  import { signClaim, applyClaims, type CurationClaim } from '$lib/domain/curation';
   import { getDeviceIdSync } from '$lib/crypto/identity';
   import { mesh } from '$lib/mesh/service';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
@@ -20,8 +23,123 @@
   let hub = $state<Hub | null>(null);
   let me = $state<string | null>(null);
   let unsubscribeReach: (() => void) | undefined;
-  let feedPosts = $derived(withoutBlocked(sortedFeed($posts), $moderation));
-  let highlightPosts = $derived(withoutBlocked(highlights($posts, 3), $moderation));
+  let unsubscribeReply: (() => void) | undefined;
+  let unsubscribeCuration: (() => void) | undefined;
+
+  /** Curation claims for this board, folded into pinned/removed on demand. */
+  let claims = $state<CurationClaim[]>([]);
+
+  /** Whether this device holds the key this board's curation is honoured from. */
+  const amCurator = $derived(
+    !!hub?.curatorId && hub.curatorId === getOrCreateSigningIdentity().authorId
+  );
+
+  const curation = $derived(applyClaims(claims, hub?.curatorId));
+
+  async function curate(post: Post, action: 'pin' | 'unpin' | 'remove') {
+    if (!hub || !amCurator) return;
+    const identity = getOrCreateSigningIdentity();
+
+    const claim = signClaim(
+      {
+        hubId: hub.hubId,
+        postId: post.postId,
+        action,
+        curatorId: identity.authorId,
+        issuedAt: Date.now()
+      },
+      identity.secretKey
+    );
+
+    await saveCurationClaim(claim);
+    claims = [...claims, claim];
+
+    try {
+      await mesh.publishCuration(claim);
+    } catch {
+      // Stored locally; it travels with the next peer.
+    }
+
+    showToast(
+      action === 'pin' ? 'Pinned to the top of this board'
+      : action === 'unpin' ? 'Unpinned'
+      : 'Removed from this board'
+    );
+  }
+
+  /** Replies for this board, grouped by the post they answer. */
+  let replies = $state<Reply[]>([]);
+  /** Which post has its reply box open. */
+  let replyingTo = $state<string | null>(null);
+  let replyText = $state('');
+
+  const repliesByPost = $derived.by(() => {
+    const grouped = new Map<string, Reply[]>();
+    for (const reply of replies) {
+      const list = grouped.get(reply.postId) ?? [];
+      list.push(reply);
+      grouped.set(reply.postId, list);
+    }
+    for (const list of grouped.values()) list.sort((a, b) => a.createdAt - b.createdAt);
+    return grouped;
+  });
+
+  async function loadReplies() {
+    replies = await getRepliesForHub(hubId);
+  }
+
+  function openReply(postId: string) {
+    replyingTo = replyingTo === postId ? null : postId;
+    replyText = '';
+  }
+
+  async function sendReply(post: Post) {
+    const text = replyText.trim();
+    if (!text) return;
+
+    const identity = getOrCreateSigningIdentity();
+    const draft: Reply = {
+      replyId: crypto.randomUUID(),
+      postId: post.postId,
+      hubId: post.hubId,
+      authorId: identity.authorId,
+      authorName: getDisplayName() || undefined,
+      text,
+      createdAt: Date.now()
+    };
+
+    const reply = withReplySignature(draft, identity);
+    await saveReply(reply);
+    replies = [...replies, reply];
+    replyingTo = null;
+    replyText = '';
+
+    try {
+      await mesh.publishReply(reply);
+    } catch {
+      // Stored locally; store-and-forward carries it to the next peer.
+    }
+  }
+  /**
+   * The feed, after the curator has had their say.
+   *
+   * Removal only affects display — the post is still stored and still relayed,
+   * because a curator governs their own board, not the network.
+   */
+  const curated = $derived(
+    withoutBlocked(sortedFeed($posts), $moderation)
+      .filter((p) => !curation.removed.has(p.postId))
+      .map((p) => (curation.pinned.has(p.postId) ? { ...p, pinned: true } : p))
+  );
+
+  let feedPosts = $derived(
+    [...curated].sort((a, b) => Number(b.pinned) - Number(a.pinned))
+  );
+  let highlightPosts = $derived(
+    withoutBlocked(highlights($posts, 3), $moderation).filter(
+      (p) => !curation.removed.has(p.postId)
+    )
+  );
 
   /** Posts the user chose to open despite a warning. */
   let revealed = $state<Set<string>>(new Set());
@@ -40,7 +158,20 @@
     hub = (await getHub(hubId)) ?? null;
     await loadPostsForHub(hubId);
     setVisibleHub(hubId);
+    await loadReplies();
+    claims = await getCurationClaims(hubId);
     void ensureMeshStarted();
+
+    unsubscribeCuration = mesh.onCuration((claim) => {
+      if (claim.hubId !== hubId) return;
+      claims = [...claims, claim];
+    });
+
+    unsubscribeReply = mesh.onReply((reply) => {
+      if (reply.hubId !== hubId) return;
+      // Replace rather than append: the same reply can arrive by two paths.
+      replies = [...replies.filter((r) => r.replyId !== reply.replyId), reply];
+    });
 
     // Store-and-forward flushes cached posts when someone arrives, so a post
     // written alone genuinely reaches people later. Update its reach rather
@@ -55,6 +186,8 @@
 
   onDestroy(() => {
     setVisibleHub(null);
+    unsubscribeCuration?.();
+    unsubscribeReply?.();
     unsubscribeReach?.();
     clearInterval(ticker);
     for (const url of blobUrlCache.values()) URL.revokeObjectURL(url);
@@ -381,7 +514,63 @@
               </svg>
             </button>
           {/if}
+
+          {#if amCurator}
+            <button
+              onclick={() => curate(post, curation.pinned.has(post.postId) ? 'unpin' : 'pin')}
+              aria-label={curation.pinned.has(post.postId) ? 'Unpin' : 'Pin to top'}
+              title={curation.pinned.has(post.postId) ? 'Unpin' : 'Pin to top'}
+            >
+              <svg viewBox="0 0 24 24" fill={curation.pinned.has(post.postId) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l2 3.2H7z"/>
+              </svg>
+            </button>
+            <button onclick={() => curate(post, 'remove')} aria-label="Remove from this board" title="Remove from this board">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>
+              </svg>
+            </button>
+          {/if}
+
+          <button onclick={() => openReply(post.postId)} aria-label="Reply" title="Reply">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5a8.5 8.5 0 0 1 8.5-8.5 8.4 8.4 0 0 1 8.5 8.5z"/>
+            </svg>
+            {#if (repliesByPost.get(post.postId)?.length ?? 0) > 0}
+              <span>{repliesByPost.get(post.postId)!.length}</span>
+            {/if}
+          </button>
         </div>
+
+        {#if repliesByPost.get(post.postId)?.length}
+          <div class="thread">
+            {#each repliesByPost.get(post.postId)! as reply (reply.replyId)}
+              <div class="thread-reply">
+                <div class="flex items-center gap-2">
+                  <span class="post-author">{authorLabel(reply.authorId, reply.authorName)}</span>
+                  <span class="post-fingerprint">{fingerprint(reply.authorId)}</span>
+                  <span class="post-time">{relativeTime(reply.createdAt)}</span>
+                </div>
+                <p class="thread-text">{reply.text}</p>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if replyingTo === post.postId}
+          <form
+            class="reply-box"
+            onsubmit={(e) => { e.preventDefault(); void sendReply(post); }}
+          >
+            <input
+              bind:value={replyText}
+              placeholder="reply..."
+              maxlength={MAX_REPLY_CHARS}
+              autofocus
+            />
+            <button type="submit" class="primary" disabled={!replyText.trim()}>send</button>
+          </form>
+        {/if}
       </article>
       {/if}
     {/if}

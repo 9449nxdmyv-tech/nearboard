@@ -3,6 +3,7 @@
   import { saveHub } from '$lib/db/localDb';
   import { loadHubs } from '$lib/stores/hubs';
   import { deriveHubId, hubJoinUrl } from '$lib/domain/hubId';
+  import { getOrCreateSigningIdentity } from '$lib/crypto/signing';
   import type { Hub } from '$lib/domain/types';
 
   let name = $state('');
@@ -20,7 +21,9 @@
       name: name.trim(),
       description: description.trim() || undefined,
       createdAt: Date.now(),
-      isOwned: true
+      isOwned: true,
+      // Creating a board makes you the curator others will honour.
+      curatorId: getOrCreateSigningIdentity().authorId
     };
 
     await saveHub(hub);

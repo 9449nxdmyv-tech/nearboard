@@ -73,7 +73,10 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
         hubId: hub.hubId,
         name: hub.name,
         createdAt: Date.now(),
-        isOwned: false
+        isOwned: false,
+        // Trust-on-first-use: whoever announced this board is who this device
+        // will honour curation from, and nobody else.
+        curatorId: hub.curatorId
       });
       await loadHubs();
       showToast(`Joined ${hub.name}`);

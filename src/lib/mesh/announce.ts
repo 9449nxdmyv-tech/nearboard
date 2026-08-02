@@ -24,6 +24,14 @@ import { makePacket, PacketType, type Packet } from './packet.ts';
 export interface AnnouncedHub {
   hubId: string;
   name: string;
+  /**
+   * Key of the board's curator, if the announcer has one.
+   *
+   * Recorded on joining and honoured thereafter. Announced rather than
+   * derived, because there is nothing in a name-derived hubId that could
+   * identify who runs the board.
+   */
+  curatorId?: string;
 }
 
 export interface AnnouncePayload {
@@ -45,7 +53,8 @@ export function encodeAnnounce(senderId: string, hubs: AnnouncedHub[]): Packet {
   const payload: AnnouncePayload = {
     hubs: hubs.slice(0, MAX_ANNOUNCED_HUBS).map((h) => ({
       hubId: h.hubId,
-      name: h.name.slice(0, MAX_NAME_LENGTH)
+      name: h.name.slice(0, MAX_NAME_LENGTH),
+      ...(h.curatorId ? { curatorId: h.curatorId } : {})
     }))
   };
 
@@ -90,7 +99,14 @@ export function decodeAnnounce(packet: Packet): AnnouncedHub[] {
     if (!/^[0-9a-f]{32}$/.test(hubId)) continue;
     if (!name || name.length > MAX_NAME_LENGTH) continue;
 
-    out.push({ hubId, name });
+    // A curator id must look like a public key or it is dropped — an
+    // ill-formed one could never verify a claim anyway.
+    const curatorId =
+      typeof hub?.curatorId === 'string' && /^[0-9a-f]{64}$/.test(hub.curatorId)
+        ? hub.curatorId
+        : undefined;
+
+    out.push({ hubId, name, ...(curatorId ? { curatorId } : {}) });
   }
 
   return out;
