@@ -624,3 +624,11 @@ label {
   border-radius: 2px;
   padding: 14px;
 }
+
+/* The unforgeable half of an author's identity */
+.post-fingerprint {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}

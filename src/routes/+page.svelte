@@ -227,10 +227,9 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
   </div>
 {/if}
 
-<div class="text-center mb-8">
-  <button class="ghost text-xs" onclick={() => goto('/about')}>
-    about, privacy &amp; blocked people
-  </button>
+<div class="text-center mb-8 flex justify-center gap-4">
+  <button class="ghost text-xs" onclick={() => goto('/settings')}>settings</button>
+  <button class="ghost text-xs" onclick={() => goto('/about')}>about &amp; privacy</button>
 </div>
 
 {#if nearby.length > 0}

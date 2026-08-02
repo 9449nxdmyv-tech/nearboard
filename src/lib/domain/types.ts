@@ -18,6 +18,14 @@ export interface Post {
    */
   authorId: string;
   /**
+   * Display name the author claimed, inside the signature.
+   *
+   * Not unique and cannot be — there is no registry. Two people may use the
+   * same name; only the key distinguishes them, which is why identity is shown
+   * as name plus fingerprint.
+   */
+  authorName?: string;
+  /**
    * Ed25519 signature over the post's immutable content — see
    * $lib/crypto/signing. Absent on posts created before signing existed.
    */

@@ -108,12 +108,15 @@ export function canonicalBytes(post: Post): Uint8Array {
   };
 
   // Version tag, so the scheme can change later without old signatures
-  // silently validating against new rules.
-  pushText('nearboard-post-v1');
+  // silently validating against new rules. Bumped when authorName joined the
+  // signed content: a name outside the signature could be lifted onto someone
+  // else's posts, which is exactly the impersonation it exists to prevent.
+  pushText('nearboard-post-v2');
 
   pushText(post.postId);
   pushText(post.hubId);
   pushText(post.authorId);
+  pushText(post.authorName ?? '');
   pushText(post.text);
   pushNumber(post.createdAt);
   pushNumber(post.isEphemeral ? 1 : 0);
