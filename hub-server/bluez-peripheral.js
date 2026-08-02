@@ -226,10 +226,25 @@ export async function startPeripheral({
   const adapterPath = await findAdapter(bus);
   log('ble', 'adapter', adapterPath);
 
-  // Powered on and discoverable, or the advertisement goes nowhere.
   const adapterObj = await bus.getProxyObject(BLUEZ, adapterPath);
   const props = adapterObj.getInterface('org.freedesktop.DBus.Properties');
+
+  // Power-cycle before registering.
+  //
+  // Anything that has driven the HCI socket directly — bleno, noble, a previous
+  // run — can leave advertising parameters set in the controller that BlueZ did
+  // not put there and does not expect. The controller then rejects the next
+  // Add Advertising with "Invalid Parameters", which reads as a bug in the
+  // request rather than stale state. Toggling power through BlueZ resets that
+  // without needing root.
+  try {
+    await props.Set(ADAPTER_IFACE, 'Powered', new Variant('b', false));
+    await new Promise((r) => setTimeout(r, 600));
+  } catch {
+    // Not fatal; carry on and try to register anyway.
+  }
   await props.Set(ADAPTER_IFACE, 'Powered', new Variant('b', true));
+  await new Promise((r) => setTimeout(r, 600));
 
   const inboundPath = `${SERVICE_PATH}/char0`;
   const outboundPath = `${SERVICE_PATH}/char1`;

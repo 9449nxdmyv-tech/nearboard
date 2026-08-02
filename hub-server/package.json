@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "type": "module",
   "description": "BLE peripheral hub server for nearboard",
-  "main": "mesh-server.js",
+  "main": "anchor.js",
   "scripts": {
-    "start": "node mesh-server.js",
+    "start": "node anchor.js",
+    "start:bleno": "node mesh-server.js",
     "start:legacy": "node server.js"
   },
   "dependencies": {
