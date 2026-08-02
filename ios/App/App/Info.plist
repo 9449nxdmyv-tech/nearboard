@@ -60,6 +60,13 @@
 	  scanning for that exact UUID — and not to Android at all. Background
 	  discovery is therefore degraded by design on iOS.
 	-->
+	<!--
+	  Ed25519 signatures and AES-GCM are standard cryptography, which qualifies
+	  for the export exemption — but the declaration is still mandatory, and an
+	  unanswered one blocks the build from submission.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

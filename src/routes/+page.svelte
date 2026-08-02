@@ -167,6 +167,32 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
   <p class="text-sm text-accent mt-2">{error}</p>
 {/if}
 
+<!--
+  Somebody opening this alone sees an app that appears to do nothing — which is
+  also exactly what App Review sees, in a building with no other nearboard users
+  in Bluetooth range. Saying plainly that it needs someone nearby, and offering
+  a board that works without one, is the difference between "not finished" and
+  "waiting for people".
+-->
+{#if $hubs.length === 0 && nearby.length === 0 && $meshStatus.phase !== 'blocked'}
+  <div class="empty-intro mb-8">
+    <p class="text-sm text-muted" style="line-height: 1.6;">
+      nearboard needs someone else nearby. Posts travel phone to phone over
+      Bluetooth — there is no server holding them.
+    </p>
+    <p class="text-sm text-muted mt-3" style="line-height: 1.6;">
+      On your own? Open a board and turn on <em>reaching beyond Bluetooth</em>
+      to see it working before anyone is in range.
+    </p>
+  </div>
+{/if}
+
+<div class="text-center mb-8">
+  <button class="ghost text-xs" onclick={() => goto('/about')}>
+    about, privacy &amp; blocked people
+  </button>
+</div>
+
 {#if nearby.length > 0}
   <p class="text-xs text-tertiary mb-3" style="text-transform: uppercase; letter-spacing: 0.08em;">
     Boards near you

@@ -596,3 +596,16 @@ label {
   line-height: 1.5;
   color: var(--text-muted, var(--text-tertiary));
 }
+
+/* A post collapsed behind a warning */
+.collapsed-post {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+/* First-run explanation when nothing is around yet */
+.empty-intro {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 14px;
+}
