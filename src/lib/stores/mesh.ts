@@ -2,6 +2,8 @@ import { writable } from 'svelte/store';
 import { mesh, type MeshStatus } from '$lib/mesh/service';
 import { posts } from './posts';
 import { mergePost } from '$lib/domain/mergePost';
+import { notifyPostArrived } from '$lib/notify/posts';
+import { getHub } from '$lib/db/localDb';
 
 /** Live mesh status for the UI. */
 export const meshStatus = writable<MeshStatus>(mesh.getStatus());
@@ -16,6 +18,11 @@ mesh.onStatus((status) => meshStatus.set(status));
  * engagement the user just added locally.
  */
 mesh.onPost((incoming) => {
+  // The hub name is what makes a notification meaningful; a hash would not.
+  void getHub(incoming.hubId).then((hub) => {
+    if (hub) notifyPostArrived(incoming, hub.name);
+  });
+
   posts.update((current) => {
     const index = current.findIndex((p) => p.postId === incoming.postId);
     if (index === -1) return [...current, incoming];

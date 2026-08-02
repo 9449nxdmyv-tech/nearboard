@@ -17,6 +17,7 @@
     "@capacitor/app": "^8.0.1",
     "@capacitor/core": "^8.1.0",
     "@capacitor/ios": "^8.1.0",
+    "@capacitor/local-notifications": "^8.2.1",
     "@sveltejs/adapter-auto": "^7.0.1",
     "idb": "^8.0.2",
     "nostr-tools": "^2.24.1",

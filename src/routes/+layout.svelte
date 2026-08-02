@@ -5,6 +5,7 @@
   import { pruneAllExpired } from '$lib/db/localDb';
   import { page } from '$app/state';
   import '../app.css';
+  import ToastHost from '$lib/components/ToastHost.svelte';
 
   let { children } = $props();
 
@@ -20,6 +21,8 @@
     return () => clearInterval(pruneInterval);
   });
 </script>
+
+<ToastHost />
 
 <div class="container">
   {#key page.url.pathname}

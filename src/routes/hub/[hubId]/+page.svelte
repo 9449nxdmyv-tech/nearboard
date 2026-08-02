@@ -7,7 +7,10 @@
   import { sortedFeed, highlights } from '$lib/domain/scoring';
   import { count, has, toggle, add } from '$lib/domain/engagement';
   import { hiddenReason, hiddenLabel, withoutBlocked, type HiddenReason } from '$lib/domain/moderation';
-  import { moderation, block } from '$lib/stores/moderation';
+  import { moderation, block, unblock } from '$lib/stores/moderation';
+  import { showToast } from '$lib/stores/toasts';
+  import { delivery, deliveryFor, deliveryLabel, recordDelivery } from '$lib/stores/delivery';
+  import { setVisibleHub } from '$lib/notify/posts';
   import { getDeviceIdSync } from '$lib/crypto/identity';
   import { mesh } from '$lib/mesh/service';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
@@ -15,6 +18,7 @@
 
   let hub = $state<Hub | null>(null);
   let me = $state<string | null>(null);
+  let unsubscribeReach: (() => void) | undefined;
   let feedPosts = $derived(withoutBlocked(sortedFeed($posts), $moderation));
   let highlightPosts = $derived(withoutBlocked(highlights($posts, 3), $moderation));
 
@@ -34,11 +38,23 @@
     me = getDeviceIdSync();
     hub = (await getHub(hubId)) ?? null;
     await loadPostsForHub(hubId);
+    setVisibleHub(hubId);
     void ensureMeshStarted();
+
+    // Store-and-forward flushes cached posts when someone arrives, so a post
+    // written alone genuinely reaches people later. Update its reach rather
+    // than leaving it reading "waiting" forever.
+    unsubscribeReach = mesh.onReachChanged((peerCount) => {
+      for (const post of $posts) {
+        if (post.authorId === me) recordDelivery(post.postId, peerCount);
+      }
+    });
     ticker = setInterval(() => { now = Date.now(); }, 1000);
   });
 
   onDestroy(() => {
+    setVisibleHub(null);
+    unsubscribeReach?.();
     clearInterval(ticker);
     for (const url of blobUrlCache.values()) URL.revokeObjectURL(url);
     blobUrlCache.clear();
@@ -157,15 +173,26 @@
       lastInteractionAt: Date.now()
     });
     block(post.authorId);
+    showToast('Reported. This post will sink for everyone.');
   }
 
-  /** Block an author outright. Keyed on their public key, so it holds. */
+  /**
+   * Block an author outright. Keyed on their public key, so it holds.
+   *
+   * Undoable: mis-tapping the block icon is easy, and without undo the only
+   * remedy is finding the About screen and matching a truncated key by eye.
+   */
   function blockAuthorOf(post: Post) {
-    block(post.authorId);
+    const authorId = post.authorId;
+    block(authorId);
+    showToast('Blocked. You will not see their posts.', () => unblock(authorId));
   }
 
   async function hidePost(post: Post) {
     await updatePost({ ...post, isHidden: true });
+    showToast('Hidden from your feed.', () => {
+      void updatePost({ ...post, isHidden: false });
+    });
   }
 </script>
 
@@ -264,6 +291,13 @@
           </div>
           <span class="post-time">{relativeTime(post.createdAt)}</span>
         </div>
+
+        {#if me && post.authorId === me}
+          {@const reach = deliveryLabel(deliveryFor($delivery, post.postId))}
+          {#if reach}
+            <p class="post-reach">{reach}</p>
+          {/if}
+        {/if}
 
         <p class="post-text">{post.text}</p>
 
