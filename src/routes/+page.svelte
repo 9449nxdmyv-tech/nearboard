@@ -127,10 +127,19 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
 {/if}
 
 {#if !isNative && !webBleSupported}
+  <!--
+    Accurate rather than discouraging. This browser genuinely cannot do
+    Bluetooth, but that only rules out the nearby half — boards reaching beyond
+    Bluetooth work here exactly as they do in the app, so this is a real
+    participant, not a viewer.
+  -->
   <div style="border: 1px solid rgba(212, 160, 64, 0.2); padding: 12px; margin-top: 12px; border-radius: 2px;">
     <p class="text-sm" style="color: var(--ephemeral);">
-      This browser has no Bluetooth. Install the app to join the mesh — you can
-      still read hubs you have already joined.
+      This browser has no Bluetooth, so it cannot find people nearby.
+    </p>
+    <p class="text-sm text-muted mt-2" style="line-height: 1.6;">
+      Boards set to <em>reach beyond Bluetooth</em> still work here — you can
+      post and read normally. Install the app to join over Bluetooth too.
     </p>
   </div>
 {/if}
@@ -176,6 +185,8 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
       <span class="text-sm text-tertiary">mesh off</span>
     {:else if $meshStatus.phase === 'checking'}
       <span class="text-sm text-tertiary">checking bluetooth...</span>
+    {:else if !$meshStatus.bluetooth}
+      <span class="text-sm text-tertiary">connected over the internet only</span>
     {:else if $meshStatus.phase === 'searching'}
       <span class="text-sm text-tertiary">
         no one nearby yet{lastSeen ? ` · last seen ${lastSeen}` : ''}

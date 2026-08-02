@@ -83,6 +83,13 @@ export interface MeshStatus {
   peerCount: number;
   advertising: boolean;
   canAdvertise: boolean;
+  /**
+   * Whether this device can use Bluetooth at all.
+   *
+   * False in any browser without Web Bluetooth. Not a fault and not fixable —
+   * the mesh runs over the internet transport instead.
+   */
+  bluetooth: boolean;
   blocker: Blocker | null;
   /**
    * When a peer was last connected, and when a packet last arrived. Silence
@@ -134,6 +141,7 @@ export class MeshService {
     peerCount: 0,
     advertising: false,
     canAdvertise: true,
+    bluetooth: true,
     blocker: null,
     lastPeerAt: null,
     lastPacketAt: null
@@ -199,11 +207,12 @@ export class MeshService {
     // Preflight before anything else, so a missing precondition is reported as
     // itself rather than surfacing later as an unexplained absence of peers.
     this.setStatus({ phase: 'checking', blocker: null });
-    const blocker = await preflight();
+    const { blocker, bluetooth } = await preflight();
     if (blocker) {
       this.setStatus({ phase: 'blocked', blocker });
       return;
     }
+    this.setStatus({ bluetooth });
 
     const { deviceId } = await getOrCreateIdentity();
     this.senderId = senderIdFrom(deviceId);
@@ -219,7 +228,7 @@ export class MeshService {
 
     this.setStatus({ phase: 'searching', blocker: null });
 
-    if (isNative) {
+    if (isNative && bluetooth) {
       // Advertising first, then scanning. Never both plus a connect attempt at
       // once: Android's stack rejects a connection issued while a scan is live
       // with "LE Create Connection attempt failed, status=0x12", surfacing as
@@ -228,9 +237,12 @@ export class MeshService {
       await this.startAdvertising();
       await this.startScanning();
     }
-    // On the web there is no peripheral role and no background scan — the user
-    // must pick a device from the browser's chooser. `connectToChosenDevice`
-    // below covers that path.
+    // Without Bluetooth the mesh still runs — every board opted into the
+    // internet transport works exactly as it does elsewhere, which is what
+    // makes a browser on iOS or a Fire tablet a real participant rather than a
+    // viewer. On the web with Bluetooth, there is no peripheral role and no
+    // background scan, so a peer must be chosen from the browser's chooser;
+    // `connectToChosenDevice` covers that.
   }
 
   async stop(): Promise<void> {

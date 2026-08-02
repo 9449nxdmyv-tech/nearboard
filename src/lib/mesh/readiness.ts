@@ -98,17 +98,36 @@ function errorBlocker(message: string): Blocker {
   };
 }
 
+export interface PreflightResult {
+  /** Something the user must fix before the mesh can run at all. */
+  blocker: Blocker | null;
+  /** Whether this device can use Bluetooth at all. */
+  bluetooth: boolean;
+}
+
 /**
  * Check every precondition, in platform order, stopping at the first failure.
  *
- * Order matters: asking for permission while Bluetooth is off produces a
- * confusing prompt, and checking location before permission reports the wrong
- * problem. Returns null when everything the mesh needs is in place.
+ * A blocker means "the user can fix this and the mesh cannot run until they
+ * do". A missing capability is different: it is a fact about the platform,
+ * nothing to fix, and must not stop the parts that do work.
+ *
+ * That distinction was wrong and it mattered. A browser without Web Bluetooth —
+ * iOS Safari, and every browser on a Fire tablet — was treated as blocked, so
+ * the mesh never started and the internet transport was unreachable even though
+ * it works perfectly there. Bluetooth being absent is a reason to run over the
+ * internet, not a reason to run nothing.
+ *
+ * Order still matters among the real blockers: asking for permission while
+ * Bluetooth is off produces a confusing prompt, and checking location before
+ * permission reports the wrong problem.
  */
-export async function preflight(): Promise<Blocker | null> {
+export async function preflight(): Promise<PreflightResult> {
   if (!isNative) {
     const hasWebBluetooth = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
-    return hasWebBluetooth ? null : BLOCKERS.unsupported;
+    // Never a blocker: the internet transport does not need Bluetooth, and a
+    // browser cannot install one anyway.
+    return { blocker: null, bluetooth: hasWebBluetooth };
   }
 
   // initialize() both sets up the plugin and requests the runtime permissions.
@@ -117,15 +136,20 @@ export async function preflight(): Promise<Blocker | null> {
     await BleClient.initialize({ androidNeverForLocation: false });
   } catch (e) {
     const message = (e as Error)?.message ?? '';
-    if (/permission|denied/i.test(message)) return BLOCKERS['permission-denied'];
-    return errorBlocker(message || 'Could not initialise Bluetooth.');
+    if (/permission|denied/i.test(message)) {
+      return { blocker: BLOCKERS['permission-denied'], bluetooth: false };
+    }
+    return { blocker: errorBlocker(message || 'Could not initialise Bluetooth.'), bluetooth: false };
   }
 
   try {
     const enabled = await BleClient.isEnabled();
-    if (!enabled) return BLOCKERS['bluetooth-off'];
+    if (!enabled) return { blocker: BLOCKERS['bluetooth-off'], bluetooth: false };
   } catch (e) {
-    return errorBlocker((e as Error)?.message ?? 'Could not read Bluetooth state.');
+    return {
+      blocker: errorBlocker((e as Error)?.message ?? 'Could not read Bluetooth state.'),
+      bluetooth: false
+    };
   }
 
   // Android only, and only below API 31. isLocationEnabled throws on iOS, where
@@ -133,13 +157,13 @@ export async function preflight(): Promise<Blocker | null> {
   if (Capacitor.getPlatform() === 'android') {
     try {
       const locationOn = await BleClient.isLocationEnabled();
-      if (!locationOn) return BLOCKERS['location-off'];
+      if (!locationOn) return { blocker: BLOCKERS['location-off'], bluetooth: false };
     } catch {
       // Newer Android versions do not tie scanning to location; carry on.
     }
   }
 
-  return null;
+  return { blocker: null, bluetooth: true };
 }
 
 /** Run the fix a blocker offers. Returns true if the user may now be unblocked. */
