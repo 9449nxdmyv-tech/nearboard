@@ -20,6 +20,7 @@ import { PacketChannel, MESH_SERVICE_UUID, CHAR_INBOUND, CHAR_OUTBOUND } from '.
 import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
 import { NostrLink } from './nostr.ts';
+import { MeshScanner } from './central.ts';
 import { makePacket, PacketType, type Packet } from './packet.ts';
 import { encodeAnnounce, decodeAnnounce, NearbyHubs, type AnnouncedHub } from './announce.ts';
 
@@ -53,6 +54,13 @@ const SCAN_SETTLE_MS = 600;
 const CONNECT_ATTEMPTS = 3;
 /** Base backoff between connect attempts; multiplied by attempt number. */
 const CONNECT_RETRY_MS = 800;
+
+/** The mesh service and its two characteristics, passed to the native plugins. */
+const MESH_UUIDS = {
+  serviceUuid: MESH_SERVICE_UUID,
+  inboundUuid: CHAR_INBOUND,
+  outboundUuid: CHAR_OUTBOUND
+};
 
 /**
  * What the mesh is doing, as one value the UI can switch on.
@@ -94,6 +102,7 @@ function senderIdFrom(deviceId: string): string {
 export class MeshService {
   private node: MeshNode | null = null;
   private advertiser: MeshAdvertiser | null = null;
+  private scanner: MeshScanner | null = null;
   private senderId = '';
 
   /** Boards other people nearby are carrying. */
@@ -102,6 +111,9 @@ export class MeshService {
 
   /** Hubs currently carried over the internet, keyed by hubId. */
   private internetLinks = new Map<string, NostrLink>();
+
+  /** Peers seen in a scan and not yet connected to. */
+  private pendingPeers = new Set<string>();
 
   /** Peers we have an open channel to, so we do not connect twice. */
   private connected = new Set<string>();
@@ -286,7 +298,38 @@ export class MeshService {
   // ---- Central role ----
 
   private async startScanning(): Promise<void> {
-    await BleClient.initialize({ androidNeverForLocation: false });
+    // Our own plugin, not the community one. The community plugin resolves a
+    // device with getRemoteDevice(address), which assumes a PUBLIC address
+    // type, while Android advertises with a RANDOM one and rotates it — so
+    // every connect targeted a wrong-typed, possibly stale address and timed
+    // out. This keeps the BluetoothDevice the scanner handed over.
+    this.scanner = new MeshScanner({
+      // Collected here rather than in sweep(), because the scan callback is a
+      // long-lived native listener — a per-sweep collector would miss peers
+      // reported outside its own window.
+      onPeerFound: (deviceId) => {
+        if (!this.connected.has(deviceId)) this.pendingPeers.add(deviceId);
+      },
+      onPeerReady: (deviceId, link) => {
+        if (this.connected.has(deviceId)) return;
+        const channel = new PacketChannel(link, deviceId, (e) =>
+          this.setStatus({ blocker: this.toBlocker(e) })
+        );
+        channel.start();
+        this.node?.addPeer(deviceId, channel);
+        this.connected.add(deviceId);
+        this.notePeerChange();
+      },
+      onPeerLost: (deviceId) => {
+        this.nearbyHubs.forgetPeer(deviceId);
+        this.node?.removePeer(deviceId);
+        this.connected.delete(deviceId);
+        this.notePeerChange();
+      },
+      onError: (e) => console.warn('[mesh] central:', e.message)
+    });
+
+    await this.scanner.start(MESH_UUIDS);
     void this.sweepLoop();
   }
 
@@ -314,113 +357,53 @@ export class MeshService {
     }
   }
 
-  /**
-   * Scan without a service filter and log everything in range.
-   *
-   * A filtered scan that returns nothing is ambiguous — it cannot distinguish
-   * "no peers here" from "our advertising is invisible" from "the filter is
-   * wrong". This separates them: if other devices appear but ours does not,
-   * the problem is on the advertising side.
-   */
-  async diagnoseScan(windowMs = 6000): Promise<string[]> {
-    const seen: string[] = [];
-    await BleClient.initialize({ androidNeverForLocation: false });
-    await BleClient.requestLEScan({ allowDuplicates: false }, (result) => {
-      const services = result.device.uuids ?? result.uuids ?? [];
-      seen.push(
-        `${result.device.deviceId} name=${result.device.name ?? result.localName ?? '?'} ` +
-          `rssi=${result.rssi ?? '?'} services=[${services.join(',')}]`
-      );
-    });
-    await new Promise((r) => setTimeout(r, windowMs));
-    try {
-      await BleClient.stopLEScan();
-    } catch {
-      // Already stopped.
-    }
-    console.log(`[mesh-diag] unfiltered scan saw ${seen.length} advertisements`);
-    for (const line of seen) console.log(`[mesh-diag] ${line}`);
-    return seen;
-  }
-
   /** One scan window: look for peers, connect to any we do not already have. */
   private async sweep(): Promise<void> {
-    if (!this.node) return;
+    if (!this.node || !this.scanner) return;
 
-    const found = new Set<string>();
     try {
-      await BleClient.requestLEScan({ services: [MESH_SERVICE_UUID] }, (result) => {
-        console.log(`[mesh-diag] filtered hit: ${result.device.deviceId} ${result.device.name ?? ''}`);
-        found.add(result.device.deviceId);
-      });
+      await this.scanner.scan(MESH_UUIDS);
     } catch (e) {
-      this.setStatus({ blocker: this.toBlocker(e as Error, "Scan failed") });
-      console.log(`[mesh-diag] filtered scan failed: ${(e as Error).message}`);
+      this.setStatus({ blocker: this.toBlocker(e as Error, 'Scan failed') });
       return;
     }
 
     await new Promise((r) => setTimeout(r, SCAN_DURATION_MS));
-    try {
-      await BleClient.stopLEScan();
-    } catch {
-      // Already stopped.
-    }
+    await this.scanner.stopScan().catch(() => {});
 
     // The stack needs a moment after a scan before it will accept a connection.
-    // Issuing one immediately is the single most common cause of GATT 133 on
-    // Android, and it fails in a way that looks like the peer is unreachable.
     await new Promise((r) => setTimeout(r, SCAN_SETTLE_MS));
 
-    // Strictly one at a time. Parallel connects contend for the same limited
-    // pool of GATT client interfaces and fail each other.
-    for (const deviceId of found) {
+    for (const deviceId of this.pendingPeers) {
       if (this.connected.has(deviceId)) continue;
       await this.connectTo(deviceId);
     }
+    this.pendingPeers.clear();
   }
 
   /**
    * Connect, retrying on the transient failures Android produces routinely.
    *
-   * GATT 133 is a generic "something went wrong" that very often succeeds on a
-   * second attempt — treating the first failure as final is why a peer that is
-   * plainly in range appears unreachable.
+   * GATT 133 is generic and frequently succeeds on a later attempt; treating
+   * the first failure as final makes a peer that is plainly in range look
+   * unreachable.
    */
   private async connectTo(deviceId: string): Promise<void> {
-    if (!this.node || this.connected.has(deviceId)) return;
-
-    // Claim the slot before awaiting, or an overlapping sweep starts a second
-    // connection to the same device.
-    this.connected.add(deviceId);
+    if (!this.node || !this.scanner || this.connected.has(deviceId)) return;
 
     for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
       try {
-        const link = await CapacitorPacketLink.connect(deviceId);
-        const channel = new PacketChannel(link, deviceId, (e) =>
-          this.setStatus({ blocker: this.toBlocker(e) })
-        );
-        channel.start();
-        this.node.addPeer(deviceId, channel);
-        this.notePeerChange();
-        return;
+        await this.scanner.connect(deviceId);
+        return; // onPeerReady wires up the channel
       } catch (e) {
         const message = (e as Error)?.message ?? String(e);
         console.log(`[mesh] connect to ${deviceId} attempt ${attempt} failed: ${message}`);
-
-        // Leave the radio idle briefly before retrying; back-to-back attempts
-        // reproduce the same failure.
         if (attempt < CONNECT_ATTEMPTS) {
-          try {
-            await BleClient.disconnect(deviceId);
-          } catch {
-            // Nothing to tear down.
-          }
+          await this.scanner.disconnect(deviceId).catch(() => {});
           await new Promise((r) => setTimeout(r, CONNECT_RETRY_MS * attempt));
         }
       }
     }
-
-    this.connected.delete(deviceId);
     console.log(`[mesh] giving up on ${deviceId} after ${CONNECT_ATTEMPTS} attempts`);
   }
 
