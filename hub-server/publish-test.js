@@ -9,6 +9,8 @@
 import { webcrypto } from 'crypto';
 import { encodePacket, makePacket, PacketType, randomId, SENDER_ID_SIZE } from '../src/lib/mesh/packet.ts';
 import { deriveHubId } from '../src/lib/domain/hubId.ts';
+import { withSignature } from '../src/lib/crypto/signing.ts';
+import { ed25519 } from '@noble/curves/ed25519.js';
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 
@@ -19,6 +21,13 @@ const text = process.argv[3] ?? 'posted from a device that has never seen Blueto
 
 const hubId = await deriveHubId(hubName);
 const senderId = randomId(SENDER_ID_SIZE);
+
+// A throwaway signing identity. Unsigned posts are rejected by every node, so
+// this tool has to be a real author rather than an anonymous publisher.
+const signingSecret = ed25519.utils.randomSecretKey();
+const authorId = [...ed25519.getPublicKey(signingSecret)]
+  .map((b) => b.toString(16).padStart(2, '0'))
+  .join('');
 const secretKey = webcrypto.getRandomValues(new Uint8Array(32));
 
 console.log(`hub "${hubName}" -> ${hubId}`);
@@ -30,7 +39,7 @@ console.log('connected to relays');
 const post = {
   postId: `p-${Date.now()}`,
   hubId,
-  authorId: senderId,
+  authorId,
   text,
   createdAt: Date.now(),
   lastInteractionAt: Date.now(),
@@ -44,7 +53,8 @@ const post = {
   isCarried: false
 };
 
-const payload = new TextEncoder().encode(JSON.stringify(post));
+const signed = withSignature(post, { authorId, secretKey: signingSecret });
+const payload = new TextEncoder().encode(JSON.stringify(signed));
 const frame = new Uint8Array(encodePacket(makePacket(PacketType.Post, senderId, payload)));
 
 console.log(`publishing post "${text}" (${frame.length}B packet)...`);

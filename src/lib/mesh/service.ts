@@ -25,6 +25,7 @@ import { encodeAnnounce, decodeAnnounce, NearbyHubs, type AnnouncedHub } from '.
 
 import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
 import { getOrCreateIdentity } from '$lib/crypto/identity';
+import { verifyPost } from '$lib/crypto/signing';
 import { toWire, fromWire, type WirePost } from '$lib/domain/wire';
 import { mergePost } from '$lib/domain/mergePost';
 import { savePost, getPost, getAllHubs } from '$lib/db/localDb';
@@ -544,6 +545,21 @@ export class MeshService {
     if (!wire?.postId || typeof wire.text !== 'string' || !wire.hubId) return;
 
     const incoming = fromWire(wire);
+
+    // Authorship is checked before anything else touches storage.
+    //
+    // Without this, authorId is a claim rather than a fact: any peer could
+    // publish a post as anyone, and every device on the flood would relay and
+    // store the forgery. Verification needs only the post, since authorId is
+    // the public key its signature verifies against.
+    //
+    // Unsigned posts are rejected outright rather than accepted as
+    // "unverified". A tier that skips the check is a tier an attacker simply
+    // opts into by omitting the signature.
+    if (!verifyPost(incoming)) {
+      console.warn(`[mesh] rejected post ${incoming.postId.slice(0, 8)}: bad or missing signature`);
+      return;
+    }
 
     // Relay everything, store only what the user has joined. A device that
     // carries traffic for hubs it is not a member of is what makes the mesh
