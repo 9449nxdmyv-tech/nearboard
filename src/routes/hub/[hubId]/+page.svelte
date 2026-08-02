@@ -160,6 +160,8 @@
     setVisibleHub(hubId);
     await loadReplies();
     claims = await getCurationClaims(hubId);
+    // Starts regardless of Bluetooth — a board on the internet transport works
+    // in any browser, which is what makes web and native the same network.
     void ensureMeshStarted();
 
     unsubscribeCuration = mesh.onCuration((claim) => {
