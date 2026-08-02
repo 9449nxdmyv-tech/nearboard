@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -0pi -e ' *)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(python3 -)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)"
+    ]
+  }
+}

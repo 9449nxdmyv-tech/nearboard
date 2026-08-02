@@ -123,9 +123,15 @@
     if (overInternet) {
       await mesh.leaveInternet(hub.hubId);
       overInternet = false;
+      showToast('Back to Bluetooth only — this board is local again.');
     } else {
       await mesh.joinOverInternet(hub.hubId, hub.name);
       overInternet = mesh.isOnInternet(hub.hubId);
+      if (overInternet) {
+        // Said plainly, because this is the moment a local board stops being
+        // local. Anyone who knows the name can now reach it from anywhere.
+        showToast('This board can now be reached from anywhere, not just nearby.');
+      }
     }
   }
 

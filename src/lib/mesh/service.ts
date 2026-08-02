@@ -21,7 +21,7 @@ import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
 import { NostrLink } from './nostr.ts';
 import { MeshScanner } from './central.ts';
-import { makePacket, PacketType, type Packet } from './packet.ts';
+import { makePacket, encodePacket, PacketType, type Packet } from './packet.ts';
 import { encodeAnnounce, decodeAnnounce, NearbyHubs, type AnnouncedHub } from './announce.ts';
 
 import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
@@ -351,6 +351,13 @@ export class MeshService {
     });
 
     await this.scanner.start(MESH_UUIDS);
+
+    // Android only. Without it the mesh stops within minutes of the app
+    // leaving the screen, which is when a board most needs to keep working.
+    if (Capacitor.getPlatform() === 'android') {
+      void this.scanner.enableBackground();
+    }
+
     void this.sweepLoop();
   }
 
@@ -462,6 +469,10 @@ export class MeshService {
       this.node.addPeer(peerId, channel);
       this.internetLinks.set(hubId, link);
       this.notePeerChange();
+
+      // Announce straight away rather than waiting for the next peer change,
+      // so a board becomes findable the moment it is switched on.
+      void this.announceHubs().catch(() => {});
     } catch (e) {
       console.warn('[mesh] could not join over the internet:', (e as Error).message);
     }
@@ -511,18 +522,45 @@ export class MeshService {
 
   // ---- Inbound ----
 
-  /** Tell peers which boards this device carries. */
+  /**
+   * Tell peers which boards this device carries.
+   *
+   * Announcements go out over whatever transports are attached, which now
+   * includes the internet for any board the user opted in. That is what makes a
+   * board reachable past the room — and also why it stays opt-in: a board
+   * announced to public relays can be joined from anywhere, which is a
+   * different thing from a board on a wall in a cafe.
+   *
+   * Only opted-in boards are announced over the internet. A board that is
+   * Bluetooth-only must not have its name leave the room just because some
+   * other board on the same device did.
+   */
   private async announceHubs(): Promise<void> {
     if (!this.node) return;
     const hubs = await getAllHubs();
     if (hubs.length === 0) return;
 
+    // Bluetooth peers hear about everything this device carries.
     await this.node.originate(
       encodeAnnounce(
         this.senderId,
         hubs.map((h) => ({ hubId: h.hubId, name: h.name }))
       )
     );
+
+    // Each internet-enabled board announces only itself, on its own relay
+    // subscription — so joining one board over the internet never discloses
+    // which other boards this device holds.
+    for (const [hubId, link] of this.internetLinks) {
+      const hub = hubs.find((h) => h.hubId === hubId);
+      if (!hub) continue;
+      const packet = encodeAnnounce(this.senderId, [{ hubId: hub.hubId, name: hub.name }]);
+      try {
+        await link.sendFrame(encodePacket(packet));
+      } catch {
+        // Relay unreachable; the next announcement will retry.
+      }
+    }
   }
 
   private async handlePacket(packet: Packet, fromPeerId?: string): Promise<void> {
