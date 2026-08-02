@@ -112,6 +112,9 @@ export class MeshService {
   /** Hubs currently carried over the internet, keyed by hubId. */
   private internetLinks = new Map<string, NostrLink>();
 
+  /** Mesh senderId -> the peerId currently carrying it, for collapsing duplicates. */
+  private peerIdentities = new Map<string, string>();
+
   /** Peers seen in a scan and not yet connected to. */
   private pendingPeers = new Set<string>();
 
@@ -185,6 +188,7 @@ export class MeshService {
 
     this.node.onDelivery((packet, fromPeerId) => {
       this.setStatus({ lastPacketAt: Date.now() });
+      this.collapseDuplicatePeer(packet.senderId, fromPeerId);
       void this.handlePacket(packet, fromPeerId);
     });
 
@@ -558,6 +562,35 @@ export class MeshService {
   }
 
   // ---- Status ----
+
+  /**
+   * Collapse two channels that turn out to reach the same device.
+   *
+   * Both halves of the mesh run at once, so two devices in range each dial the
+   * other while also accepting the other's call. That leaves two links to one
+   * peer — and because each side uses its own rotating random BLE address,
+   * nothing at the transport layer can tell they are the same device. The
+   * symptom is a peer count of two when one other person is present, and every
+   * packet sent twice.
+   *
+   * The mesh senderId is the first thing that identifies a device across both
+   * roles, so the duplicate can only be spotted once a packet arrives. Keeping
+   * the channel that most recently carried traffic favours the one known to
+   * work.
+   */
+  private collapseDuplicatePeer(senderId: string, peerId: string): void {
+    const existing = this.peerIdentities.get(senderId);
+
+    if (existing && existing !== peerId) {
+      this.node?.removePeer(existing);
+      this.connected.delete(existing);
+      this.nearbyHubs.forgetPeer(existing);
+      void this.scanner?.disconnect(existing).catch(() => {});
+      this.notePeerChange();
+    }
+
+    this.peerIdentities.set(senderId, peerId);
+  }
 
   /**
    * Recompute peer count and phase together.
