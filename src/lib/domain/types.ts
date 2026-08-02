@@ -6,6 +6,17 @@ export interface Hub {
   description?: string;
   createdAt: number; // ms epoch
   isOwned: boolean;
+  /**
+   * Public key of whoever curates this board, recorded when it was created or
+   * joined — trust-on-first-use.
+   *
+   * hubId comes from the board's name, so there is no global owner and anyone
+   * may claim to be one. This device honours pins and removals only from the
+   * key it recorded here, which means two people who joined from different
+   * sources may see different curators. That is an honest reflection of a
+   * network with no authority.
+   */
+  curatorId?: string;
 }
 
 export interface Post {
@@ -57,11 +68,20 @@ export interface Post {
 
 export interface Reply {
   replyId: string;
+  /** The post being answered. */
   postId: string;
+  /** Which board it belongs to, so a reply can be routed without its post. */
+  hubId: string;
+  /** Ed25519 public key of the author, hex — same self-certifying scheme as Post. */
   authorId: string;
-  text: string; // max 140 chars
+  authorName?: string;
+  text: string;
   createdAt: number;
+  /** Ed25519 signature over the reply's content — see $lib/crypto/signing. */
+  signature?: string;
 }
+
+export const MAX_REPLY_CHARS = 140;
 
 /** Duration options for ephemeral posts, in milliseconds */
 export const EPHEMERAL_DURATIONS = [

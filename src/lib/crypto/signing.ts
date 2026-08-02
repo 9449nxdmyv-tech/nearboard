@@ -22,7 +22,7 @@
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js';
-import type { Post } from '$lib/domain/types';
+import type { Post, Reply } from '$lib/domain/types';
 
 const STORAGE_KEY = 'nearboard_signing_key';
 
@@ -137,6 +137,71 @@ export function canonicalBytes(post: Post): Uint8Array {
 }
 
 // --- sign / verify ---
+
+/**
+ * The bytes a reply's signature covers.
+ *
+ * Same length-prefixed scheme as a post, and the post id is included: without
+ * it a reply could be lifted onto a different post, which would let someone
+ * put an innocuous answer under something it was never written for.
+ */
+export function canonicalReplyBytes(reply: Reply): Uint8Array {
+  const parts: Uint8Array[] = [];
+  const encoder = new TextEncoder();
+
+  const pushField = (bytes: Uint8Array) => {
+    const header = new Uint8Array(4);
+    new DataView(header.buffer).setUint32(0, bytes.byteLength, false);
+    parts.push(header, bytes);
+  };
+  const pushText = (value: string) => pushField(encoder.encode(value));
+  const pushNumber = (value: number) => {
+    const buf = new Uint8Array(8);
+    new DataView(buf.buffer).setBigUint64(0, BigInt(Math.max(0, Math.floor(value))), false);
+    pushField(buf);
+  };
+
+  pushText('nearboard-reply-v1');
+  pushText(reply.replyId);
+  pushText(reply.postId);
+  pushText(reply.hubId);
+  pushText(reply.authorId);
+  pushText(reply.authorName ?? '');
+  pushText(reply.text);
+  pushNumber(reply.createdAt);
+
+  const total = parts.reduce((n, p) => n + p.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.byteLength;
+  }
+  return out;
+}
+
+export function signReply(reply: Reply, secretKey: Uint8Array): string {
+  return toHex(ed25519.sign(canonicalReplyBytes(reply), secretKey));
+}
+
+export function verifyReply(reply: Reply): boolean {
+  if (!reply.signature || !isVerifiableAuthorId(reply.authorId)) return false;
+  const signature = fromHex(reply.signature);
+  const publicKey = fromHex(reply.authorId);
+  if (!signature || signature.length !== 64) return false;
+  if (!publicKey || publicKey.length !== 32) return false;
+  try {
+    return ed25519.verify(signature, canonicalReplyBytes(reply), publicKey);
+  } catch {
+    return false;
+  }
+}
+
+/** Sign a reply in place, returning a new signed copy. */
+export function withReplySignature(reply: Reply, identity: SigningIdentity): Reply {
+  const authored: Reply = { ...reply, authorId: identity.authorId };
+  return { ...authored, signature: signReply(authored, identity.secretKey) };
+}
 
 /** Sign a post. `authorId` must already be the identity's public key. */
 export function signPost(post: Post, secretKey: Uint8Array): string {

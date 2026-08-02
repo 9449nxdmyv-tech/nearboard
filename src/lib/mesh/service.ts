@@ -26,11 +26,12 @@ import { encodeAnnounce, decodeAnnounce, NearbyHubs, type AnnouncedHub } from '.
 
 import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
 import { getOrCreateIdentity } from '$lib/crypto/identity';
-import { verifyPost } from '$lib/crypto/signing';
+import { verifyPost, verifyReply } from '$lib/crypto/signing';
+import { verifyClaim, type CurationClaim } from '$lib/domain/curation';
 import { toWire, fromWire, type WirePost } from '$lib/domain/wire';
 import { mergePost } from '$lib/domain/mergePost';
-import { savePost, getPost, getAllHubs } from '$lib/db/localDb';
-import type { Post } from '$lib/domain/types';
+import { savePost, getPost, getAllHubs, saveReply, saveCurationClaim } from '$lib/db/localDb';
+import type { Post, Reply } from '$lib/domain/types';
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -109,6 +110,8 @@ export class MeshService {
   private nearbyHubs = new NearbyHubs();
   private nearbyListeners = new Set<(hubs: AnnouncedHub[]) => void>();
   private reachListeners = new Set<(peerCount: number) => void>();
+  private replyListeners = new Set<(reply: Reply) => void>();
+  private curationListeners = new Set<(claim: CurationClaim) => void>();
 
   /** Hubs currently carried over the internet, keyed by hubId. */
   private internetLinks = new Map<string, NostrLink>();
@@ -162,6 +165,18 @@ export class MeshService {
   onReachChanged(listener: (peerCount: number) => void): () => void {
     this.reachListeners.add(listener);
     return () => this.reachListeners.delete(listener);
+  }
+
+  /** Fires when a reply arrives from the mesh and has been stored. */
+  onReply(listener: (reply: Reply) => void): () => void {
+    this.replyListeners.add(listener);
+    return () => this.replyListeners.delete(listener);
+  }
+
+  /** Fires when a verified curation decision arrives. */
+  onCuration(listener: (claim: CurationClaim) => void): () => void {
+    this.curationListeners.add(listener);
+    return () => this.curationListeners.delete(listener);
   }
 
   /** Boards currently visible on the mesh. */
@@ -255,6 +270,21 @@ export class MeshService {
     if (!this.node) return 0;
     const payload = new TextEncoder().encode(JSON.stringify(toWire(post)));
     await this.node.originate(makePacket(PacketType.Post, this.senderId, payload));
+    return this.node.peerCount;
+  }
+
+  /** Publish a curation decision. Only meaningful from a board's curator. */
+  async publishCuration(claim: CurationClaim): Promise<void> {
+    if (!this.node) return;
+    const payload = new TextEncoder().encode(JSON.stringify(claim));
+    await this.node.originate(makePacket(PacketType.Curation, this.senderId, payload));
+  }
+
+  /** Put a reply onto the mesh. Returns how many peers it went to. */
+  async publishReply(reply: Reply): Promise<number> {
+    if (!this.node) return 0;
+    const payload = new TextEncoder().encode(JSON.stringify(reply));
+    await this.node.originate(makePacket(PacketType.Reply, this.senderId, payload));
     return this.node.peerCount;
   }
 
@@ -572,6 +602,16 @@ export class MeshService {
       return;
     }
 
+    if (packet.type === PacketType.Curation) {
+      await this.handleCuration(packet);
+      return;
+    }
+
+    if (packet.type === PacketType.Reply) {
+      await this.handleReply(packet);
+      return;
+    }
+
     if (packet.type !== PacketType.Post) return;
 
     let wire: WirePost;
@@ -614,6 +654,69 @@ export class MeshService {
     await savePost(merged);
 
     for (const listener of this.postListeners) listener(merged);
+  }
+
+  /**
+   * Store a reply that arrived from the mesh.
+   *
+   * Kept even when its post has not arrived yet — replies and posts take
+   * different paths, so a reply landing first is ordinary rather than an error.
+   * The feed simply shows nothing until the post catches up, and
+   * pruneOrphanReplies clears any that never do.
+   */
+  private async handleReply(packet: Packet): Promise<void> {
+    let reply: Reply;
+    try {
+      reply = JSON.parse(new TextDecoder().decode(packet.payload)) as Reply;
+    } catch {
+      return;
+    }
+
+    if (!reply?.replyId || !reply.postId || !reply.hubId || typeof reply.text !== 'string') {
+      return;
+    }
+
+    if (!verifyReply(reply)) {
+      console.warn(`[mesh] rejected reply ${reply.replyId.slice(0, 8)}: bad or missing signature`);
+      return;
+    }
+
+    // Relay everything, store only for boards this device has joined.
+    const hubs = await getAllHubs();
+    if (!hubs.some((h) => h.hubId === reply.hubId)) return;
+
+    await saveReply(reply);
+    for (const listener of this.replyListeners) listener(reply);
+  }
+
+  /**
+   * Store a curation claim, if it came from the curator this device recognises.
+   *
+   * Verified against the key recorded when the board was joined, not against
+   * whoever sent the packet — an impostor can sign perfectly well, they simply
+   * cannot sign as the curator the user trusted.
+   */
+  private async handleCuration(packet: Packet): Promise<void> {
+    let claim: CurationClaim;
+    try {
+      claim = JSON.parse(new TextDecoder().decode(packet.payload)) as CurationClaim;
+    } catch {
+      return;
+    }
+
+    if (!claim?.hubId || !claim.postId || !claim.curatorId) return;
+
+    const hubs = await getAllHubs();
+    const hub = hubs.find((h) => h.hubId === claim.hubId);
+    if (!hub) return;
+
+    if (!verifyClaim(claim, hub.curatorId)) {
+      console.warn(`[mesh] rejected curation for ${claim.hubId.slice(0, 8)}: not from this board's curator`);
+      return;
+    }
+
+    await saveCurationClaim(claim);
+    for (const listener of this.curationListeners) listener(claim);
   }
 
   // ---- Status ----
