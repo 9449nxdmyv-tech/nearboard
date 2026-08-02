@@ -3,8 +3,10 @@
   import { goto } from '$app/navigation';
   import { Capacitor } from '@capacitor/core';
   import { hubs, loadHubs } from '$lib/stores/hubs';
+import { saveHub } from '$lib/db/localDb';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
   import { mesh } from '$lib/mesh/service';
+import type { AnnouncedHub } from '$lib/mesh/announce';
   import type { FixAction } from '$lib/mesh/readiness';
   import { canInstall, triggerInstall } from '$lib/pwa/installPrompt';
 
@@ -38,6 +40,24 @@
     if (mins < 60) return `${mins}m ago`;
     return `${Math.floor(mins / 60)}h ago`;
   });
+
+  // Boards peers nearby are carrying. Joining one takes a tap, rather than
+  // typing a name that has to match character for character.
+  let nearby = $state<AnnouncedHub[]>([]);
+  onMount(() => mesh.onNearbyHubs((hubs) => { nearby = hubs; }));
+
+  async function joinNearby(hub: AnnouncedHub) {
+    if (!$hubs.some((h) => h.hubId === hub.hubId)) {
+      await saveHub({
+        hubId: hub.hubId,
+        name: hub.name,
+        createdAt: Date.now(),
+        isOwned: false
+      });
+      await loadHubs();
+    }
+    goto(`/hub/${hub.hubId}`);
+  }
 
   async function fixBlocker(action: FixAction) {
     try {
@@ -145,6 +165,30 @@
 
 {#if error}
   <p class="text-sm text-accent mt-2">{error}</p>
+{/if}
+
+{#if nearby.length > 0}
+  <p class="text-xs text-tertiary mb-3" style="text-transform: uppercase; letter-spacing: 0.08em;">
+    Boards near you
+  </p>
+  <div class="stagger mb-6">
+    {#each nearby as hub (hub.hubId)}
+      <div
+        class="card interactive"
+        role="button"
+        tabindex="0"
+        onclick={() => joinNearby(hub)}
+        onkeydown={(e) => e.key === 'Enter' && joinNearby(hub)}
+      >
+        <div class="flex items-center gap-2">
+          <span style="font-weight: 500;">{hub.name}</span>
+          {#if !$hubs.some((h) => h.hubId === hub.hubId)}
+            <span class="badge">tap to join</span>
+          {/if}
+        </div>
+      </div>
+    {/each}
+  </div>
 {/if}
 
 {#if $hubs.length > 0}

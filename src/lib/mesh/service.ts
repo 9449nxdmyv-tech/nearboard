@@ -21,6 +21,7 @@ import { CapacitorPacketLink, WebPacketLink } from './links.ts';
 import { MeshAdvertiser } from './peripheral.ts';
 import { NostrLink } from './nostr.ts';
 import { makePacket, PacketType, type Packet } from './packet.ts';
+import { encodeAnnounce, decodeAnnounce, NearbyHubs, type AnnouncedHub } from './announce.ts';
 
 import { preflight, applyFix, type Blocker, type FixAction } from './readiness.ts';
 import { getOrCreateIdentity } from '$lib/crypto/identity';
@@ -94,6 +95,10 @@ export class MeshService {
   private advertiser: MeshAdvertiser | null = null;
   private senderId = '';
 
+  /** Boards other people nearby are carrying. */
+  private nearbyHubs = new NearbyHubs();
+  private nearbyListeners = new Set<(hubs: AnnouncedHub[]) => void>();
+
   /** Hubs currently carried over the internet, keyed by hubId. */
   private internetLinks = new Map<string, NostrLink>();
 
@@ -126,6 +131,18 @@ export class MeshService {
     return () => this.postListeners.delete(listener);
   }
 
+  /** Subscribe to boards seen nearby. Fires with the current list immediately. */
+  onNearbyHubs(listener: (hubs: AnnouncedHub[]) => void): () => void {
+    this.nearbyListeners.add(listener);
+    listener(this.nearbyHubs.list());
+    return () => this.nearbyListeners.delete(listener);
+  }
+
+  /** Boards currently visible on the mesh. */
+  getNearbyHubs(): AnnouncedHub[] {
+    return this.nearbyHubs.list();
+  }
+
   getStatus(): MeshStatus {
     return { ...this.status };
   }
@@ -153,9 +170,9 @@ export class MeshService {
       onError: (e) => this.setStatus({ blocker: this.toBlocker(e) })
     });
 
-    this.node.onDelivery((packet) => {
+    this.node.onDelivery((packet, fromPeerId) => {
       this.setStatus({ lastPacketAt: Date.now() });
-      void this.handlePacket(packet);
+      void this.handlePacket(packet, fromPeerId);
     });
 
     this.setStatus({ phase: 'searching', blocker: null });
@@ -234,6 +251,7 @@ export class MeshService {
         this.notePeerChange();
       },
       onPeerDisconnected: (peerId) => {
+        this.nearbyHubs.forgetPeer(peerId);
         this.node?.removePeer(peerId);
         this.connected.delete(peerId);
         this.notePeerChange();
@@ -488,7 +506,29 @@ export class MeshService {
 
   // ---- Inbound ----
 
-  private async handlePacket(packet: Packet): Promise<void> {
+  /** Tell peers which boards this device carries. */
+  private async announceHubs(): Promise<void> {
+    if (!this.node) return;
+    const hubs = await getAllHubs();
+    if (hubs.length === 0) return;
+
+    await this.node.originate(
+      encodeAnnounce(
+        this.senderId,
+        hubs.map((h) => ({ hubId: h.hubId, name: h.name }))
+      )
+    );
+  }
+
+  private async handlePacket(packet: Packet, fromPeerId?: string): Promise<void> {
+    if (packet.type === PacketType.Announce) {
+      const hubs = decodeAnnounce(packet);
+      if (hubs.length > 0 && this.nearbyHubs.record(hubs, fromPeerId ?? packet.senderId)) {
+        for (const listener of this.nearbyListeners) listener(this.nearbyHubs.list());
+      }
+      return;
+    }
+
     if (packet.type !== PacketType.Post) return;
 
     let wire: WirePost;
@@ -528,7 +568,18 @@ export class MeshService {
    * the sort of lie this refactor exists to prevent.
    */
   private notePeerChange(): void {
+    const previous = this.status.peerCount;
     const peerCount = this.node?.peerCount ?? 0;
+
+    // A peer that just arrived has no idea what boards we hold, and we have no
+    // idea what they hold. Announcing on change is what populates "boards near
+    // you" without anyone typing anything.
+    if (peerCount > previous) {
+      void this.announceHubs().catch(() => {
+        // Nothing to announce, or the link went away again.
+      });
+    }
+
     const patch: Partial<MeshStatus> = { peerCount };
 
     if (this.isRunning) {
