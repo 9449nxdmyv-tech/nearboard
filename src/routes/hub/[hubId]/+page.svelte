@@ -11,6 +11,7 @@
   import { showToast } from '$lib/stores/toasts';
   import { delivery, deliveryFor, deliveryLabel, recordDelivery } from '$lib/stores/delivery';
   import { setVisibleHub } from '$lib/notify/posts';
+  import { authorLabel, fingerprint } from '$lib/crypto/profile';
   import { getDeviceIdSync } from '$lib/crypto/identity';
   import { mesh } from '$lib/mesh/service';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
@@ -122,9 +123,15 @@
     if (overInternet) {
       await mesh.leaveInternet(hub.hubId);
       overInternet = false;
+      showToast('Back to Bluetooth only — this board is local again.');
     } else {
       await mesh.joinOverInternet(hub.hubId, hub.name);
       overInternet = mesh.isOnInternet(hub.hubId);
+      if (overInternet) {
+        // Said plainly, because this is the moment a local board stops being
+        // local. Anyone who knows the name can now reach it from anywhere.
+        showToast('This board can now be reached from anywhere, not just nearby.');
+      }
     }
   }
 
@@ -282,7 +289,13 @@
 
         <div class="post-meta">
           <div class="flex items-center gap-2">
-            <span class="post-author">{shortAuthor(post.authorId)}</span>
+            <!--
+              Name and fingerprint together. The name is the forgeable part —
+              anyone may call themselves anything — and the fingerprint is not,
+              so showing one without the other would be misleading.
+            -->
+            <span class="post-author">{authorLabel(post.authorId, post.authorName)}</span>
+            <span class="post-fingerprint">{fingerprint(post.authorId)}</span>
             {#if post.isEphemeral && post.expiresAt}
               <span class="badge ephemeral" style="font-size: 9px;">{formatCountdown(post.expiresAt)}</span>
             {/if}

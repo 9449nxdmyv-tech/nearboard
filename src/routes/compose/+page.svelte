@@ -5,6 +5,8 @@
   import { getOrCreateSigningIdentity, withSignature } from '$lib/crypto/signing';
   import { mesh } from '$lib/mesh/service';
   import { recordDelivery } from '$lib/stores/delivery';
+  import { getDisplayName } from '$lib/crypto/profile';
+  import { previewFor } from '$lib/domain/linkPreview';
   import { EPHEMERAL_CYCLE } from '$lib/domain/types';
   import type { Post } from '$lib/domain/types';
 
@@ -63,25 +65,19 @@
   }
 
   /**
-   * Build the preview locally from the URL alone.
+   * Build the preview from the URL alone — see $lib/domain/linkPreview.
    *
-   * This deliberately makes no network request. Fetching Open Graph tags meant
-   * routing every URL the user typed — keystroke-debounced, before they had
-   * decided to post — through a third-party CORS proxy, which is exactly the
-   * "no cloud" promise on the home screen being quietly broken. A domain and
-   * path are enough to make the card recognisable, and cost nothing.
+   * No fetch. A YouTube id, a GitHub repo, a Wikipedia title are all *in* the
+   * URL, so a rich preview costs nothing and tells nobody what is about to be
+   * posted.
    */
   function buildLinkPreview(url: string) {
-    try {
-      const parsed = new URL(url);
-      const path = parsed.pathname === '/' ? '' : decodeURIComponent(parsed.pathname);
-      return {
-        url,
-        title: path.replace(/[-_/]+/g, ' ').trim().slice(0, 120) || undefined
-      };
-    } catch {
-      return { url };
-    }
+    const rich = previewFor(url);
+    return {
+      url: rich.url,
+      title: rich.title,
+      description: rich.subtitle
+    };
   }
 
   function getDomain(url: string): string {
@@ -148,6 +144,7 @@
       postId: crypto.randomUUID(),
       hubId,
       authorId: identity.authorId,
+      authorName: getDisplayName() || undefined,
       text: text.trim(),
       imageBlob,
       linkPreview: linkPreview ?? undefined,

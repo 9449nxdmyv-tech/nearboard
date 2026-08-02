@@ -275,6 +275,32 @@ public class MeshCentralPlugin extends Plugin {
         }
     }
 
+    /**
+     * Keep the mesh running while the app is backgrounded.
+     *
+     * Separate from startScan so the caller decides: a user who never
+     * backgrounds the app should not be given a permanent notification.
+     */
+    @PluginMethod
+    public void startBackgroundMode(PluginCall call) {
+        try {
+            MeshForegroundService.start(getContext());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not start background mode: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopBackgroundMode(PluginCall call) {
+        try {
+            MeshForegroundService.stop(getContext());
+        } catch (Exception ignored) {
+            // Already stopped.
+        }
+        call.resolve();
+    }
+
     @PluginMethod
     public void getConnectedPeers(PluginCall call) {
         JSObject result = new JSObject();

@@ -43,6 +43,8 @@ export interface MeshCentralPlugin {
   disconnectPeer(options: { deviceId: string }): Promise<void>;
   writePeer(options: { deviceId: string; data: string }): Promise<void>;
   getConnectedPeers(): Promise<{ deviceIds: string[] }>;
+  startBackgroundMode(): Promise<void>;
+  stopBackgroundMode(): Promise<void>;
   addListener(
     event: 'peerFound' | 'peerReady' | 'peerLost',
     handler: (info: PeerFoundEvent) => void
@@ -202,8 +204,30 @@ export class MeshScanner {
     this.links.delete(deviceId);
   }
 
+  /**
+   * Keep scanning and advertising alive when the app is backgrounded.
+   *
+   * Android stops both within minutes otherwise, so the mesh would die the
+   * moment a phone went into a pocket. The cost is a permanent notification,
+   * which the platform requires and which the service makes actionable.
+   *
+   * No effect on iOS, where background advertising is limited by the OS in a
+   * way no app can opt out of.
+   */
+  async enableBackground(): Promise<void> {
+    await MeshCentral.startBackgroundMode().catch(() => {
+      // Older Android, or the user denied notifications; the mesh still works
+      // while the app is open.
+    });
+  }
+
+  async disableBackground(): Promise<void> {
+    await MeshCentral.stopBackgroundMode().catch(() => {});
+  }
+
   async stop(): Promise<void> {
     if (!this.started) return;
+    await this.disableBackground();
     await MeshCentral.stopScan().catch(() => {});
     for (const remove of this.removers) await remove().catch(() => {});
     this.removers = [];
