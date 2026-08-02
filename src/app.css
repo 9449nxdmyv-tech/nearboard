@@ -609,3 +609,18 @@ label {
   border-radius: 2px;
   padding: 14px;
 }
+
+/* Reach of your own post — deliberately quiet */
+.post-reach {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+/* Permission explanation, shown before the system prompts */
+.priming {
+  border: 1px solid rgba(233, 69, 96, 0.25);
+  border-radius: 2px;
+  padding: 14px;
+}

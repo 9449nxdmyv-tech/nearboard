@@ -8,6 +8,7 @@ import { saveHub } from '$lib/db/localDb';
   import { mesh } from '$lib/mesh/service';
 import type { AnnouncedHub } from '$lib/mesh/announce';
   import type { FixAction } from '$lib/mesh/readiness';
+  import { showToast } from '$lib/stores/toasts';
   import { canInstall, triggerInstall } from '$lib/pwa/installPrompt';
 
   const isNative = Capacitor.isNativePlatform();
@@ -17,13 +18,33 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
   let connecting = $state(false);
   let error = $state('');
 
+  /**
+   * Whether the user has been told what the permissions are for.
+   *
+   * The system prompts arrive with no context, and Location in particular looks
+   * alarming for an app that promises no tracking — Android simply requires it
+   * before any app may scan for Bluetooth devices, which is not something a
+   * user can be expected to know. A denial is close to unrecoverable on iOS, so
+   * the explanation has to come first, in the app's own words.
+   */
+  let primed = $state(true);
+
   onMount(async () => {
     isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
     webBleSupported = typeof navigator !== 'undefined' && 'bluetooth' in navigator;
     await loadHubs();
-    // Native devices discover peers continuously; there is nothing to press.
-    if (isNative) await ensureMeshStarted();
+
+    if (isNative) {
+      primed = localStorage.getItem('nearboard_primed') === 'yes';
+      if (primed) await ensureMeshStarted();
+    }
   });
+
+  async function acceptPriming() {
+    localStorage.setItem('nearboard_primed', 'yes');
+    primed = true;
+    await ensureMeshStarted();
+  }
 
   // Ticks so "last seen 4m ago" stays truthful without a reload.
   let now = $state(Date.now());
@@ -55,6 +76,7 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
         isOwned: false
       });
       await loadHubs();
+      showToast(`Joined ${hub.name}`);
     }
     goto(`/hub/${hub.hubId}`);
   }
@@ -110,12 +132,30 @@ import type { AnnouncedHub } from '$lib/mesh/announce';
   </div>
 {/if}
 
+{#if isNative && !primed}
+  <div class="priming mt-6">
+    <p class="text-sm mb-3" style="line-height: 1.6;">
+      nearboard needs two permissions to find people near you.
+    </p>
+    <p class="text-sm text-muted mb-2" style="line-height: 1.6;">
+      <strong>Bluetooth</strong> — how posts travel. Nothing goes to a server.
+    </p>
+    <p class="text-sm text-muted mb-3" style="line-height: 1.6;">
+      <strong>Location</strong> — Android requires it before any app may scan
+      for Bluetooth devices. nearboard never reads where you are.
+    </p>
+    <button class="primary w-full" onclick={acceptPriming}>Continue</button>
+  </div>
+{/if}
+
 <!--
   Mesh state. Each phase is distinguishable and, when something is wrong, comes
   with the one tap that fixes it. A resting state that cannot be told apart from
   a fault is the thing this replaced.
 -->
-{#if $meshStatus.phase === 'blocked' && $meshStatus.blocker}
+{#if isNative && !primed}
+  <!-- Nothing to report until the mesh has been allowed to start. -->
+{:else if $meshStatus.phase === 'blocked' && $meshStatus.blocker}
   {@const blocker = $meshStatus.blocker}
   <div class="mesh-blocker mt-6">
     <p class="mesh-blocker-title">{blocker.title}</p>

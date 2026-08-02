@@ -108,6 +108,7 @@ export class MeshService {
   /** Boards other people nearby are carrying. */
   private nearbyHubs = new NearbyHubs();
   private nearbyListeners = new Set<(hubs: AnnouncedHub[]) => void>();
+  private reachListeners = new Set<(peerCount: number) => void>();
 
   /** Hubs currently carried over the internet, keyed by hubId. */
   private internetLinks = new Map<string, NostrLink>();
@@ -152,6 +153,15 @@ export class MeshService {
     this.nearbyListeners.add(listener);
     listener(this.nearbyHubs.list());
     return () => this.nearbyListeners.delete(listener);
+  }
+
+  /**
+   * Fires when the peer count grows, meaning cached posts have just been
+   * flushed to someone new.
+   */
+  onReachChanged(listener: (peerCount: number) => void): () => void {
+    this.reachListeners.add(listener);
+    return () => this.reachListeners.delete(listener);
   }
 
   /** Boards currently visible on the mesh. */
@@ -234,11 +244,18 @@ export class MeshService {
 
   // ---- Publishing ----
 
-  /** Put a post onto the mesh. */
-  async publishPost(post: Post): Promise<void> {
-    if (!this.node) return;
+  /**
+   * Put a post onto the mesh.
+   *
+   * Returns how many peers it was handed to. There is no delivery receipt on a
+   * flood network — nobody acknowledges a packet — but this is true and it is
+   * what lets the UI stop pretending it knows nothing.
+   */
+  async publishPost(post: Post): Promise<number> {
+    if (!this.node) return 0;
     const payload = new TextEncoder().encode(JSON.stringify(toWire(post)));
     await this.node.originate(makePacket(PacketType.Post, this.senderId, payload));
+    return this.node.peerCount;
   }
 
   /**
@@ -249,8 +266,8 @@ export class MeshService {
    * full copy merges correctly no matter what order copies arrive in, while a
    * delta would need its own dedup and ordering rules to avoid double-counting.
    */
-  async publishEngagement(post: Post): Promise<void> {
-    await this.publishPost(post);
+  async publishEngagement(post: Post): Promise<number> {
+    return this.publishPost(post);
   }
 
   // ---- Peripheral role ----
@@ -607,6 +624,10 @@ export class MeshService {
     // idea what they hold. Announcing on change is what populates "boards near
     // you" without anyone typing anything.
     if (peerCount > previous) {
+      // A post written with nobody around is flushed from the cache the moment
+      // someone appears, so its reach really does change after the fact.
+      for (const listener of this.reachListeners) listener(peerCount);
+
       void this.announceHubs().catch(() => {
         // Nothing to announce, or the link went away again.
       });

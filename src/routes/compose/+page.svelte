@@ -4,6 +4,7 @@
   import { addPost } from '$lib/stores/posts';
   import { getOrCreateSigningIdentity, withSignature } from '$lib/crypto/signing';
   import { mesh } from '$lib/mesh/service';
+  import { recordDelivery } from '$lib/stores/delivery';
   import { EPHEMERAL_CYCLE } from '$lib/domain/types';
   import type { Post } from '$lib/domain/types';
 
@@ -172,8 +173,11 @@
     // saved locally, and store-and-forward will carry it to the next peer that
     // appears, so a send failure here is not worth blocking the user on.
     try {
-      await mesh.publishPost(post);
+      recordDelivery(post.postId, await mesh.publishPost(post));
     } catch (e) {
+      // Saved locally regardless; store-and-forward carries it to the next
+      // peer, and the reach indicator updates when that happens.
+      recordDelivery(post.postId, 0);
       console.warn('Post saved locally but not yet published:', e);
     }
 
