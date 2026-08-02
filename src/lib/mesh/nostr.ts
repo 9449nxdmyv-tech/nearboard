@@ -29,7 +29,7 @@
 
 import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
 import type { PacketLink } from './transport.ts';
-import { normalizeHubName } from '$lib/domain/hubId';
+import { normalizeHubName } from '../domain/hubId.ts';
 
 /**
  * A regular event kind, so relays retain it. Ephemeral kinds (20000-29999)
@@ -148,6 +148,11 @@ export interface NostrLinkOptions {
   hubName: string;
   relays?: string[];
   onError?: (error: Error) => void;
+  /**
+   * Signing key. Defaults to the browser's persisted one; a server passes its
+   * own, since it has no localStorage.
+   */
+  secretKey?: Uint8Array;
 }
 
 /**
@@ -170,17 +175,19 @@ export class NostrLink implements PacketLink {
   private handlers = new Set<(frame: Uint8Array) => void>();
   private closer: { close: () => void } | null = null;
   private onError: (error: Error) => void;
+  private providedKey: Uint8Array | null;
 
   constructor(options: NostrLinkOptions) {
     this.hubId = options.hubId;
     this.hubName = options.hubName;
     this.relays = options.relays ?? DEFAULT_RELAYS;
     this.onError = options.onError ?? (() => {});
+    this.providedKey = options.secretKey ?? null;
   }
 
   async start(): Promise<void> {
     this.key = await hubKey(this.hubName);
-    this.sk = getOrCreateNostrKey();
+    this.sk = this.providedKey ?? getOrCreateNostrKey();
 
     this.closer = this.pool.subscribeMany(
       this.relays,
