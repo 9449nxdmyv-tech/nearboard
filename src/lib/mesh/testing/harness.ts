@@ -114,6 +114,41 @@ export class MeshHarness {
   }
 
   /**
+   * Originate an arbitrary packet from a node.
+   *
+   * `send` only makes text posts; replies, curation and announcements need to
+   * be routed too, and they are the ones most likely to be got wrong — a new
+   * packet type that fails to relay looks exactly like a working one until two
+   * devices are in a room together.
+   */
+  sendPacket(
+    from: string,
+    type: PacketType,
+    payload: unknown,
+    options: { ttl?: number } = {}
+  ): Packet {
+    const node = this.nodes.get(from);
+    if (!node) throw new Error(`unknown node ${from}`);
+
+    const packet = makePacket(
+      type,
+      from.padEnd(16, '0').slice(0, 16),
+      new TextEncoder().encode(JSON.stringify(payload)),
+      options
+    );
+    void node.originate(packet);
+    return packet;
+  }
+
+  /** Decoded payloads of a given type that reached a node. */
+  payloadsAt<T>(id: string, type: PacketType): T[] {
+    return (this.received.get(id) ?? [])
+      .filter((r) => r.packet.type === type)
+      .map((r) => JSON.parse(new TextDecoder().decode(r.packet.payload)) as T);
+  }
+
+
+  /**
    * Run the network until nothing is in flight.
    *
    * This alternates between flushing pending promise callbacks and draining the
