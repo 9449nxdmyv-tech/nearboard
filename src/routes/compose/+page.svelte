@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { addPost } from '$lib/stores/posts';
-  import { getOrCreateIdentity } from '$lib/crypto/identity';
+  import { getOrCreateSigningIdentity, withSignature } from '$lib/crypto/signing';
   import { mesh } from '$lib/mesh/service';
   import { EPHEMERAL_CYCLE } from '$lib/domain/types';
   import type { Post } from '$lib/domain/types';
@@ -135,7 +135,7 @@
     if (!text.trim() || !hubId || charsLeft < 0) return;
     submitting = true;
 
-    const { deviceId } = await getOrCreateIdentity();
+    const identity = getOrCreateSigningIdentity();
     const now = Date.now();
 
     let imageBlob: Uint8Array<ArrayBuffer> | undefined;
@@ -143,10 +143,10 @@
       imageBlob = await compressImage(imageFile);
     }
 
-    const post: Post = {
+    const draft: Post = {
       postId: crypto.randomUUID(),
       hubId,
-      authorId: deviceId,
+      authorId: identity.authorId,
       text: text.trim(),
       imageBlob,
       linkPreview: linkPreview ?? undefined,
@@ -162,6 +162,9 @@
       isHidden: false,
       isCarried: false
     };
+
+    // Signed at creation, so it is verifiable from the moment it exists.
+    const post = withSignature(draft, identity);
 
     await addPost(post);
 

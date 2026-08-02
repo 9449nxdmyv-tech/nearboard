@@ -33,6 +33,7 @@ import { randomUUID, webcrypto } from 'crypto';
 import { decodePacket, PacketType, randomId, SENDER_ID_SIZE } from '../src/lib/mesh/packet.ts';
 import { Reassembler } from '../src/lib/mesh/fragment.ts';
 import { mergePost } from '../src/lib/domain/mergePost.ts';
+import { verifyPost } from '../src/lib/crypto/signing.ts';
 import { deriveHubId } from '../src/lib/domain/hubId.ts';
 
 // The shared modules assume a browser-shaped global crypto.
@@ -145,6 +146,15 @@ function handlePacket(packet, via) {
 
   if (!incoming?.postId || typeof incoming.text !== 'string') {
     log('mesh', via, 'discarded post missing required fields');
+    return;
+  }
+
+  // An anchor stores and re-serves posts from strangers, so an unverified post
+  // here would be laundered into something that looks authoritative. Checked
+  // with the same code the app uses, so the two cannot disagree about what
+  // counts as authentic.
+  if (!verifyPost(incoming)) {
+    log('mesh', via, `rejected ${incoming.postId.slice(0, 8)}: bad or missing signature`);
     return;
   }
 

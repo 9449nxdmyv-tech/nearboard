@@ -11,7 +11,17 @@ export interface Hub {
 export interface Post {
   postId: string;
   hubId: string;
-  authorId: string; // deviceId of author
+  /**
+   * Ed25519 public key of the author, hex. The post is self-certifying: this
+   * is the key its `signature` verifies against, so authorship needs no
+   * directory to look up and no server to trust.
+   */
+  authorId: string;
+  /**
+   * Ed25519 signature over the post's immutable content — see
+   * $lib/crypto/signing. Absent on posts created before signing existed.
+   */
+  signature?: string;
   text: string; // max 280 chars
   imageBlob?: Uint8Array<ArrayBuffer>; // compressed, ≤150KB, max 720px longest side
   linkPreview?: {
