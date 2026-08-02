@@ -6,6 +6,8 @@
   import { getHub } from '$lib/db/localDb';
   import { sortedFeed, highlights } from '$lib/domain/scoring';
   import { count, has, toggle, add } from '$lib/domain/engagement';
+  import { hiddenReason, hiddenLabel, withoutBlocked, type HiddenReason } from '$lib/domain/moderation';
+  import { moderation, block } from '$lib/stores/moderation';
   import { getDeviceIdSync } from '$lib/crypto/identity';
   import { mesh } from '$lib/mesh/service';
   import { meshStatus, ensureMeshStarted } from '$lib/stores/mesh';
@@ -13,8 +15,15 @@
 
   let hub = $state<Hub | null>(null);
   let me = $state<string | null>(null);
-  let feedPosts = $derived(sortedFeed($posts));
-  let highlightPosts = $derived(highlights($posts, 3));
+  let feedPosts = $derived(withoutBlocked(sortedFeed($posts), $moderation));
+  let highlightPosts = $derived(withoutBlocked(highlights($posts, 3), $moderation));
+
+  /** Posts the user chose to open despite a warning. */
+  let revealed = $state<Set<string>>(new Set());
+
+  function reveal(postId: string) {
+    revealed = new Set(revealed).add(postId);
+  }
   let now = $state(Date.now());
   let ticker: ReturnType<typeof setInterval>;
   let viewingImage = $state<string | null>(null);
@@ -132,6 +141,29 @@
     });
   }
 
+  /**
+   * Report a post.
+   *
+   * There is no server to report to, so this has to have effect on its own: it
+   * adds to the post's deranks — a CRDT that already lowers its score wherever
+   * it travels — and blocks the author on this device. Enough reports and the
+   * post sinks in everyone's feed, computed identically on every device.
+   */
+  async function reportPost(post: Post) {
+    if (!me) return;
+    await saveAndPublish({
+      ...post,
+      deranks: add(post.deranks, me),
+      lastInteractionAt: Date.now()
+    });
+    block(post.authorId);
+  }
+
+  /** Block an author outright. Keyed on their public key, so it holds. */
+  function blockAuthorOf(post: Post) {
+    block(post.authorId);
+  }
+
   async function hidePost(post: Post) {
     await updatePost({ ...post, isHidden: true });
   }
@@ -200,6 +232,22 @@
   <!-- Feed -->
   {#each feedPosts as post, i (post.postId)}
     {#if !isExpired(post)}
+      {@const warning = revealed.has(post.postId) ? null : hiddenReason(post, $moderation)}
+      {#if warning}
+        <!--
+          Collapsed rather than removed. Removing outright would make the app
+          decide for the user what they may read; a warning tells them why and
+          lets them choose. Blocked authors never reach here — those are dropped
+          from the feed entirely, because "I do not want to see this person"
+          should not still put them on screen.
+        -->
+        <article class="card collapsed-post">
+          <p class="text-sm text-tertiary">{hiddenLabel(warning)}</p>
+          <button class="ghost text-xs mt-2" onclick={() => reveal(post.postId)}>
+            show anyway
+          </button>
+        </article>
+      {:else}
       <article class="card animate-in" style="position: relative; overflow: hidden;">
         {#if post.isEphemeral && post.expiresAt}
           <div class="ephemeral-bar" style="width: {ephemeralProgress(post) * 100}%;"></div>
@@ -265,15 +313,30 @@
             </svg>
             {#if count(post.reshares) > 0}<span>{count(post.reshares)}</span>{/if}
           </button>
-          <button onclick={() => hidePost(post)}>
+          <button onclick={() => hidePost(post)} aria-label="Hide this post">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
               <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
               <line x1="1" y1="1" x2="23" y2="23"/>
             </svg>
           </button>
+
+          {#if me && post.authorId !== me}
+            <button onclick={() => reportPost(post)} aria-label="Report this post" title="Report">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+              </svg>
+              {#if count(post.deranks) > 0}<span>{count(post.deranks)}</span>{/if}
+            </button>
+            <button onclick={() => blockAuthorOf(post)} aria-label="Block this person" title="Block">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>
+              </svg>
+            </button>
+          {/if}
         </div>
       </article>
+      {/if}
     {/if}
   {/each}
 
