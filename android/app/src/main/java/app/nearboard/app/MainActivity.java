@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
         // App-local plugins must be registered before super.onCreate, which is
         // where the bridge is built. Registering after it silently does nothing.
         registerPlugin(MeshPeripheralPlugin.class);
+        registerPlugin(MeshCentralPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
